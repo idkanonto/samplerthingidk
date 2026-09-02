@@ -31,6 +31,10 @@ juce_add_plugin(RandomChopSampler
     EDITOR_WANTS_KEYBOARD_FOCUS FALSE
     COPY_PLUGIN_AFTER_BUILD FALSE)
 
+# The source uses the Projucer-style aggregate include. Generate it explicitly
+# for CMake builds so clean CI runners can resolve <JuceHeader.h>.
+juce_generate_juce_header(RandomChopSampler)
+
 target_sources(RandomChopSampler PRIVATE
     Source/PluginProcessor.cpp
     Source/PluginProcessor.h
