@@ -17,7 +17,7 @@ public:
 private:
     int getNumRows() override;
     void paintListBoxItem(int, juce::Graphics&, int, int, bool) override;
-    std::unique_ptr<juce::Component> refreshComponentForRow(int, bool, std::unique_ptr<juce::Component>) override;
+    juce::Component* refreshComponentForRow(int, bool, juce::Component*) override;
     void timerCallback() override;
     void refresh();
     void addFiles(const juce::StringArray&);
@@ -36,4 +36,3 @@ private:
     juce::String transientMessage;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(RandomChopSamplerAudioProcessorEditor)
 };
-

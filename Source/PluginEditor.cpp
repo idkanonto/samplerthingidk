@@ -18,7 +18,8 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     title.setFont(juce::Font(24.0f, juce::Font::bold));
     title.setColour(juce::Label::textColourId, juce::Colour(0xfff2f2f5));
     status.setColour(juce::Label::textColourId, juce::Colour(0xffa9acb7));
-    for (auto* component : { static_cast<juce::Component*>(&title), &status, &addButton, &clearButton, &list }) addAndMakeVisible(component);
+    juce::Component* components[] = { &title, &status, &addButton, &clearButton, &list };
+    for (auto* component : components) addAndMakeVisible(component);
     list.setColour(juce::ListBox::backgroundColourId, juce::Colour(0xff191b21));
     list.setRowHeight(34);
 
@@ -115,13 +116,13 @@ void RandomChopSamplerAudioProcessorEditor::paintListBoxItem(int row, juce::Grap
     g.drawText(juce::String(row + 1) + ".  " + (*displayPool)[static_cast<size_t>(row)]->name, 10, 0, width - 95, height, juce::Justification::centredLeft, true);
 }
 
-std::unique_ptr<juce::Component> RandomChopSamplerAudioProcessorEditor::refreshComponentForRow(int row, bool, std::unique_ptr<juce::Component> existing)
+juce::Component* RandomChopSamplerAudioProcessorEditor::refreshComponentForRow(int row, bool, juce::Component* existing)
 {
-    auto* button = dynamic_cast<RemoveButton*>(existing.get());
-    if (!button) { existing = std::make_unique<RemoveButton>(); button = static_cast<RemoveButton*>(existing.get()); }
+    auto* button = dynamic_cast<RemoveButton*>(existing);
+    if (!button) { delete existing; button = new RemoveButton(); }
     button->row = row;
     button->onClick = [this, button] { processor.samples.remove(static_cast<size_t>(button->row)); refresh(); };
-    return existing;
+    return button;
 }
 
 void RandomChopSamplerAudioProcessorEditor::timerCallback()
@@ -132,4 +133,3 @@ void RandomChopSamplerAudioProcessorEditor::timerCallback()
     status.setText(message, juce::dontSendNotification);
     list.repaint();
 }
-
