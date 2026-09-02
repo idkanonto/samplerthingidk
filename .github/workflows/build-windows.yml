@@ -1,0 +1,57 @@
+name: Build Windows VST3
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build-vst3:
+    name: Windows Release VST3
+    runs-on: windows-2022
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Configure Release build
+        run: >-
+          cmake -S . -B build
+          -G "Visual Studio 17 2022"
+          -A x64
+          -DCMAKE_BUILD_TYPE=Release
+          -DJUCE_BUILD_EXAMPLES=OFF
+          -DJUCE_BUILD_EXTRAS=OFF
+
+      - name: Build VST3
+        run: cmake --build build --config Release --target RandomChopSampler_VST3 --parallel
+
+      - name: Verify artifact
+        shell: pwsh
+        run: |
+          $plugin = Join-Path $env:GITHUB_WORKSPACE 'build\RandomChopSampler_artefacts\Release\VST3\Random Chop Sampler.vst3'
+          if (-not (Test-Path -LiteralPath $plugin -PathType Container)) {
+            throw "Expected VST3 bundle was not produced: $plugin"
+          }
+          $module = Get-ChildItem -LiteralPath $plugin -Recurse -Filter '*.vst3' -File
+          if ($module.Count -lt 1) {
+            throw "The VST3 bundle does not contain a module binary."
+          }
+          Write-Host "Verified $plugin"
+          $module | ForEach-Object { Write-Host "Module: $($_.FullName) ($($_.Length) bytes)" }
+
+      - name: Upload VST3
+        uses: actions/upload-artifact@v7
+        with:
+          name: Random-Chop-Sampler-Windows-VST3
+          # Upload the parent so the downloaded archive preserves the required
+          # top-level "Random Chop Sampler.vst3" bundle directory.
+          path: build/RandomChopSampler_artefacts/Release/VST3
+          if-no-files-found: error
+          retention-days: 30
