@@ -11,7 +11,7 @@ verified: 2026-09-03
 
 # Current Implementation State
 
-Evidence: source inspection plus [Windows Release CI run #8](https://github.com/idkanonto/samplerthingidk/actions/runs/33788048166) at commit `c4c93e932ee42a6b8ee5a4507abc1622d080e29b` on 2026-09-03. The workflow configured a Windows Server 2022 Release build, built `RandomChopSampler_VST3` and `RandomChopSamplerTests`, passed `ctest --test-dir build -C Release --output-on-failure`, verified that the VST3 bundle contained a module, and uploaded the bundle artifact. No DAW/host audio test or full format/sample-rate matrix was run.
+Evidence: source inspection plus [Windows Release CI run #10](https://github.com/idkanonto/samplerthingidk/actions/runs/33791050526) at commit `6b1b209a5062626c31e6887f8bf7ce00af655a2b` on 2026-09-03. The workflow configured a Windows Server 2022 Release build, built `RandomChopSampler_VST3` and `RandomChopSamplerTests`, passed `ctest --test-dir build -C Release --output-on-failure`, verified that the VST3 bundle contained a module, and uploaded the bundle artifact. No DAW/host audio test or full format/sample-rate matrix was run.
 
 ## Implemented in code
 
