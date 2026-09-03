@@ -46,14 +46,12 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     sourceWeightLabel.setText("SELECTION WEIGHT", juce::dontSendNotification);
     sourceGain.onValueChange = [this]
     {
-        const auto row = processor.selectedSourceIndex.load();
-        if (row >= 0) processor.samples.updateSettings(static_cast<size_t>(row),
+        if (selectedSourceId.isNotEmpty()) processor.samples.updateSettings(selectedSourceId,
             [this](SampleSettings& s) { s.gainDb = static_cast<float>(sourceGain.getValue()); });
     };
     sourceWeight.onValueChange = [this]
     {
-        const auto row = processor.selectedSourceIndex.load();
-        if (row >= 0) processor.samples.updateSettings(static_cast<size_t>(row),
+        if (selectedSourceId.isNotEmpty()) processor.samples.updateSettings(selectedSourceId,
             [this](SampleSettings& s) { s.selectionWeight = static_cast<float>(sourceWeight.getValue()); });
     };
 
@@ -173,11 +171,18 @@ void RandomChopSamplerAudioProcessorEditor::addFiles(const juce::StringArray& fi
 
 void RandomChopSamplerAudioProcessorEditor::refresh()
 {
-    const int oldSelection = processor.selectedSourceIndex.load();
     displayPool = processor.samples.getSnapshot();
-    const int selected = displayPool->empty() ? -1
-        : juce::jlimit(0, static_cast<int>(displayPool->size()) - 1, juce::jmax(0, oldSelection));
-    processor.selectedSourceIndex.store(selected);
+    int selected = -1;
+    for (size_t i = 0; displayPool && i < displayPool->size(); ++i)
+        if ((*displayPool)[i]->settings.id == selectedSourceId)
+            selected = static_cast<int>(i);
+    if (selected < 0 && displayPool && !displayPool->empty())
+    {
+        selected = 0;
+        selectedSourceId = displayPool->front()->settings.id;
+    }
+    if (!displayPool || displayPool->empty())
+        selectedSourceId.clear();
     list.updateContent();
     list.selectRow(selected);
     list.repaint();
@@ -193,10 +198,11 @@ void RandomChopSamplerAudioProcessorEditor::paintListBoxItem(int row, juce::Grap
                                                               int height, bool selected)
 {
     if (!displayPool || row < 0 || row >= static_cast<int>(displayPool->size())) return;
-    const bool recent = row == processor.lastTriggeredIndex.load(std::memory_order_relaxed);
+    const auto& source = (*displayPool)[static_cast<size_t>(row)];
+    const bool recent = source->runtimeId
+        == processor.lastTriggeredRuntimeId.load(std::memory_order_relaxed);
     g.fillAll(selected ? juce::Colour(0xff343746)
                        : (recent ? juce::Colour(0xff29233a) : juce::Colour(0xff191b21)));
-    const auto& source = (*displayPool)[static_cast<size_t>(row)];
     g.setColour(source->settings.missing ? juce::Colour(0xffff8a8a) : juce::Colour(0xffe3e4e8));
     const auto suffix = source->settings.missing ? "  [MISSING]" : juce::String();
     g.drawText(juce::String(row + 1).paddedLeft('0', 2) + ".  "
@@ -215,13 +221,17 @@ juce::Component* RandomChopSamplerAudioProcessorEditor::refreshComponentForRow(i
                                          juce::dontSendNotification);
     controls->enabled.onClick = [this, controls]
     {
-        processor.samples.setEnabled(static_cast<size_t>(controls->row),
-                                     controls->enabled.getToggleState());
+        if (displayPool && controls->row >= 0
+            && controls->row < static_cast<int>(displayPool->size()))
+            processor.samples.setEnabled((*displayPool)[static_cast<size_t>(controls->row)]->settings.id,
+                                         controls->enabled.getToggleState());
         refresh();
     };
     controls->remove.onClick = [this, controls]
     {
-        processor.samples.remove(static_cast<size_t>(controls->row));
+        if (displayPool && controls->row >= 0
+            && controls->row < static_cast<int>(displayPool->size()))
+            processor.samples.remove((*displayPool)[static_cast<size_t>(controls->row)]->settings.id);
         refresh();
     };
     return controls;
@@ -229,10 +239,10 @@ juce::Component* RandomChopSamplerAudioProcessorEditor::refreshComponentForRow(i
 
 void RandomChopSamplerAudioProcessorEditor::selectedRowsChanged(int row)
 {
-    processor.selectedSourceIndex.store(row);
     if (displayPool && row >= 0 && row < static_cast<int>(displayPool->size()))
     {
         const auto& settings = (*displayPool)[static_cast<size_t>(row)]->settings;
+        selectedSourceId = settings.id;
         sourceGain.setValue(settings.gainDb, juce::dontSendNotification);
         sourceWeight.setValue(settings.selectionWeight, juce::dontSendNotification);
     }
@@ -240,6 +250,7 @@ void RandomChopSamplerAudioProcessorEditor::selectedRowsChanged(int row)
 
 void RandomChopSamplerAudioProcessorEditor::timerCallback()
 {
+    processor.samples.collectGarbage();
     const int count = processor.samples.size();
     auto message = juce::String(count).paddedLeft('0', 2) + " / 20 sources";
     if (processor.triggeredWhileEmpty.load(std::memory_order_relaxed))

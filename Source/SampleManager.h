@@ -29,6 +29,7 @@ struct SampleData final
     SampleSettings settings;
     std::shared_ptr<const juce::AudioBuffer<float>> audio;
     double sampleRate = 44100.0;
+    uint64_t runtimeId = 0;
 
     bool isPlayable() const noexcept
     {
@@ -46,11 +47,12 @@ public:
 
     SampleManager();
     std::vector<juce::String> addFiles(const juce::StringArray& paths);
-    void remove(size_t index);
+    void remove(const juce::String& id);
     void clear();
-    void setEnabled(size_t index, bool enabled);
+    void setEnabled(const juce::String& id, bool enabled);
     void setAllEnabled(bool enabled);
-    void updateSettings(size_t index, const std::function<void(SampleSettings&)>& update);
+    void updateSettings(const juce::String& id, const std::function<void(SampleSettings&)>& update);
+    void collectGarbage();
     std::shared_ptr<const Pool> getSnapshot() const noexcept;
     juce::ValueTree createState() const;
     std::vector<juce::String> restoreState(const juce::ValueTree& state);
@@ -61,10 +63,15 @@ private:
     SamplePtr loadFile(const juce::File& file, const SampleSettings* restored,
                        std::vector<juce::String>& errors);
     void publish(std::shared_ptr<const Pool> next);
+    void collectGarbageLocked();
+    static size_t findSource(const Pool&, const juce::String& id) noexcept;
     juce::AudioFormatManager formats;
     std::shared_ptr<const Pool> pool { std::make_shared<const Pool>() };
-    // Retired snapshots keep RT shared_ptr releases from becoming deallocations.
+    // Replaced objects remain owned here until no realtime snapshot, voice, or
+    // future Take references them. Collection is performed only by control
+    // threads, so the audio thread can never become the last owner.
     std::vector<std::shared_ptr<const Pool>> retiredPools;
+    std::vector<SamplePtr> retiredSamples;
     std::mutex mutationMutex;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SampleManager)
 };

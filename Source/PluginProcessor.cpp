@@ -35,28 +35,10 @@ bool RandomChopSamplerAudioProcessor::isBusesLayoutSupported(const BusesLayout& 
         && layouts.getMainInputChannelSet().isDisabled();
 }
 
-int RandomChopSamplerAudioProcessor::chooseWeightedSource(const SampleManager::Pool& pool) noexcept
-{
-    double total = 0.0;
-    for (const auto& source : pool)
-        if (source->isPlayable()) total += juce::jmax(0.01f, source->settings.selectionWeight);
-    if (total <= 0.0) return -1;
-
-    double target = random.unit() * total;
-    for (size_t i = 0; i < pool.size(); ++i)
-    {
-        if (!pool[i]->isPlayable()) continue;
-        target -= juce::jmax(0.01f, pool[i]->settings.selectionWeight);
-        if (target <= 0.0) return static_cast<int>(i);
-    }
-    for (size_t i = pool.size(); i-- > 0;) if (pool[i]->isPlayable()) return static_cast<int>(i);
-    return -1;
-}
-
 void RandomChopSamplerAudioProcessor::noteOn(int note, float velocity) noexcept
 {
     const auto pool = samples.getSnapshot();
-    const int selected = chooseWeightedSource(*pool);
+    const int selected = randomchop::chooseWeightedSource(*pool, random);
     if (selected < 0) { triggeredWhileEmpty.store(true, std::memory_order_relaxed); return; }
     const auto& sample = (*pool)[static_cast<size_t>(selected)];
     const double amount = parameters.getRawParameterValue(IDs::randomStart)->load() * 0.01;
@@ -73,7 +55,7 @@ void RandomChopSamplerAudioProcessor::noteOn(int note, float velocity) noexcept
                  juce::Decibels::decibelsToGain(sample->settings.gainDb),
                  juce::jmax(0.001f, parameters.getRawParameterValue(IDs::attack)->load()),
                  parameters.getRawParameterValue(IDs::release)->load(), ++voiceCounter);
-    lastTriggeredIndex.store(static_cast<int>(selected), std::memory_order_relaxed);
+    lastTriggeredRuntimeId.store(sample->runtimeId, std::memory_order_relaxed);
     triggeredWhileEmpty.store(false, std::memory_order_relaxed);
 }
 

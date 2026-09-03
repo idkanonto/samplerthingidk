@@ -1,10 +1,12 @@
 #include "SampleManager.h"
+#include <algorithm>
 #include <limits>
 
 namespace
 {
 constexpr auto samplesType = "SAMPLES";
 constexpr auto sampleType = "SAMPLE";
+std::atomic<uint64_t> nextRuntimeId { 1 };
 
 SampleSettings readSettings(const juce::ValueTree& node)
 {
@@ -29,8 +31,41 @@ SampleManager::SampleManager() { formats.registerBasicFormats(); }
 
 void SampleManager::publish(std::shared_ptr<const Pool> next)
 {
-    retiredPools.push_back(getSnapshot());
+    collectGarbageLocked();
+    const auto previous = getSnapshot();
+
+    // Retain only sources that disappear or are replaced by a new immutable
+    // version. Sources shared unchanged between snapshots remain owned by the
+    // new pool and need no additional retirement reference.
+    for (const auto& oldSource : *previous)
+    {
+        const auto stillPublished = std::find(next->begin(), next->end(), oldSource) != next->end();
+        if (!stillPublished)
+            retiredSamples.push_back(oldSource);
+    }
+
+    retiredPools.push_back(previous);
     std::atomic_store_explicit(&pool, std::move(next), std::memory_order_release);
+}
+
+void SampleManager::collectGarbageLocked()
+{
+    std::erase_if(retiredPools, [] (const auto& retired) { return retired.use_count() == 1; });
+    std::erase_if(retiredSamples, [] (const auto& retired) { return retired.use_count() == 1; });
+}
+
+void SampleManager::collectGarbage()
+{
+    const std::lock_guard<std::mutex> lock(mutationMutex);
+    collectGarbageLocked();
+}
+
+size_t SampleManager::findSource(const Pool& sources, const juce::String& id) noexcept
+{
+    for (size_t i = 0; i < sources.size(); ++i)
+        if (sources[i]->settings.id == id)
+            return i;
+    return sources.size();
 }
 
 bool SampleManager::isSupported(const juce::File& file)
@@ -75,6 +110,7 @@ SampleManager::SamplePtr SampleManager::loadFile(const juce::File& file,
     sample->settings.missing = false;
     sample->audio = std::move(buffer);
     sample->sampleRate = reader->sampleRate;
+    sample->runtimeId = nextRuntimeId.fetch_add(1, std::memory_order_relaxed);
     return sample;
 }
 
@@ -98,10 +134,11 @@ std::vector<juce::String> SampleManager::addFiles(const juce::StringArray& paths
     return errors;
 }
 
-void SampleManager::remove(size_t index)
+void SampleManager::remove(const juce::String& id)
 {
     const std::lock_guard<std::mutex> lock(mutationMutex);
     auto current = getSnapshot();
+    const auto index = findSource(*current, id);
     if (index >= current->size()) return;
     auto next = std::make_shared<Pool>(*current);
     next->erase(next->begin() + static_cast<std::ptrdiff_t>(index));
@@ -114,9 +151,9 @@ void SampleManager::clear()
     publish(std::make_shared<const Pool>());
 }
 
-void SampleManager::setEnabled(size_t index, bool enabled)
+void SampleManager::setEnabled(const juce::String& id, bool enabled)
 {
-    updateSettings(index, [enabled](SampleSettings& s) { s.enabled = enabled; });
+    updateSettings(id, [enabled](SampleSettings& s) { s.enabled = enabled; });
 }
 
 void SampleManager::setAllEnabled(bool enabled)
@@ -134,10 +171,12 @@ void SampleManager::setAllEnabled(bool enabled)
     publish(std::shared_ptr<const Pool>(std::move(next)));
 }
 
-void SampleManager::updateSettings(size_t index, const std::function<void(SampleSettings&)>& update)
+void SampleManager::updateSettings(const juce::String& id,
+                                   const std::function<void(SampleSettings&)>& update)
 {
     const std::lock_guard<std::mutex> lock(mutationMutex);
     auto current = getSnapshot();
+    const auto index = findSource(*current, id);
     if (index >= current->size()) return;
     auto next = std::make_shared<Pool>(*current);
     auto copy = std::make_shared<SampleData>(*(*next)[index]);
@@ -197,6 +236,7 @@ std::vector<juce::String> SampleManager::restoreState(const juce::ValueTree& sta
             auto missing = std::make_shared<SampleData>();
             missing->settings = settings;
             missing->settings.missing = true;
+            missing->runtimeId = nextRuntimeId.fetch_add(1, std::memory_order_relaxed);
             if (missing->settings.displayName.isEmpty()) missing->settings.displayName = file.getFileName();
             next->push_back(std::move(missing));
         }

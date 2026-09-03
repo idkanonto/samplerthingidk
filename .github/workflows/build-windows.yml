@@ -29,8 +29,11 @@ jobs:
           -DJUCE_BUILD_EXAMPLES=OFF
           -DJUCE_BUILD_EXTRAS=OFF
 
-      - name: Build VST3
-        run: cmake --build build --config Release --target RandomChopSampler_VST3 --parallel
+      - name: Build VST3 and tests
+        run: cmake --build build --config Release --target RandomChopSampler_VST3 RandomChopSamplerTests --parallel
+
+      - name: Run tests
+        run: ctest --test-dir build -C Release --output-on-failure
 
       - name: Verify artifact
         shell: pwsh

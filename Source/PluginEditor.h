@@ -37,6 +37,7 @@ private:
     std::unique_ptr<SliderAttachment> randomStartAttachment, attackAttachment, releaseAttachment,
         outputAttachment, seedAttachment;
     std::shared_ptr<const SampleManager::Pool> displayPool;
+    juce::String selectedSourceId;
     std::unique_ptr<juce::FileChooser> chooser;
     juce::String transientMessage;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(RandomChopSamplerAudioProcessorEditor)

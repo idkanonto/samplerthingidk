@@ -3,6 +3,7 @@
 #include <JuceHeader.h>
 #include "RandomSamplerVoice.h"
 #include "RandomizationEngine.h"
+#include "SourceSelection.h"
 #include <array>
 
 class RandomChopSamplerAudioProcessor final : public juce::AudioProcessor
@@ -32,12 +33,10 @@ public:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     juce::AudioProcessorValueTreeState parameters;
     SampleManager samples;
-    std::atomic<int> lastTriggeredIndex { -1 };
-    std::atomic<int> selectedSourceIndex { -1 };
+    std::atomic<uint64_t> lastTriggeredRuntimeId { 0 };
     std::atomic<bool> triggeredWhileEmpty { false };
 
 private:
-    int chooseWeightedSource(const SampleManager::Pool&) noexcept;
     void noteOn(int note, float velocity) noexcept;
     void noteOff(int note) noexcept;
     std::array<RandomSamplerVoice, 16> voices;
