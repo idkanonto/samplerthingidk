@@ -52,6 +52,7 @@ target_sources(RandomChopSampler PRIVATE
 target_compile_definitions(RandomChopSampler PUBLIC
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
+    JUCE_USE_MP3AUDIOFORMAT=1
     JUCE_VST3_CAN_REPLACE_VST2=0)
 
 target_link_libraries(RandomChopSampler PRIVATE
@@ -73,9 +74,11 @@ if (BUILD_TESTING)
     target_include_directories(RandomChopSamplerTests PRIVATE Source)
     target_compile_definitions(RandomChopSamplerTests PRIVATE
         JUCE_WEB_BROWSER=0
-        JUCE_USE_CURL=0)
+        JUCE_USE_CURL=0
+        JUCE_USE_MP3AUDIOFORMAT=1)
     target_link_libraries(RandomChopSamplerTests PRIVATE
         juce::juce_audio_formats
+        juce::juce_data_structures
         PUBLIC juce::juce_recommended_config_flags
                juce::juce_recommended_warning_flags)
     add_test(NAME RandomChopSamplerTests COMMAND RandomChopSamplerTests)

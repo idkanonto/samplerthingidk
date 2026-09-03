@@ -106,7 +106,9 @@ void RandomChopSamplerAudioProcessor::setStateInformation(const void* data, int 
             auto files = state.getChildWithName("SAMPLES");
             if (files.isValid()) state.removeChild(files, nullptr);
             parameters.replaceState(state);
-            if (files.isValid()) samples.restoreState(files);
+            // An absent SAMPLES node represents a parameter-only state and
+            // must replace, rather than silently retain, the current pool.
+            samples.restoreState(files);
         }
     }
 }

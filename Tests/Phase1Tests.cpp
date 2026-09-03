@@ -124,12 +124,37 @@ void testPoolLimitAndPersistentSettings()
 
     check(file.deleteFile(), "could not remove the temporary WAV fixture");
 }
+
+void testParameterOnlyStateClearsSamples()
+{
+    const auto file = makeTinyWaveFile();
+    check(file.existsAsFile(), "could not create the parameter-only state fixture");
+    if (!file.existsAsFile())
+        return;
+
+    {
+        SampleManager manager;
+        juce::StringArray paths;
+        paths.add(file.getFullPathName());
+        check(manager.addFiles(paths).empty(), "could not load the parameter-only state fixture");
+        check(manager.size() == 1, "parameter-only state fixture was not added");
+
+        const juce::ValueTree parameterOnlyState("PARAMETERS");
+        const auto restoreErrors = manager.restoreState(
+            parameterOnlyState.getChildWithName("SAMPLES"));
+        check(restoreErrors.empty(), "parameter-only state produced sample restore errors");
+        check(manager.size() == 0, "parameter-only state retained the previous sample pool");
+    }
+
+    check(file.deleteFile(), "could not remove the parameter-only state fixture");
+}
 }
 
 int main()
 {
     testWeightedSelection();
     testPoolLimitAndPersistentSettings();
+    testParameterOnlyStateClearsSamples();
     if (failures == 0)
         std::cout << "All Phase 1 tests passed.\n";
     return failures == 0 ? 0 : 1;

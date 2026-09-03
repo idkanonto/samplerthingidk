@@ -1,11 +1,13 @@
 #include "SampleManager.h"
 #include <algorithm>
 #include <limits>
+#include <new>
 
 namespace
 {
 constexpr auto samplesType = "SAMPLES";
 constexpr auto sampleType = "SAMPLE";
+constexpr uint64_t maximumDecodedBytesPerSource = 256ULL * 1024ULL * 1024ULL;
 std::atomic<uint64_t> nextRuntimeId { 1 };
 
 SampleSettings readSettings(const juce::ValueTree& node)
@@ -92,10 +94,30 @@ SampleManager::SamplePtr SampleManager::loadFile(const juce::File& file,
         return {};
     }
 
-    auto buffer = std::make_shared<juce::AudioBuffer<float>>();
-    const auto length = static_cast<int>(juce::jmin<int64_t>(reader->lengthInSamples,
-                                                              std::numeric_limits<int>::max()));
-    buffer->setSize(juce::jmin(2, static_cast<int>(reader->numChannels)), length);
+    const auto channelCount = juce::jmin(2, static_cast<int>(reader->numChannels));
+    const auto frameCount = static_cast<uint64_t>(reader->lengthInSamples);
+    const auto maximumFrameCount = maximumDecodedBytesPerSource
+        / (sizeof(float) * static_cast<uint64_t>(channelCount));
+    if (frameCount > maximumFrameCount
+        || frameCount > static_cast<uint64_t>(std::numeric_limits<int>::max()))
+    {
+        errors.push_back(file.getFileName() + ": decoded audio exceeds 256 MiB source limit");
+        return {};
+    }
+
+    std::shared_ptr<juce::AudioBuffer<float>> buffer;
+    try
+    {
+        buffer = std::make_shared<juce::AudioBuffer<float>>();
+        buffer->setSize(channelCount, static_cast<int>(frameCount));
+    }
+    catch (const std::bad_alloc&)
+    {
+        errors.push_back(file.getFileName() + ": insufficient memory to decode");
+        return {};
+    }
+
+    const auto length = static_cast<int>(frameCount);
     if (!reader->read(buffer.get(), 0, length, 0, true, true))
     {
         errors.push_back(file.getFileName() + ": read failed");
