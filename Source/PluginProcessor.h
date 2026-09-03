@@ -3,6 +3,7 @@
 #include <JuceHeader.h>
 #include "RandomSamplerVoice.h"
 #include "RandomizationEngine.h"
+#include "SourceSelection.h"
 #include <array>
 
 class RandomChopSamplerAudioProcessor final : public juce::AudioProcessor
@@ -32,7 +33,7 @@ public:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     juce::AudioProcessorValueTreeState parameters;
     SampleManager samples;
-    std::atomic<int> lastTriggeredIndex { -1 };
+    std::atomic<uint64_t> lastTriggeredRuntimeId { 0 };
     std::atomic<bool> triggeredWhileEmpty { false };
 
 private:
@@ -45,4 +46,3 @@ private:
     int lastSeed = -1;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(RandomChopSamplerAudioProcessor)
 };
-

@@ -1,6 +1,6 @@
 # Random Chop Sampler
 
-A 16-voice JUCE VST3/standalone sampler instrument. Every MIDI note chooses a random loaded WAV/AIFF and a random legal start point. MIDI pitch is deliberately trigger-only in this MVP.
+A 16-voice JUCE VST3/standalone sampler instrument. Every MIDI note chooses a weighted random source and a random legal start point. V2 is being delivered through gated functionality phases; the current source-pool phase supports WAV, AIFF/AIF, MP3, and FLAC.
 
 ## Build without local development tools (recommended)
 
@@ -29,7 +29,7 @@ Then rescan VST3 plug-ins in the DAW, create an instrument track, insert **Rando
 ## Architecture and real-time safety
 
 - `SampleManager` decodes files only from message/host state threads and publishes immutable pool snapshots atomically.
-- `SampleData` is reference-counted. Voices retain their own reference, so removing or clearing a sample cannot invalidate active playback. Replaced snapshots are retired on the message thread and retained until plug-in teardown, ensuring the audio thread never performs the final deallocation.
+- `SampleData` is reference-counted. Voices retain their own reference, so removing or clearing a sample cannot invalidate active playback. Superseded snapshots and sources are reclaimed only from control-thread maintenance after realtime references have drained.
 - `RandomSamplerVoice` performs linear sample-rate conversion, mono-to-stereo routing, per-voice attack/release, a minimum 1 ms start safety fade, a file-end fade, and a 3 ms tail crossfade when a voice is stolen.
 - `PluginProcessor` owns 16 fixed voices and an allocation-free xorshift64* randomizer. Voice stealing selects the oldest voice.
 - MIDI rendering is sample-accurate within each host block. No disk access, decoding, blocking mutex, logging, or explicit allocation occurs in the audio callback.
@@ -37,9 +37,10 @@ Then rescan VST3 plug-ins in the DAW, create an instrument track, insert **Rando
 ## MVP checklist
 
 - [x] VST3 instrument and standalone CMake targets; stereo output and MIDI input
-- [x] Multi-file drag/drop and file picker for WAV, AIFF, and AIF
-- [x] Visible scrollable list, per-file Remove, Clear All, error/status feedback
-- [x] Equal-probability sample selection and bounded random starts per Note On
+- [x] Multi-file drag/drop and file picker for WAV, AIFF/AIF, MP3, and FLAC
+- [x] Hard 20-source cap with visible count and graceful rejection
+- [x] Visible scrollable list, per-file Enable/Remove, Enable All, Disable All, Clear All, and status feedback
+- [x] Weighted enabled-source selection plus per-source gain
 - [x] Reproducible Seed sequence (sequence restarts after prepare or a Seed change)
 - [x] 16-voice polyphony with oldest-voice stealing and clean Note Off release
 - [x] Source-rate conversion via linear interpolation; mono and stereo playback
@@ -51,10 +52,9 @@ Then rescan VST3 plug-ins in the DAW, create an instrument track, insert **Rando
 ## Known MVP limitations
 
 - Samples are decoded fully into RAM; very large libraries are not streamed.
-- Removed samples remain in a retired snapshot until the plug-in instance closes. This deliberate MVP tradeoff guarantees real-time-safe reclamation; repeated load/remove cycles can therefore retain memory for the instance lifetime.
 - Linear interpolation favors low CPU use over premium resampling quality.
 - Restoring sample paths is synchronous because JUCE host state restoration provides no completion callback; it never occurs in `processBlock`, but an unusually large library can briefly delay project loading.
-- MIDI notes do not transpose samples. Sustain pedal, slice length, tempo sync, waveform display, presets, and the other future features are not yet implemented.
+- MIDI notes do not transpose samples yet. Later gated V2 phases add manual pitch, stretch, event processing, Step Mask, Take History, and master digital processing.
 - A reproducible Seed gives a deterministic trigger sequence for the same pool/order and parameter/MIDI event sequence; changing the pool changes the results.
 
 ## Practical test pass

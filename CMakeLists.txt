@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.22)
 project(RandomChopSampler VERSION 1.0.0 LANGUAGES CXX)
 
+include(CTest)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
@@ -44,11 +46,13 @@ target_sources(RandomChopSampler PRIVATE
     Source/SampleManager.h
     Source/RandomSamplerVoice.cpp
     Source/RandomSamplerVoice.h
-    Source/RandomizationEngine.h)
+    Source/RandomizationEngine.h
+    Source/SourceSelection.h)
 
 target_compile_definitions(RandomChopSampler PUBLIC
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
+    JUCE_USE_MP3AUDIOFORMAT=1
     JUCE_VST3_CAN_REPLACE_VST2=0)
 
 target_link_libraries(RandomChopSampler PRIVATE
@@ -56,3 +60,26 @@ target_link_libraries(RandomChopSampler PRIVATE
     PUBLIC juce::juce_recommended_config_flags
            juce::juce_recommended_lto_flags
            juce::juce_recommended_warning_flags)
+
+if (BUILD_TESTING)
+    juce_add_console_app(RandomChopSamplerTests
+        PRODUCT_NAME "Random Chop Sampler Tests")
+    juce_generate_juce_header(RandomChopSamplerTests)
+    target_sources(RandomChopSamplerTests PRIVATE
+        Tests/Phase1Tests.cpp
+        Source/SampleManager.cpp
+        Source/SampleManager.h
+        Source/RandomizationEngine.h
+        Source/SourceSelection.h)
+    target_include_directories(RandomChopSamplerTests PRIVATE Source)
+    target_compile_definitions(RandomChopSamplerTests PRIVATE
+        JUCE_WEB_BROWSER=0
+        JUCE_USE_CURL=0
+        JUCE_USE_MP3AUDIOFORMAT=1)
+    target_link_libraries(RandomChopSamplerTests PRIVATE
+        juce::juce_audio_formats
+        juce::juce_data_structures
+        PUBLIC juce::juce_recommended_config_flags
+               juce::juce_recommended_warning_flags)
+    add_test(NAME RandomChopSamplerTests COMMAND RandomChopSamplerTests)
+endif()

@@ -6,4 +6,4 @@
 *.suo
 *.VC.db
 *.VC.VC.opendb
-
+/.agents/

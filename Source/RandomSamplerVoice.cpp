@@ -2,8 +2,8 @@
 #include <cmath>
 
 void RandomSamplerVoice::start(SampleManager::SamplePtr newSample, int note, float velocity,
-                               double startFrame, float attackSeconds, float releaseSeconds,
-                               uint64_t newAge) noexcept
+                               double startFrame, float voiceGain, float attackSeconds,
+                               float releaseSeconds, uint64_t newAge) noexcept
 {
     if (isActive())
     {
@@ -21,7 +21,7 @@ void RandomSamplerVoice::start(SampleManager::SamplePtr newSample, int note, flo
     age = newAge;
     sourcePosition = startFrame;
     increment = sample->sampleRate / juce::jmax(1.0, hostRate);
-    targetLevel = juce::jlimit(0.0f, 1.0f, velocity);
+    targetLevel = juce::jmax(0.0f, velocity * voiceGain);
     level = 0.0f;
     attackStep = attackSeconds <= 0.00001f ? targetLevel
         : targetLevel / juce::jmax(1.0f, attackSeconds * static_cast<float>(hostRate));
@@ -39,8 +39,8 @@ void RandomSamplerVoice::release(float releaseSeconds) noexcept
 void RandomSamplerVoice::render(juce::AudioBuffer<float>& output, int startSample, int numSamples) noexcept
 {
     if (!sample) return;
-    const auto sourceLength = sample->audio.getNumSamples();
-    const auto sourceChannels = sample->audio.getNumChannels();
+    const auto sourceLength = sample->audio->getNumSamples();
+    const auto sourceChannels = sample->audio->getNumChannels();
 
     for (int i = 0; i < numSamples; ++i)
     {
@@ -67,7 +67,7 @@ void RandomSamplerVoice::render(juce::AudioBuffer<float>& output, int startSampl
         for (int channel = 0; channel < output.getNumChannels(); ++channel)
         {
             const int sourceChannel = sourceChannels == 1 ? 0 : juce::jmin(channel, sourceChannels - 1);
-            const float* data = sample->audio.getReadPointer(sourceChannel);
+            const float* data = sample->audio->getReadPointer(sourceChannel);
             const float value = data[index] + fraction * (data[index + 1] - data[index]);
             const float voiceOutput = value * level * endGain;
             const int stereoChannel = juce::jmin(channel, 1);
