@@ -149,9 +149,20 @@ void SourceWaveformComponent::mouseDown(const juce::MouseEvent& event)
         + static_cast<float>(region.start) * static_cast<float>(bounds.getWidth());
     const auto endX = static_cast<float>(bounds.getX())
         + static_cast<float>(region.end) * static_cast<float>(bounds.getWidth());
-    dragMarker = std::abs(event.position.x - startX) <= std::abs(event.position.x - endX)
-        ? DragMarker::start : DragMarker::end;
-    mouseDrag(event);
+    if (std::abs(startX - endX) < 0.5f)
+    {
+        const auto position = positionToNormalised(event.position.x);
+        dragMarker = position < region.start ? DragMarker::start
+            : (position > region.end ? DragMarker::end : DragMarker::coincident);
+    }
+    else
+    {
+        dragMarker = std::abs(event.position.x - startX) <= std::abs(event.position.x - endX)
+            ? DragMarker::start : DragMarker::end;
+    }
+
+    if (dragMarker != DragMarker::coincident)
+        mouseDrag(event);
 }
 
 void SourceWaveformComponent::mouseDrag(const juce::MouseEvent& event)
@@ -160,6 +171,16 @@ void SourceWaveformComponent::mouseDrag(const juce::MouseEvent& event)
         return;
 
     const auto position = positionToNormalised(event.position.x);
+    if (dragMarker == DragMarker::coincident)
+    {
+        if (position < region.start)
+            dragMarker = DragMarker::start;
+        else if (position > region.end)
+            dragMarker = DragMarker::end;
+        else
+            return;
+    }
+
     if (dragMarker == DragMarker::start)
         region.start = juce::jmin(position, region.end);
     else

@@ -25,8 +25,8 @@ buildWaveformPeaks(const juce::AudioBuffer<float>& audio)
         const auto first = static_cast<int>((static_cast<int64_t>(peak) * sampleCount) / peakCount);
         const auto last = juce::jmax(first + 1,
             static_cast<int>((static_cast<int64_t>(peak + 1) * sampleCount) / peakCount));
-        float minimum = 0.0f;
-        float maximum = 0.0f;
+        float minimum = std::numeric_limits<float>::max();
+        float maximum = std::numeric_limits<float>::lowest();
         for (int channel = 0; channel < channelCount; ++channel)
         {
             const auto* values = audio.getReadPointer(channel);

@@ -16,7 +16,7 @@ public:
     std::function<void(double, double)> onRegionChanged;
 
 private:
-    enum class DragMarker { none, start, end };
+    enum class DragMarker { none, start, end, coincident };
     juce::Rectangle<int> getWaveformBounds() const;
     double positionToNormalised(float x) const noexcept;
     juce::String markerDescription(const juce::String&, double) const;

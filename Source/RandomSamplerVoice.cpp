@@ -73,7 +73,10 @@ void RandomSamplerVoice::render(juce::AudioBuffer<float>& output, int startSampl
         const auto framesLeft = playingInReverse
             ? sourcePosition - static_cast<double>(region.firstFrame)
             : static_cast<double>(region.lastFrame) - sourcePosition;
-        const float endGain = static_cast<float>(juce::jlimit(0.0, 1.0, framesLeft / (0.003 * sample->sampleRate)));
+        auto endGain = static_cast<float>(juce::jlimit(
+            0.0, 1.0, framesLeft / (0.003 * sample->sampleRate)));
+        if (!randomchop::isInterpolationPositionLegal(region, sourcePosition + increment))
+            endGain = 0.0f;
         const float tailGain = stealTailRemaining > 0
             ? static_cast<float>(stealTailRemaining) / static_cast<float>(stealTailLength) : 0.0f;
         for (int channel = 0; channel < output.getNumChannels(); ++channel)

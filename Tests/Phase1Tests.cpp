@@ -55,6 +55,31 @@ juce::File makeTinyWaveFile()
     return file;
 }
 
+juce::File makeConstantWaveFile(float value)
+{
+    const auto directory = juce::File::getSpecialLocation(juce::File::tempDirectory);
+    const auto stem = value >= 0.0f ? "random-chop-positive" : "random-chop-negative";
+    const auto file = directory.getNonexistentChildFile(stem, ".wav", false);
+    std::unique_ptr<juce::OutputStream> stream = file.createOutputStream();
+    juce::WavAudioFormat format;
+    const auto options = juce::AudioFormatWriterOptions {}
+        .withSampleRate(44100.0)
+        .withNumChannels(1)
+        .withBitsPerSample(16);
+    auto writer = format.createWriterFor(stream, options);
+    if (writer == nullptr)
+        return {};
+
+    juce::AudioBuffer<float> audio(1, 32);
+    audio.clear();
+    for (int frame = 0; frame < audio.getNumSamples(); ++frame)
+        audio.setSample(0, frame, value);
+    if (!writer->writeFromAudioSampleBuffer(audio, 0, audio.getNumSamples()))
+        return {};
+    writer.reset();
+    return file;
+}
+
 void testWeightedSelection()
 {
     SampleManager::Pool pool;
@@ -267,11 +292,42 @@ void testVoiceRegionBoundaries()
             }
         check(maximumMagnitude > 0.0f && maximumMagnitude < 1.0f,
               "voice read a sentinel sample outside its source region");
+        check(std::abs(output.getSample(0, 3)) < 0.000001f,
+              "final region sample was not faded to zero before leaving bounds");
         check(!voice.isActive(), "voice did not end naturally at its source-region boundary");
     };
 
     renderDirection(false);
     renderDirection(true);
+}
+
+void testWaveformPeakExtrema()
+{
+    const float values[] { 0.25f, -0.25f };
+    for (const auto expected : values)
+    {
+        const auto file = makeConstantWaveFile(expected);
+        check(file.existsAsFile(), "could not create constant waveform fixture");
+        if (!file.existsAsFile())
+            continue;
+
+        {
+            SampleManager manager;
+            juce::StringArray paths;
+            paths.add(file.getFullPathName());
+            check(manager.addFiles(paths).empty(), "constant waveform fixture did not load");
+            const auto snapshot = manager.getSnapshot();
+            check(snapshot->size() == 1 && snapshot->front()->waveformPeaks != nullptr,
+                  "constant waveform peaks were not prepared");
+            if (snapshot->size() == 1 && snapshot->front()->waveformPeaks != nullptr)
+                for (const auto& peak : *snapshot->front()->waveformPeaks)
+                    check(std::abs(peak.minimum - expected) < 0.01f
+                              && std::abs(peak.maximum - expected) < 0.01f,
+                          "waveform peak bounds introduced a false zero crossing");
+        }
+
+        check(file.deleteFile(), "could not remove constant waveform fixture");
+    }
 }
 }
 
@@ -283,6 +339,7 @@ int main()
     testRegionClampingAndRestore();
     testRandomStartAndReadBounds();
     testVoiceRegionBoundaries();
+    testWaveformPeakExtrema();
     if (failures == 0)
         std::cout << "All Phase 1 tests passed.\n";
     return failures == 0 ? 0 : 1;
