@@ -53,13 +53,22 @@ private:
     juce::TextButton enableAllButton { "Enable All" }, disableAllButton { "Disable All" };
     juce::ListBox list { "Samples", this };
     SourceWaveformComponent waveform;
-    juce::Slider sourceGain, sourceWeight;
-    juce::Label sourceGainLabel, sourceWeightLabel;
-    juce::Slider randomStart, attack, release, output, seed;
-    juce::Label randomStartLabel, attackLabel, releaseLabel, outputLabel, seedLabel;
+    juce::ComboBox sourceKey;
+    juce::Slider sourceTranspose, sourceFineTune, sourceGain, sourceWeight;
+    juce::Label sourceKeyLabel, sourceTransposeLabel, sourceFineTuneLabel,
+        sourceGainLabel, sourceWeightLabel;
+    juce::ComboBox targetKey;
+    juce::ToggleButton midiPitch { "MIDI Pitch" };
+    juce::Slider rootNote, randomStart, attack, release, output, seed;
+    juce::Label targetKeyLabel, rootNoteLabel, randomStartLabel, attackLabel,
+        releaseLabel, outputLabel, seedLabel;
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
+    using ComboBoxAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
+    using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
     std::unique_ptr<SliderAttachment> randomStartAttachment, attackAttachment, releaseAttachment,
-        outputAttachment, seedAttachment;
+        outputAttachment, seedAttachment, rootNoteAttachment;
+    std::unique_ptr<ComboBoxAttachment> targetKeyAttachment;
+    std::unique_ptr<ButtonAttachment> midiPitchAttachment;
     std::shared_ptr<const SampleManager::Pool> displayPool;
     juce::String selectedSourceId;
     std::unique_ptr<juce::FileChooser> chooser;

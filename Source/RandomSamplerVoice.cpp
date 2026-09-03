@@ -3,7 +3,8 @@
 
 void RandomSamplerVoice::start(SampleManager::SamplePtr newSample, int note, float velocity,
                                double startFrame, randomchop::FrameRegion sourceRegion,
-                               bool reverse, float voiceGain, float attackSeconds,
+                               double playbackPitchRatio, bool reverse, float voiceGain,
+                               float attackSeconds,
                                float releaseSeconds, uint64_t newAge) noexcept
 {
     if (isActive())
@@ -24,7 +25,9 @@ void RandomSamplerVoice::start(SampleManager::SamplePtr newSample, int note, flo
     playingInReverse = reverse;
     sourcePosition = juce::jlimit(static_cast<double>(region.firstFrame),
                                   randomchop::lastInterpolationPosition(region), startFrame);
-    increment = sample->sampleRate / juce::jmax(1.0, hostRate);
+    const auto safePitchRatio = std::isfinite(playbackPitchRatio) && playbackPitchRatio > 0.0
+        ? playbackPitchRatio : 1.0;
+    increment = (sample->sampleRate / juce::jmax(1.0, hostRate)) * safePitchRatio;
     if (playingInReverse)
         increment = -increment;
     targetLevel = juce::jmax(0.0f, velocity * voiceGain);

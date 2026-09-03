@@ -1,6 +1,7 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include "HarmonicPitch.h"
 #include "PlaybackRegion.h"
 #include <atomic>
 #include <functional>

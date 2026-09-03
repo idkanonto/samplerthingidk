@@ -53,10 +53,12 @@ SampleSettings readSettings(const juce::ValueTree& node)
         static_cast<double>(node.getProperty("end", 1.0)));
     s.startNormalised = region.start;
     s.endNormalised = region.end;
-    s.sourceKey = juce::jlimit(0, 24, static_cast<int>(node.getProperty("sourceKey", 0)));
+    s.sourceKey = randomchop::clampTonic(static_cast<int>(node.getProperty("sourceKey", 0)));
     s.gainDb = juce::jlimit(-60.0f, 12.0f, static_cast<float>(node.getProperty("gain", 0.0f)));
-    s.transposeSemitones = juce::jlimit(-24, 24, static_cast<int>(node.getProperty("transpose", 0)));
-    s.fineTuneCents = juce::jlimit(-100.0f, 100.0f, static_cast<float>(node.getProperty("fineTune", 0.0f)));
+    s.transposeSemitones = randomchop::clampTranspose(
+        static_cast<int>(node.getProperty("transpose", 0)));
+    s.fineTuneCents = randomchop::clampFineTune(
+        static_cast<float>(node.getProperty("fineTune", 0.0f)));
     s.stretchRatio = juce::jlimit(0.5f, 2.0f, static_cast<float>(node.getProperty("stretch", 1.0f)));
     s.selectionWeight = juce::jlimit(0.01f, 10.0f, static_cast<float>(node.getProperty("weight", 1.0f)));
     return s;
@@ -250,6 +252,10 @@ void SampleManager::updateSettings(const juce::String& id,
                                                           copy->settings.endNormalised);
     copy->settings.startNormalised = region.start;
     copy->settings.endNormalised = region.end;
+    copy->settings.sourceKey = randomchop::clampTonic(copy->settings.sourceKey);
+    copy->settings.transposeSemitones = randomchop::clampTranspose(
+        copy->settings.transposeSemitones);
+    copy->settings.fineTuneCents = randomchop::clampFineTune(copy->settings.fineTuneCents);
     copy->settings.selectionWeight = juce::jlimit(0.01f, 10.0f, copy->settings.selectionWeight);
     (*next)[index] = std::move(copy);
     publish(std::shared_ptr<const Pool>(std::move(next)));

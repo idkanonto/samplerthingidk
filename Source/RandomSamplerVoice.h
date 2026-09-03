@@ -10,7 +10,8 @@ public:
     int getNote() const noexcept { return midiNote; }
     uint64_t getAge() const noexcept { return age; }
     void start(SampleManager::SamplePtr newSample, int note, float velocity, double startFrame,
-               randomchop::FrameRegion sourceRegion, bool reverse, float voiceGain,
+               randomchop::FrameRegion sourceRegion, double playbackPitchRatio,
+               bool reverse, float voiceGain,
                float attackSeconds, float releaseSeconds,
                uint64_t newAge) noexcept;
     void release(float releaseSeconds) noexcept;
