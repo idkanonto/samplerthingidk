@@ -12,10 +12,10 @@ Update evidence when tests actually run. “Code-inspected” is not a runtime p
 
 | Area | Minimum verification | Current evidence |
 |---|---|---|
-| Build | Clean Release VST3 and Standalone builds | CI workflow exists; not rerun for this setup |
-| Formats | Mono/stereo WAV, AIFF/AIF, MP3, FLAC at 44.1/48/96 kHz | Extension/decoder path code-inspected; runtime not run |
-| Pool | 20 accepted, 21st rejected; remove/clear; missing-file restore | Code-inspected; runtime not run |
-| Selection | Disabled never selected; Weight distribution is plausible; seeded repeatability | Code-inspected; behavior not run |
+| Build | Clean Release VST3 and Standalone builds | [Windows Release CI run #5](https://github.com/idkanonto/samplerthingidk/actions/runs/33783523577) at `af2ec677` built the Release VST3 and test targets, passed CTest, verified the bundle/module, and uploaded the artifact; Standalone was not built in this run |
+| Formats | Mono/stereo WAV, AIFF/AIF, MP3, FLAC at 44.1/48/96 kHz | Run #5 decoded a mono 44.1 kHz WAV fixture; AIFF/AIF, MP3, FLAC, stereo, and other rates remain code-inspected but not runtime-tested |
+| Pool | 20 accepted, 21st rejected; remove/clear; missing-file restore | Run #5 tested 20 accepted, the 21st rejected, and clear/restore; remove and missing-file restore remain code-inspected |
+| Selection | Disabled never selected; Weight distribution is plausible; seeded repeatability | Run #5 tested that disabled/missing sources are never selected and exercised a 1:9 weighting over 10,000 choices; seeded repeatability remains code-inspected |
 | Random region | Starts always within manual Start/End | Not implemented |
 | Pitch | Source/Target keys, Transpose, Fine Tune, MIDI pitch/root behavior | Not implemented |
 | Stretch | Pitch preservation, cache reuse/invalidation, off-audio-thread preparation | Not implemented |
@@ -24,8 +24,7 @@ Update evidence when tests actually run. “Code-inspected” is not a runtime p
 | Takes | Full-cycle boundary, latest-8 eviction, deterministic HISTORY replay | Not implemented |
 | Length/envelope | Chance → Final Length → Attack/Release ordering | Final Length not implemented |
 | Global FX | Bit Crush → Sample Rate Reduction → Output Gain | Only Output Gain implemented |
-| State | Automation and project save/reopen, moved/missing sources | Code-inspected; host runtime not run |
-| Realtime | No I/O, blocking, allocation/reclamation, or stretch prep in callback | Architecture code-inspected; profiler/stress test not run |
+| State | Automation and project save/reopen, moved/missing sources | Run #5 tested source UUID, enabled state, Gain, and Weight round-trip plus parameter-only pool replacement; DAW automation/save-reopen and moved/missing files were not runtime-tested |
+| Realtime | No I/O, blocking, allocation/reclamation, or stretch prep in callback | Immutable snapshots and deferred control-thread reclamation code-inspected at `af2ec677`; profiler/stress test not run |
 
 When a feature passes, update [[CURRENT_STATE]] with the exact build, host, sample set, or automated test used.
-

@@ -11,7 +11,7 @@ verified: 2026-09-03
 
 # Current Implementation State
 
-Evidence: source inspection at local commit `723b9da` on 2026-09-03. The worktree was clean and `main` was one commit ahead of `origin/main`. No fresh build or runtime audio test was performed during this documentation setup.
+Evidence: source inspection plus [Windows Release CI run #5](https://github.com/idkanonto/samplerthingidk/actions/runs/33783523577) at commit `af2ec67781c575a1f66a76cfa748e25493635378` on 2026-09-03. The workflow configured a Windows Server 2022 Release build, built `RandomChopSampler_VST3` and `RandomChopSamplerTests`, passed `ctest --test-dir build -C Release --output-on-failure`, verified that the VST3 bundle contained a module, and uploaded the bundle artifact. No DAW/host audio test or full format/sample-rate matrix was run.
 
 ## Implemented in code
 
@@ -24,8 +24,9 @@ Evidence: source inspection at local commit `723b9da` on 2026-09-03. The worktre
 - Random start uses a global Random Start amount over the physical file range. It does **not** yet honor the stored manual Start/End region.
 - Sample-accurate MIDI event handling within each block; Note Off starts the global release envelope.
 - Global Attack, Release, Output Gain, and deterministic Seed parameters with host state persistence.
-- Path and source-setting persistence, missing-file representation, immutable pool snapshots, and retained retired snapshots for realtime-safe removal.
+- Path and source-setting persistence, missing-file representation, immutable pool snapshots, and deferred control-thread reclamation after realtime references drain.
 - Linear source-rate conversion, mono-to-stereo playback, physical-end fade, and a short voice-steal tail crossfade.
+- `RandomChopSamplerTests` CTest coverage for weighted playable-source selection, the 20-source cap, persistent source identity/settings, and parameter-only state replacement; the Windows workflow builds and runs the test target.
 
 ## Stored scaffolding, not functional behavior
 
@@ -40,7 +41,5 @@ Evidence: source inspection at local commit `723b9da` on 2026-09-03. The worktre
 - Step Mask, Chance effects, Takes, Take History, LIVE/HISTORY replay.
 - Final Length.
 - Global Bit Crush and Sample Rate Reduction.
-- Automated tests. The current workflow builds and checks that a VST3 bundle/module exists, but does not run DSP or behavior tests.
 
 See [[TEST_MATRIX]] before changing an item from planned to implemented.
-
