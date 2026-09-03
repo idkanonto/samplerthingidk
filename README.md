@@ -1,6 +1,6 @@
 # Random Chop Sampler
 
-A 16-voice JUCE VST3/standalone sampler instrument. Every MIDI note chooses a weighted random source and a random legal start point. V2 is being delivered through gated functionality phases; the current source-pool phase supports WAV, AIFF/AIF, MP3, and FLAC.
+A 16-voice JUCE VST3/standalone sampler instrument. Every MIDI note chooses a weighted random source and a random legal start point. V2 is being delivered through gated functionality phases; the current source-region phase adds a selected-source waveform and manual Start/End playback bounds for WAV, AIFF/AIF, MP3, and FLAC sources.
 
 ## Build without local development tools (recommended)
 
@@ -9,7 +9,7 @@ A 16-voice JUCE VST3/standalone sampler instrument. Every MIDI note chooses a we
 3. When the run finishes, open it and download **Random-Chop-Sampler-Windows-VST3** from the Artifacts section.
 4. Extract the downloaded archive. Copy the complete `Random Chop Sampler.vst3` directory to `C:\Program Files\Common Files\VST3\` and rescan plug-ins in the DAW.
 
-The workflow uses GitHub's `windows-2022` runner with Visual Studio 2022 and CMake. CMake FetchContent downloads pinned JUCE 8.0.13 automatically, builds only the Release VST3 target, verifies that the bundle contains its module binary, and uploads the complete `.vst3` bundle. Nothing needs to be installed locally.
+The workflow uses GitHub's `windows-2022` runner with Visual Studio 2022 and CMake. CMake FetchContent downloads pinned JUCE 8.0.13 automatically, builds the Release VST3 and test targets, runs CTest, verifies that the bundle contains its module binary, and uploads the complete `.vst3` bundle. Nothing needs to be installed locally.
 
 ## Optional local build
 
@@ -30,7 +30,7 @@ Then rescan VST3 plug-ins in the DAW, create an instrument track, insert **Rando
 
 - `SampleManager` decodes files only from message/host state threads and publishes immutable pool snapshots atomically.
 - `SampleData` is reference-counted. Voices retain their own reference, so removing or clearing a sample cannot invalidate active playback. Superseded snapshots and sources are reclaimed only from control-thread maintenance after realtime references have drained.
-- `RandomSamplerVoice` performs linear sample-rate conversion, mono-to-stereo routing, per-voice attack/release, a minimum 1 ms start safety fade, a file-end fade, and a 3 ms tail crossfade when a voice is stolen.
+- `RandomSamplerVoice` performs linear sample-rate conversion, mono-to-stereo routing, per-voice attack/release, a source-region boundary fade, and a 3 ms tail crossfade when a voice is stolen.
 - `PluginProcessor` owns 16 fixed voices and an allocation-free xorshift64* randomizer. Voice stealing selects the oldest voice.
 - MIDI rendering is sample-accurate within each host block. No disk access, decoding, blocking mutex, logging, or explicit allocation occurs in the audio callback.
 
@@ -41,10 +41,11 @@ Then rescan VST3 plug-ins in the DAW, create an instrument track, insert **Rando
 - [x] Hard 20-source cap with visible count and graceful rejection
 - [x] Visible scrollable list, per-file Enable/Remove, Enable All, Disable All, Clear All, and status feedback
 - [x] Weighted enabled-source selection plus per-source gain
+- [x] Selected-source waveform with draggable Start/End markers and region-bounded Random Start
 - [x] Reproducible Seed sequence (sequence restarts after prepare or a Seed change)
 - [x] 16-voice polyphony with oldest-voice stealing and clean Note Off release
 - [x] Source-rate conversion via linear interpolation; mono and stereo playback
-- [x] Per-voice attack/release plus 3 ms physical-end fade
+- [x] Per-voice attack/release plus 3 ms source-region boundary fade
 - [x] Random Start, Attack, Release, Output, and Seed automation/state
 - [x] Sample path persistence and graceful missing-file handling
 - [x] Safe removal/clear while voices are active

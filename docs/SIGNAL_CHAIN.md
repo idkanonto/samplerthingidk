@@ -29,7 +29,6 @@ Take History records the decisions that drive this path; it does not store rende
 
 ## Current code path
 
-The current implementation is shorter: MIDI event → weighted playable-source selection → file-range random start → linear source-rate conversion and per-source Gain → per-voice Attack/Release/end fade → voice mix → global Output Gain. See [[CURRENT_STATE]] for omissions.
+The current implementation is shorter: MIDI event → weighted playable-source selection → region-bounded random start → linear source-rate conversion and per-source Gain → per-voice Attack/Release/region-boundary fade → voice mix → global Output Gain. See [[CURRENT_STATE]] for omissions.
 
 The approved chain fixes stage order, but exact pitch-mapping math and individual Chance-effect algorithms still require explicit definitions before implementation; do not invent them silently.
-
