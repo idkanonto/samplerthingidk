@@ -2,6 +2,29 @@
 
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
+#include <functional>
+
+class SourceWaveformComponent final : public juce::Component
+{
+public:
+    void setSource(SampleManager::SamplePtr);
+    void paint(juce::Graphics&) override;
+    void mouseDown(const juce::MouseEvent&) override;
+    void mouseDrag(const juce::MouseEvent&) override;
+    void mouseUp(const juce::MouseEvent&) override;
+
+    std::function<void(double, double)> onRegionChanged;
+
+private:
+    enum class DragMarker { none, start, end, coincident };
+    juce::Rectangle<int> getWaveformBounds() const;
+    double positionToNormalised(float x) const noexcept;
+    juce::String markerDescription(const juce::String&, double) const;
+
+    SampleManager::SamplePtr source;
+    randomchop::NormalisedRegion region;
+    DragMarker dragMarker = DragMarker::none;
+};
 
 class RandomChopSamplerAudioProcessorEditor final : public juce::AudioProcessorEditor,
     public juce::FileDragAndDropTarget, private juce::ListBoxModel, private juce::Timer
@@ -29,6 +52,7 @@ private:
     juce::TextButton addButton { "Add samples..." }, clearButton { "Clear All" };
     juce::TextButton enableAllButton { "Enable All" }, disableAllButton { "Disable All" };
     juce::ListBox list { "Samples", this };
+    SourceWaveformComponent waveform;
     juce::Slider sourceGain, sourceWeight;
     juce::Label sourceGainLabel, sourceWeightLabel;
     juce::Slider randomStart, attack, release, output, seed;

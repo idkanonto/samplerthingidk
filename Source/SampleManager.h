@@ -1,6 +1,7 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include "PlaybackRegion.h"
 #include <atomic>
 #include <functional>
 #include <memory>
@@ -26,15 +27,26 @@ struct SampleSettings final
 
 struct SampleData final
 {
+    struct WaveformPeak final
+    {
+        float minimum = 0.0f;
+        float maximum = 0.0f;
+    };
+
+    using WaveformPeaks = std::vector<WaveformPeak>;
+
     SampleSettings settings;
     std::shared_ptr<const juce::AudioBuffer<float>> audio;
+    std::shared_ptr<const WaveformPeaks> waveformPeaks;
     double sampleRate = 44100.0;
     uint64_t runtimeId = 0;
 
     bool isPlayable() const noexcept
     {
         return settings.enabled && !settings.missing && audio != nullptr
-            && audio->getNumChannels() > 0 && audio->getNumSamples() > 1;
+            && audio->getNumChannels() > 0
+            && randomchop::makeFrameRegion(audio->getNumSamples(), settings.startNormalised,
+                                           settings.endNormalised).canInterpolate();
     }
 };
 

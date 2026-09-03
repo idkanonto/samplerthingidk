@@ -1,4 +1,200 @@
 #include "PluginEditor.h"
+#include <cmath>
+
+void SourceWaveformComponent::setSource(SampleManager::SamplePtr newSource)
+{
+    source = std::move(newSource);
+    region = source != nullptr
+        ? randomchop::clampNormalisedRegion(source->settings.startNormalised,
+                                            source->settings.endNormalised)
+        : randomchop::NormalisedRegion {};
+    repaint();
+}
+
+juce::Rectangle<int> SourceWaveformComponent::getWaveformBounds() const
+{
+    return getLocalBounds().reduced(10).withTrimmedTop(28).withTrimmedBottom(42);
+}
+
+double SourceWaveformComponent::positionToNormalised(float x) const noexcept
+{
+    const auto bounds = getWaveformBounds();
+    if (bounds.getWidth() <= 0)
+        return 0.0;
+    return juce::jlimit(0.0, 1.0,
+        static_cast<double>(x - static_cast<float>(bounds.getX()))
+            / static_cast<double>(bounds.getWidth()));
+}
+
+juce::String SourceWaveformComponent::markerDescription(const juce::String& name,
+                                                          double position) const
+{
+    if (source == nullptr || source->audio == nullptr)
+        return name;
+
+    const auto lastFrame = juce::jmax(0, source->audio->getNumSamples() - 1);
+    const auto frame = juce::jlimit(0, lastFrame,
+        static_cast<int>(std::llround(position * static_cast<double>(lastFrame))));
+    const auto seconds = static_cast<double>(frame) / juce::jmax(1.0, source->sampleRate);
+    return name + "  " + juce::String(position * 100.0, 1) + "%  |  "
+        + juce::String(seconds, 3) + " s  |  sample " + juce::String(frame);
+}
+
+void SourceWaveformComponent::paint(juce::Graphics& g)
+{
+    const auto outer = getLocalBounds().toFloat();
+    g.setColour(juce::Colour(0xff171920));
+    g.fillRoundedRectangle(outer, 7.0f);
+    g.setColour(juce::Colour(0xff494c5a));
+    g.drawRoundedRectangle(outer.reduced(0.5f), 7.0f, 1.0f);
+
+    g.setFont(14.0f);
+    g.setColour(juce::Colour(0xffc8cad1));
+    juce::String heading("SOURCE REGION");
+    if (source != nullptr)
+    {
+        heading += " — ";
+        heading += source->settings.displayName;
+    }
+    g.drawText(heading, getLocalBounds().reduced(10).removeFromTop(24),
+               juce::Justification::centredLeft, true);
+
+    const auto waveBounds = getWaveformBounds();
+    g.setColour(juce::Colour(0xff20232c));
+    g.fillRect(waveBounds);
+    g.setColour(juce::Colour(0xff343846));
+    g.drawHorizontalLine(waveBounds.getCentreY(), static_cast<float>(waveBounds.getX()),
+                         static_cast<float>(waveBounds.getRight()));
+
+    if (source == nullptr)
+    {
+        g.setColour(juce::Colour(0xff8f93a3));
+        g.drawText("Select a source to edit its region", waveBounds,
+                   juce::Justification::centred);
+        return;
+    }
+
+    if (source->settings.missing || source->audio == nullptr
+        || source->waveformPeaks == nullptr || source->waveformPeaks->empty())
+    {
+        g.setColour(juce::Colour(0xffff8a8a));
+        g.drawText("Waveform unavailable for missing source", waveBounds,
+                   juce::Justification::centred);
+    }
+    else
+    {
+        const auto& peaks = *source->waveformPeaks;
+        const auto peakCount = peaks.size();
+        const auto halfHeight = static_cast<float>(waveBounds.getHeight()) * 0.46f;
+        const auto centreY = static_cast<float>(waveBounds.getCentreY());
+        g.setColour(juce::Colour(0xff9a7cff));
+        for (int x = 0; x < waveBounds.getWidth(); ++x)
+        {
+            const auto first = static_cast<size_t>(x) * peakCount
+                / static_cast<size_t>(waveBounds.getWidth());
+            const auto last = juce::jmax(first + 1,
+                static_cast<size_t>(x + 1) * peakCount
+                    / static_cast<size_t>(waveBounds.getWidth()));
+            float minimum = 0.0f;
+            float maximum = 0.0f;
+            for (auto peak = first; peak < juce::jmin(last, peakCount); ++peak)
+            {
+                minimum = juce::jmin(minimum, peaks[peak].minimum);
+                maximum = juce::jmax(maximum, peaks[peak].maximum);
+            }
+            g.drawVerticalLine(waveBounds.getX() + x,
+                               centreY - maximum * halfHeight,
+                               centreY - minimum * halfHeight);
+        }
+    }
+
+    const auto startX = static_cast<float>(waveBounds.getX())
+        + static_cast<float>(region.start) * static_cast<float>(waveBounds.getWidth());
+    const auto endX = static_cast<float>(waveBounds.getX())
+        + static_cast<float>(region.end) * static_cast<float>(waveBounds.getWidth());
+    g.setColour(juce::Colours::black.withAlpha(0.5f));
+    g.fillRect(juce::Rectangle<float>(static_cast<float>(waveBounds.getX()),
+                                     static_cast<float>(waveBounds.getY()),
+                                     juce::jmax(0.0f, startX - waveBounds.getX()),
+                                     static_cast<float>(waveBounds.getHeight())));
+    g.fillRect(juce::Rectangle<float>(endX, static_cast<float>(waveBounds.getY()),
+                                     juce::jmax(0.0f, waveBounds.getRight() - endX),
+                                     static_cast<float>(waveBounds.getHeight())));
+
+    g.setColour(juce::Colour(0xff66e3a4));
+    g.drawLine(startX, static_cast<float>(waveBounds.getY()), startX,
+               static_cast<float>(waveBounds.getBottom()), 2.0f);
+    g.setColour(juce::Colour(0xffffa65c));
+    g.drawLine(endX, static_cast<float>(waveBounds.getY()), endX,
+               static_cast<float>(waveBounds.getBottom()), 2.0f);
+
+    auto footer = getLocalBounds().reduced(10).removeFromBottom(36);
+    auto startText = footer.removeFromLeft(footer.getWidth() / 2);
+    g.setFont(12.0f);
+    g.setColour(juce::Colour(0xff66e3a4));
+    g.drawText(markerDescription("START", region.start), startText,
+               juce::Justification::centredLeft, true);
+    g.setColour(juce::Colour(0xffffa65c));
+    g.drawText(markerDescription("END", region.end), footer,
+               juce::Justification::centredRight, true);
+}
+
+void SourceWaveformComponent::mouseDown(const juce::MouseEvent& event)
+{
+    if (source == nullptr || source->audio == nullptr)
+        return;
+
+    const auto bounds = getWaveformBounds();
+    const auto startX = static_cast<float>(bounds.getX())
+        + static_cast<float>(region.start) * static_cast<float>(bounds.getWidth());
+    const auto endX = static_cast<float>(bounds.getX())
+        + static_cast<float>(region.end) * static_cast<float>(bounds.getWidth());
+    if (std::abs(startX - endX) < 0.5f)
+    {
+        const auto position = positionToNormalised(event.position.x);
+        dragMarker = position < region.start ? DragMarker::start
+            : (position > region.end ? DragMarker::end : DragMarker::coincident);
+    }
+    else
+    {
+        dragMarker = std::abs(event.position.x - startX) <= std::abs(event.position.x - endX)
+            ? DragMarker::start : DragMarker::end;
+    }
+
+    if (dragMarker != DragMarker::coincident)
+        mouseDrag(event);
+}
+
+void SourceWaveformComponent::mouseDrag(const juce::MouseEvent& event)
+{
+    if (dragMarker == DragMarker::none || source == nullptr)
+        return;
+
+    const auto position = positionToNormalised(event.position.x);
+    if (dragMarker == DragMarker::coincident)
+    {
+        if (position < region.start)
+            dragMarker = DragMarker::start;
+        else if (position > region.end)
+            dragMarker = DragMarker::end;
+        else
+            return;
+    }
+
+    if (dragMarker == DragMarker::start)
+        region.start = juce::jmin(position, region.end);
+    else
+        region.end = juce::jmax(position, region.start);
+
+    if (onRegionChanged)
+        onRegionChanged(region.start, region.end);
+    repaint();
+}
+
+void SourceWaveformComponent::mouseUp(const juce::MouseEvent&)
+{
+    dragMarker = DragMarker::none;
+}
 
 namespace
 {
@@ -26,14 +222,14 @@ public:
 RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(RandomChopSamplerAudioProcessor& p)
     : AudioProcessorEditor(&p), processor(p)
 {
-    setSize(940, 680);
+    setSize(940, 820);
     title.setText("RANDOM CHOP SAMPLER V2", juce::dontSendNotification);
     title.setFont(juce::Font(24.0f, juce::Font::bold));
     title.setColour(juce::Label::textColourId, juce::Colour(0xfff2f2f5));
     status.setColour(juce::Label::textColourId, juce::Colour(0xffa9acb7));
 
     juce::Component* components[] = { &title, &status, &addButton, &clearButton,
-        &enableAllButton, &disableAllButton, &list, &sourceGain, &sourceWeight,
+        &enableAllButton, &disableAllButton, &list, &waveform, &sourceGain, &sourceWeight,
         &sourceGainLabel, &sourceWeightLabel };
     for (auto* component : components) addAndMakeVisible(component);
     list.setColour(juce::ListBox::backgroundColourId, juce::Colour(0xff191b21));
@@ -53,6 +249,18 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     {
         if (selectedSourceId.isNotEmpty()) processor.samples.updateSettings(selectedSourceId,
             [this](SampleSettings& s) { s.selectionWeight = static_cast<float>(sourceWeight.getValue()); });
+    };
+    waveform.onRegionChanged = [this](double start, double end)
+    {
+        if (selectedSourceId.isEmpty())
+            return;
+        processor.samples.updateSettings(selectedSourceId, [start, end](SampleSettings& settings)
+        {
+            settings.startNormalised = start;
+            settings.endNormalised = end;
+        });
+        displayPool = processor.samples.getSnapshot();
+        list.repaint();
     };
 
     configureKnob(randomStart, randomStartLabel, "RANDOM START");
@@ -103,7 +311,7 @@ void RandomChopSamplerAudioProcessorEditor::configureKnob(juce::Slider& slider, 
 void RandomChopSamplerAudioProcessorEditor::paint(juce::Graphics& g)
 {
     g.fillAll(juce::Colour(0xff111218));
-    auto poolArea = getLocalBounds().reduced(20).withTrimmedTop(90).withTrimmedBottom(205);
+    auto poolArea = list.getBounds().expanded(10);
     g.setColour(juce::Colour(0xff242630));
     g.fillRoundedRectangle(poolArea.toFloat(), 8.0f);
     g.setColour(juce::Colour(0xff494c5a));
@@ -131,6 +339,7 @@ void RandomChopSamplerAudioProcessorEditor::resized()
 
     auto globalControls = area.removeFromBottom(135);
     auto sourceControls = area.removeFromBottom(62);
+    auto waveformArea = area.removeFromBottom(190);
     auto gainCell = sourceControls.removeFromLeft(350).reduced(3);
     sourceGainLabel.setBounds(gainCell.removeFromLeft(125));
     sourceGain.setBounds(gainCell);
@@ -147,6 +356,7 @@ void RandomChopSamplerAudioProcessorEditor::resized()
         labels[i]->setBounds(cell.removeFromTop(22));
         sliders[i]->setBounds(cell.reduced(4));
     }
+    waveform.setBounds(waveformArea.reduced(10));
     list.setBounds(area.reduced(10));
 }
 
@@ -185,6 +395,17 @@ void RandomChopSamplerAudioProcessorEditor::refresh()
         selectedSourceId.clear();
     list.updateContent();
     list.selectRow(selected);
+    if (displayPool && selected >= 0 && selected < static_cast<int>(displayPool->size()))
+    {
+        const auto& selectedSource = (*displayPool)[static_cast<size_t>(selected)];
+        sourceGain.setValue(selectedSource->settings.gainDb, juce::dontSendNotification);
+        sourceWeight.setValue(selectedSource->settings.selectionWeight, juce::dontSendNotification);
+        waveform.setSource(selectedSource);
+    }
+    else
+    {
+        waveform.setSource({});
+    }
     list.repaint();
     repaint();
 }
@@ -245,6 +466,7 @@ void RandomChopSamplerAudioProcessorEditor::selectedRowsChanged(int row)
         selectedSourceId = settings.id;
         sourceGain.setValue(settings.gainDb, juce::dontSendNotification);
         sourceWeight.setValue(settings.selectionWeight, juce::dontSendNotification);
+        waveform.setSource((*displayPool)[static_cast<size_t>(row)]);
     }
 }
 

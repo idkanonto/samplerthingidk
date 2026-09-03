@@ -47,6 +47,7 @@ target_sources(RandomChopSampler PRIVATE
     Source/RandomSamplerVoice.cpp
     Source/RandomSamplerVoice.h
     Source/RandomizationEngine.h
+    Source/PlaybackRegion.h
     Source/SourceSelection.h)
 
 target_compile_definitions(RandomChopSampler PUBLIC
@@ -69,7 +70,10 @@ if (BUILD_TESTING)
         Tests/Phase1Tests.cpp
         Source/SampleManager.cpp
         Source/SampleManager.h
+        Source/RandomSamplerVoice.cpp
+        Source/RandomSamplerVoice.h
         Source/RandomizationEngine.h
+        Source/PlaybackRegion.h
         Source/SourceSelection.h)
     target_include_directories(RandomChopSamplerTests PRIVATE Source)
     target_compile_definitions(RandomChopSamplerTests PRIVATE
