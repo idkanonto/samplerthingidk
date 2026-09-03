@@ -10,6 +10,37 @@ constexpr auto sampleType = "SAMPLE";
 constexpr uint64_t maximumDecodedBytesPerSource = 256ULL * 1024ULL * 1024ULL;
 std::atomic<uint64_t> nextRuntimeId { 1 };
 
+std::shared_ptr<const SampleData::WaveformPeaks>
+buildWaveformPeaks(const juce::AudioBuffer<float>& audio)
+{
+    constexpr int maximumPeakCount = 1024;
+    const auto sampleCount = audio.getNumSamples();
+    const auto channelCount = audio.getNumChannels();
+    const auto peakCount = juce::jmin(maximumPeakCount, sampleCount);
+    auto peaks = std::make_shared<SampleData::WaveformPeaks>();
+    peaks->reserve(static_cast<size_t>(peakCount));
+
+    for (int peak = 0; peak < peakCount; ++peak)
+    {
+        const auto first = static_cast<int>((static_cast<int64_t>(peak) * sampleCount) / peakCount);
+        const auto last = juce::jmax(first + 1,
+            static_cast<int>((static_cast<int64_t>(peak + 1) * sampleCount) / peakCount));
+        float minimum = 0.0f;
+        float maximum = 0.0f;
+        for (int channel = 0; channel < channelCount; ++channel)
+        {
+            const auto* values = audio.getReadPointer(channel);
+            for (int frame = first; frame < last; ++frame)
+            {
+                minimum = juce::jmin(minimum, values[frame]);
+                maximum = juce::jmax(maximum, values[frame]);
+            }
+        }
+        peaks->push_back({ minimum, maximum });
+    }
+    return peaks;
+}
+
 SampleSettings readSettings(const juce::ValueTree& node)
 {
     SampleSettings s;
@@ -17,8 +48,11 @@ SampleSettings readSettings(const juce::ValueTree& node)
     s.displayName = node.getProperty("name").toString();
     s.filePath = node.getProperty("path").toString();
     s.enabled = static_cast<bool>(node.getProperty("enabled", true));
-    s.startNormalised = juce::jlimit(0.0, 1.0, static_cast<double>(node.getProperty("start", 0.0)));
-    s.endNormalised = juce::jlimit(s.startNormalised, 1.0, static_cast<double>(node.getProperty("end", 1.0)));
+    const auto region = randomchop::clampNormalisedRegion(
+        static_cast<double>(node.getProperty("start", 0.0)),
+        static_cast<double>(node.getProperty("end", 1.0)));
+    s.startNormalised = region.start;
+    s.endNormalised = region.end;
     s.sourceKey = juce::jlimit(0, 24, static_cast<int>(node.getProperty("sourceKey", 0)));
     s.gainDb = juce::jlimit(-60.0f, 12.0f, static_cast<float>(node.getProperty("gain", 0.0f)));
     s.transposeSemitones = juce::jlimit(-24, 24, static_cast<int>(node.getProperty("transpose", 0)));
@@ -124,16 +158,25 @@ SampleManager::SamplePtr SampleManager::loadFile(const juce::File& file,
         return {};
     }
 
-    auto sample = std::make_shared<SampleData>();
-    if (restored != nullptr) sample->settings = *restored;
-    if (sample->settings.id.isEmpty()) sample->settings.id = juce::Uuid().toString();
-    if (sample->settings.displayName.isEmpty()) sample->settings.displayName = file.getFileName();
-    sample->settings.filePath = file.getFullPathName();
-    sample->settings.missing = false;
-    sample->audio = std::move(buffer);
-    sample->sampleRate = reader->sampleRate;
-    sample->runtimeId = nextRuntimeId.fetch_add(1, std::memory_order_relaxed);
-    return sample;
+    try
+    {
+        auto sample = std::make_shared<SampleData>();
+        if (restored != nullptr) sample->settings = *restored;
+        if (sample->settings.id.isEmpty()) sample->settings.id = juce::Uuid().toString();
+        if (sample->settings.displayName.isEmpty()) sample->settings.displayName = file.getFileName();
+        sample->settings.filePath = file.getFullPathName();
+        sample->settings.missing = false;
+        sample->waveformPeaks = buildWaveformPeaks(*buffer);
+        sample->audio = std::move(buffer);
+        sample->sampleRate = reader->sampleRate;
+        sample->runtimeId = nextRuntimeId.fetch_add(1, std::memory_order_relaxed);
+        return sample;
+    }
+    catch (const std::bad_alloc&)
+    {
+        errors.push_back(file.getFileName() + ": insufficient memory to prepare waveform");
+        return {};
+    }
 }
 
 std::vector<juce::String> SampleManager::addFiles(const juce::StringArray& paths)
@@ -203,8 +246,10 @@ void SampleManager::updateSettings(const juce::String& id,
     auto next = std::make_shared<Pool>(*current);
     auto copy = std::make_shared<SampleData>(*(*next)[index]);
     update(copy->settings);
-    copy->settings.startNormalised = juce::jlimit(0.0, 1.0, copy->settings.startNormalised);
-    copy->settings.endNormalised = juce::jlimit(copy->settings.startNormalised, 1.0, copy->settings.endNormalised);
+    const auto region = randomchop::clampNormalisedRegion(copy->settings.startNormalised,
+                                                          copy->settings.endNormalised);
+    copy->settings.startNormalised = region.start;
+    copy->settings.endNormalised = region.end;
     copy->settings.selectionWeight = juce::jlimit(0.01f, 10.0f, copy->settings.selectionWeight);
     (*next)[index] = std::move(copy);
     publish(std::shared_ptr<const Pool>(std::move(next)));

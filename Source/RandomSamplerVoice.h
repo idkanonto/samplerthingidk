@@ -10,7 +10,8 @@ public:
     int getNote() const noexcept { return midiNote; }
     uint64_t getAge() const noexcept { return age; }
     void start(SampleManager::SamplePtr newSample, int note, float velocity, double startFrame,
-               float voiceGain, float attackSeconds, float releaseSeconds,
+               randomchop::FrameRegion sourceRegion, bool reverse, float voiceGain,
+               float attackSeconds, float releaseSeconds,
                uint64_t newAge) noexcept;
     void release(float releaseSeconds) noexcept;
     void forceStop() noexcept { sample.reset(); stealTailRemaining = 0; lastOutput[0] = lastOutput[1] = 0.0f; }
@@ -19,6 +20,8 @@ public:
 private:
     SampleManager::SamplePtr sample;
     double sourcePosition = 0.0, increment = 1.0, hostRate = 44100.0;
+    randomchop::FrameRegion region;
+    bool playingInReverse = false;
     float level = 0.0f, targetLevel = 1.0f, attackStep = 1.0f, releaseStep = 1.0f;
     int midiNote = -1;
     uint64_t age = 0;
