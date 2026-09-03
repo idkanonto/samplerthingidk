@@ -1,10 +1,31 @@
 #include "SampleManager.h"
 #include <limits>
 
-SampleManager::SampleManager()
+namespace
 {
-    formats.registerBasicFormats();
+constexpr auto samplesType = "SAMPLES";
+constexpr auto sampleType = "SAMPLE";
+
+SampleSettings readSettings(const juce::ValueTree& node)
+{
+    SampleSettings s;
+    s.id = node.getProperty("id", juce::Uuid().toString()).toString();
+    s.displayName = node.getProperty("name").toString();
+    s.filePath = node.getProperty("path").toString();
+    s.enabled = static_cast<bool>(node.getProperty("enabled", true));
+    s.startNormalised = juce::jlimit(0.0, 1.0, static_cast<double>(node.getProperty("start", 0.0)));
+    s.endNormalised = juce::jlimit(s.startNormalised, 1.0, static_cast<double>(node.getProperty("end", 1.0)));
+    s.sourceKey = juce::jlimit(0, 24, static_cast<int>(node.getProperty("sourceKey", 0)));
+    s.gainDb = juce::jlimit(-60.0f, 12.0f, static_cast<float>(node.getProperty("gain", 0.0f)));
+    s.transposeSemitones = juce::jlimit(-24, 24, static_cast<int>(node.getProperty("transpose", 0)));
+    s.fineTuneCents = juce::jlimit(-100.0f, 100.0f, static_cast<float>(node.getProperty("fineTune", 0.0f)));
+    s.stretchRatio = juce::jlimit(0.5f, 2.0f, static_cast<float>(node.getProperty("stretch", 1.0f)));
+    s.selectionWeight = juce::jlimit(0.01f, 10.0f, static_cast<float>(node.getProperty("weight", 1.0f)));
+    return s;
 }
+}
+
+SampleManager::SampleManager() { formats.registerBasicFormats(); }
 
 void SampleManager::publish(std::shared_ptr<const Pool> next)
 {
@@ -15,46 +36,62 @@ void SampleManager::publish(std::shared_ptr<const Pool> next)
 bool SampleManager::isSupported(const juce::File& file)
 {
     const auto ext = file.getFileExtension().toLowerCase();
-    return ext == ".wav" || ext == ".aif" || ext == ".aiff";
+    return ext == ".wav" || ext == ".aif" || ext == ".aiff"
+        || ext == ".mp3" || ext == ".flac";
+}
+
+SampleManager::SamplePtr SampleManager::loadFile(const juce::File& file,
+                                                  const SampleSettings* restored,
+                                                  std::vector<juce::String>& errors)
+{
+    if (!file.existsAsFile() || !isSupported(file))
+    {
+        errors.push_back(file.getFileName() + ": unsupported or missing");
+        return {};
+    }
+
+    std::unique_ptr<juce::AudioFormatReader> reader(formats.createReaderFor(file));
+    if (reader == nullptr || reader->lengthInSamples < 2 || reader->numChannels < 1)
+    {
+        errors.push_back(file.getFileName() + ": could not decode");
+        return {};
+    }
+
+    auto buffer = std::make_shared<juce::AudioBuffer<float>>();
+    const auto length = static_cast<int>(juce::jmin<int64_t>(reader->lengthInSamples,
+                                                              std::numeric_limits<int>::max()));
+    buffer->setSize(juce::jmin(2, static_cast<int>(reader->numChannels)), length);
+    if (!reader->read(buffer.get(), 0, length, 0, true, true))
+    {
+        errors.push_back(file.getFileName() + ": read failed");
+        return {};
+    }
+
+    auto sample = std::make_shared<SampleData>();
+    if (restored != nullptr) sample->settings = *restored;
+    if (sample->settings.id.isEmpty()) sample->settings.id = juce::Uuid().toString();
+    if (sample->settings.displayName.isEmpty()) sample->settings.displayName = file.getFileName();
+    sample->settings.filePath = file.getFullPathName();
+    sample->settings.missing = false;
+    sample->audio = std::move(buffer);
+    sample->sampleRate = reader->sampleRate;
+    return sample;
 }
 
 std::vector<juce::String> SampleManager::addFiles(const juce::StringArray& paths)
 {
-    // Only control/host-state threads enter this path. The audio thread only
-    // performs an atomic snapshot load and never takes this mutex.
     const std::lock_guard<std::mutex> lock(mutationMutex);
     auto next = std::make_shared<Pool>(*getSnapshot());
     std::vector<juce::String> errors;
 
     for (const auto& path : paths)
     {
-        const juce::File file(path);
-        if (!file.existsAsFile() || !isSupported(file))
+        if (static_cast<int>(next->size()) >= maximumSamples)
         {
-            errors.push_back(file.getFileName() + ": unsupported or missing");
+            errors.push_back(juce::File(path).getFileName() + ": pool is full (20 / 20)");
             continue;
         }
-
-        std::unique_ptr<juce::AudioFormatReader> reader(formats.createReaderFor(file));
-        if (reader == nullptr || reader->lengthInSamples < 2 || reader->numChannels < 1)
-        {
-            errors.push_back(file.getFileName() + ": could not decode");
-            continue;
-        }
-
-        auto sample = std::make_shared<SampleData>();
-        sample->name = file.getFileName();
-        sample->file = file;
-        sample->sampleRate = reader->sampleRate;
-        const auto length = static_cast<int>(juce::jmin<int64_t>(reader->lengthInSamples,
-                                                                  std::numeric_limits<int>::max()));
-        sample->audio.setSize(juce::jmin(2, static_cast<int>(reader->numChannels)), length);
-        if (!reader->read(&sample->audio, 0, length, 0, true, true))
-        {
-            errors.push_back(file.getFileName() + ": read failed");
-            continue;
-        }
-        next->push_back(std::move(sample));
+        if (auto loaded = loadFile(juce::File(path), nullptr, errors)) next->push_back(std::move(loaded));
     }
 
     publish(std::shared_ptr<const Pool>(std::move(next)));
@@ -77,16 +114,95 @@ void SampleManager::clear()
     publish(std::make_shared<const Pool>());
 }
 
+void SampleManager::setEnabled(size_t index, bool enabled)
+{
+    updateSettings(index, [enabled](SampleSettings& s) { s.enabled = enabled; });
+}
+
+void SampleManager::setAllEnabled(bool enabled)
+{
+    const std::lock_guard<std::mutex> lock(mutationMutex);
+    const auto current = getSnapshot();
+    auto next = std::make_shared<Pool>();
+    next->reserve(current->size());
+    for (const auto& source : *current)
+    {
+        auto copy = std::make_shared<SampleData>(*source);
+        copy->settings.enabled = enabled;
+        next->push_back(std::move(copy));
+    }
+    publish(std::shared_ptr<const Pool>(std::move(next)));
+}
+
+void SampleManager::updateSettings(size_t index, const std::function<void(SampleSettings&)>& update)
+{
+    const std::lock_guard<std::mutex> lock(mutationMutex);
+    auto current = getSnapshot();
+    if (index >= current->size()) return;
+    auto next = std::make_shared<Pool>(*current);
+    auto copy = std::make_shared<SampleData>(*(*next)[index]);
+    update(copy->settings);
+    copy->settings.startNormalised = juce::jlimit(0.0, 1.0, copy->settings.startNormalised);
+    copy->settings.endNormalised = juce::jlimit(copy->settings.startNormalised, 1.0, copy->settings.endNormalised);
+    copy->settings.selectionWeight = juce::jlimit(0.01f, 10.0f, copy->settings.selectionWeight);
+    (*next)[index] = std::move(copy);
+    publish(std::shared_ptr<const Pool>(std::move(next)));
+}
+
 std::shared_ptr<const SampleManager::Pool> SampleManager::getSnapshot() const noexcept
 {
     return std::atomic_load_explicit(&pool, std::memory_order_acquire);
 }
 
-juce::StringArray SampleManager::getPaths() const
+juce::ValueTree SampleManager::createState() const
 {
-    juce::StringArray result;
-    for (const auto& sample : *getSnapshot()) result.add(sample->file.getFullPathName());
-    return result;
+    juce::ValueTree root(samplesType);
+    for (const auto& sample : *getSnapshot())
+    {
+        const auto& s = sample->settings;
+        juce::ValueTree node(sampleType);
+        node.setProperty("id", s.id, nullptr);
+        node.setProperty("name", s.displayName, nullptr);
+        node.setProperty("path", s.filePath, nullptr);
+        node.setProperty("enabled", s.enabled, nullptr);
+        node.setProperty("start", s.startNormalised, nullptr);
+        node.setProperty("end", s.endNormalised, nullptr);
+        node.setProperty("sourceKey", s.sourceKey, nullptr);
+        node.setProperty("gain", s.gainDb, nullptr);
+        node.setProperty("transpose", s.transposeSemitones, nullptr);
+        node.setProperty("fineTune", s.fineTuneCents, nullptr);
+        node.setProperty("stretch", s.stretchRatio, nullptr);
+        node.setProperty("weight", s.selectionWeight, nullptr);
+        root.appendChild(node, nullptr);
+    }
+    return root;
+}
+
+std::vector<juce::String> SampleManager::restoreState(const juce::ValueTree& state)
+{
+    const std::lock_guard<std::mutex> lock(mutationMutex);
+    auto next = std::make_shared<Pool>();
+    std::vector<juce::String> errors;
+
+    for (int i = 0; i < state.getNumChildren() && static_cast<int>(next->size()) < maximumSamples; ++i)
+    {
+        auto settings = readSettings(state.getChild(i));
+        const juce::File file(settings.filePath);
+        if (auto loaded = loadFile(file, &settings, errors))
+        {
+            next->push_back(std::move(loaded));
+        }
+        else
+        {
+            auto missing = std::make_shared<SampleData>();
+            missing->settings = settings;
+            missing->settings.missing = true;
+            if (missing->settings.displayName.isEmpty()) missing->settings.displayName = file.getFileName();
+            next->push_back(std::move(missing));
+        }
+    }
+    publish(std::shared_ptr<const Pool>(std::move(next)));
+    return errors;
 }
 
 int SampleManager::size() const noexcept { return static_cast<int>(getSnapshot()->size()); }

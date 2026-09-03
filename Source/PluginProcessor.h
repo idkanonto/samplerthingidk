@@ -33,9 +33,11 @@ public:
     juce::AudioProcessorValueTreeState parameters;
     SampleManager samples;
     std::atomic<int> lastTriggeredIndex { -1 };
+    std::atomic<int> selectedSourceIndex { -1 };
     std::atomic<bool> triggeredWhileEmpty { false };
 
 private:
+    int chooseWeightedSource(const SampleManager::Pool&) noexcept;
     void noteOn(int note, float velocity) noexcept;
     void noteOff(int note) noexcept;
     std::array<RandomSamplerVoice, 16> voices;
@@ -45,4 +47,3 @@ private:
     int lastSeed = -1;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(RandomChopSamplerAudioProcessor)
 };
-

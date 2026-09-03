@@ -35,15 +35,33 @@ bool RandomChopSamplerAudioProcessor::isBusesLayoutSupported(const BusesLayout& 
         && layouts.getMainInputChannelSet().isDisabled();
 }
 
+int RandomChopSamplerAudioProcessor::chooseWeightedSource(const SampleManager::Pool& pool) noexcept
+{
+    double total = 0.0;
+    for (const auto& source : pool)
+        if (source->isPlayable()) total += juce::jmax(0.01f, source->settings.selectionWeight);
+    if (total <= 0.0) return -1;
+
+    double target = random.unit() * total;
+    for (size_t i = 0; i < pool.size(); ++i)
+    {
+        if (!pool[i]->isPlayable()) continue;
+        target -= juce::jmax(0.01f, pool[i]->settings.selectionWeight);
+        if (target <= 0.0) return static_cast<int>(i);
+    }
+    for (size_t i = pool.size(); i-- > 0;) if (pool[i]->isPlayable()) return static_cast<int>(i);
+    return -1;
+}
+
 void RandomChopSamplerAudioProcessor::noteOn(int note, float velocity) noexcept
 {
     const auto pool = samples.getSnapshot();
-    if (pool->empty()) { triggeredWhileEmpty.store(true, std::memory_order_relaxed); return; }
-    const auto selected = random.bounded(static_cast<uint32_t>(pool->size()));
-    const auto& sample = (*pool)[selected];
+    const int selected = chooseWeightedSource(*pool);
+    if (selected < 0) { triggeredWhileEmpty.store(true, std::memory_order_relaxed); return; }
+    const auto& sample = (*pool)[static_cast<size_t>(selected)];
     const double amount = parameters.getRawParameterValue(IDs::randomStart)->load() * 0.01;
     const double margin = juce::jmax(2.0, sample->sampleRate * 0.003);
-    const double lastLegal = juce::jmax(0.0, static_cast<double>(sample->audio.getNumSamples() - 2) - margin);
+    const double lastLegal = juce::jmax(0.0, static_cast<double>(sample->audio->getNumSamples() - 2) - margin);
     const double start = random.unit() * lastLegal * amount;
 
     auto* voice = &voices[0];
@@ -52,6 +70,7 @@ void RandomChopSamplerAudioProcessor::noteOn(int note, float velocity) noexcept
         else if (candidate.getAge() < voice->getAge()) voice = &candidate;
 
     voice->start(sample, note, velocity, start,
+                 juce::Decibels::decibelsToGain(sample->settings.gainDb),
                  juce::jmax(0.001f, parameters.getRawParameterValue(IDs::attack)->load()),
                  parameters.getRawParameterValue(IDs::release)->load(), ++voiceCounter);
     lastTriggeredIndex.store(static_cast<int>(selected), std::memory_order_relaxed);
@@ -91,9 +110,7 @@ void RandomChopSamplerAudioProcessor::processBlock(juce::AudioBuffer<float>& buf
 void RandomChopSamplerAudioProcessor::getStateInformation(juce::MemoryBlock& destination)
 {
     auto state = parameters.copyState();
-    auto paths = std::make_unique<juce::XmlElement>("SAMPLES");
-    for (const auto& path : samples.getPaths()) paths->createNewChildElement("FILE")->setAttribute("path", path);
-    state.appendChild(juce::ValueTree::fromXml(*paths), nullptr);
+    state.appendChild(samples.createState(), nullptr);
     if (auto xml = state.createXml()) copyXmlToBinary(*xml, destination);
 }
 
@@ -104,13 +121,10 @@ void RandomChopSamplerAudioProcessor::setStateInformation(const void* data, int 
         auto state = juce::ValueTree::fromXml(*xml);
         if (state.isValid())
         {
-            juce::StringArray paths;
             auto files = state.getChildWithName("SAMPLES");
-            for (int i = 0; i < files.getNumChildren(); ++i) paths.add(files.getChild(i)["path"].toString());
             if (files.isValid()) state.removeChild(files, nullptr);
             parameters.replaceState(state);
-            samples.clear();
-            samples.addFiles(paths); // Hosts call state restore away from the real-time callback.
+            if (files.isValid()) samples.restoreState(files);
         }
     }
 }
