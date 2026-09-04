@@ -591,12 +591,13 @@ void testAsynchronousStretchPublication()
             juce::Thread::sleep(1);
         check(secondJobStarted.load(std::memory_order_acquire),
               "replacement stretch revision did not start");
-        const auto beforeSecondPublish = manager.getSnapshot();
+        auto beforeSecondPublish = manager.getSnapshot();
         check(!beforeSecondPublish->empty()
                   && beforeSecondPublish->front()->stretchPending
                   && beforeSecondPublish->front()->requestedStretchRevision == 2
                   && beforeSecondPublish->front()->prepared->revision == 0,
               "a stale stretch revision published before its replacement");
+        beforeSecondPublish.reset();
         releaseSecondJob.store(true, std::memory_order_release);
 
         std::shared_ptr<const SampleManager::Pool> current;
