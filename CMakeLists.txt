@@ -47,6 +47,7 @@ target_sources(RandomChopSampler PRIVATE
     Source/RandomSamplerVoice.cpp
     Source/RandomSamplerVoice.h
     Source/RandomizationEngine.h
+    Source/HarmonicPitch.h
     Source/PlaybackRegion.h
     Source/SourceSelection.h)
 
@@ -73,6 +74,7 @@ if (BUILD_TESTING)
         Source/RandomSamplerVoice.cpp
         Source/RandomSamplerVoice.h
         Source/RandomizationEngine.h
+        Source/HarmonicPitch.h
         Source/PlaybackRegion.h
         Source/SourceSelection.h)
     target_include_directories(RandomChopSamplerTests PRIVATE Source)

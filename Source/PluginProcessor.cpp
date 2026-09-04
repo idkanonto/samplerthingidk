@@ -1,7 +1,17 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 
-namespace IDs { constexpr auto randomStart="randomStart", attack="attack", release="release", output="output", seed="seed"; }
+namespace IDs
+{
+constexpr auto randomStart = "randomStart";
+constexpr auto attack = "attack";
+constexpr auto release = "release";
+constexpr auto output = "output";
+constexpr auto seed = "seed";
+constexpr auto targetKey = "targetKey";
+constexpr auto midiPitch = "midiPitch";
+constexpr auto rootNote = "rootNote";
+}
 
 RandomChopSamplerAudioProcessor::RandomChopSamplerAudioProcessor()
     : AudioProcessor(BusesProperties().withOutput("Output", juce::AudioChannelSet::stereo(), true)),
@@ -19,6 +29,15 @@ juce::AudioProcessorValueTreeState::ParameterLayout RandomChopSamplerAudioProces
     layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::output, "Output",
         juce::NormalisableRange<float>(-60.0f, 6.0f, 0.1f), 0.0f, "dB"));
     layout.add(std::make_unique<juce::AudioParameterInt>(IDs::seed, "Seed", 1, 999999, 1));
+    juce::StringArray tonicChoices;
+    for (const auto* name : randomchop::tonicNames)
+        tonicChoices.add(name);
+    layout.add(std::make_unique<juce::AudioParameterChoice>(
+        IDs::targetKey, "Target Key", tonicChoices, randomchop::noTonic));
+    layout.add(std::make_unique<juce::AudioParameterBool>(
+        IDs::midiPitch, "MIDI Pitch", false));
+    layout.add(std::make_unique<juce::AudioParameterInt>(
+        IDs::rootNote, "Root MIDI Note", 0, 127, 72));
     return layout;
 }
 
@@ -47,13 +66,20 @@ void RandomChopSamplerAudioProcessor::noteOn(int note, float velocity) noexcept
                                                      sample->settings.endNormalised);
     const double start = randomchop::resolveRandomStart(region, sample->sampleRate,
                                                         amount, random.unit());
+    const auto targetKey = static_cast<int>(parameters.getRawParameterValue(IDs::targetKey)->load());
+    const auto midiPitch = parameters.getRawParameterValue(IDs::midiPitch)->load() >= 0.5f;
+    const auto rootNote = static_cast<int>(parameters.getRawParameterValue(IDs::rootNote)->load());
+    const auto pitchSemitones = randomchop::totalPitchSemitones(
+        sample->settings.sourceKey, targetKey, sample->settings.transposeSemitones,
+        sample->settings.fineTuneCents, midiPitch, note, rootNote);
+    const auto pitchRatio = randomchop::pitchRatioForSemitones(pitchSemitones);
 
     auto* voice = &voices[0];
     for (auto& candidate : voices)
         if (!candidate.isActive()) { voice = &candidate; break; }
         else if (candidate.getAge() < voice->getAge()) voice = &candidate;
 
-    voice->start(sample, note, velocity, start, region, false,
+    voice->start(sample, note, velocity, start, region, pitchRatio, false,
                  juce::Decibels::decibelsToGain(sample->settings.gainDb),
                  juce::jmax(0.001f, parameters.getRawParameterValue(IDs::attack)->load()),
                  parameters.getRawParameterValue(IDs::release)->load(), ++voiceCounter);

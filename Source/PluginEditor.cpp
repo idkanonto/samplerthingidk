@@ -222,24 +222,68 @@ public:
 RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(RandomChopSamplerAudioProcessor& p)
     : AudioProcessorEditor(&p), processor(p)
 {
-    setSize(940, 820);
+    setSize(1050, 900);
     title.setText("RANDOM CHOP SAMPLER V2", juce::dontSendNotification);
     title.setFont(juce::Font(24.0f, juce::Font::bold));
     title.setColour(juce::Label::textColourId, juce::Colour(0xfff2f2f5));
     status.setColour(juce::Label::textColourId, juce::Colour(0xffa9acb7));
 
     juce::Component* components[] = { &title, &status, &addButton, &clearButton,
-        &enableAllButton, &disableAllButton, &list, &waveform, &sourceGain, &sourceWeight,
-        &sourceGainLabel, &sourceWeightLabel };
+        &enableAllButton, &disableAllButton, &list, &waveform, &sourceKey,
+        &sourceTranspose, &sourceFineTune, &sourceGain, &sourceWeight, &sourceKeyLabel,
+        &sourceTransposeLabel, &sourceFineTuneLabel, &sourceGainLabel, &sourceWeightLabel,
+        &targetKey, &targetKeyLabel, &midiPitch };
     for (auto* component : components) addAndMakeVisible(component);
     list.setColour(juce::ListBox::backgroundColourId, juce::Colour(0xff191b21));
     list.setRowHeight(34);
 
+    for (int index = 0; index < static_cast<int>(randomchop::tonicNames.size()); ++index)
+    {
+        sourceKey.addItem(randomchop::tonicNames[static_cast<size_t>(index)], index + 1);
+        targetKey.addItem(randomchop::tonicNames[static_cast<size_t>(index)], index + 1);
+    }
+    sourceTranspose.setRange(-24.0, 24.0, 1.0);
+    sourceTranspose.setTextValueSuffix(" st");
+    sourceFineTune.setRange(-100.0, 100.0, 1.0);
+    sourceFineTune.setTextValueSuffix(" cents");
     sourceGain.setRange(-60.0, 12.0, 0.1);
     sourceGain.setTextValueSuffix(" dB");
     sourceWeight.setRange(0.01, 10.0, 0.01);
+    for (auto* slider : { &sourceTranspose, &sourceFineTune, &sourceGain, &sourceWeight })
+    {
+        slider->setSliderStyle(juce::Slider::LinearHorizontal);
+        slider->setTextBoxStyle(juce::Slider::TextBoxRight, false, 84, 22);
+    }
+    sourceKeyLabel.setText("SOURCE KEY", juce::dontSendNotification);
+    sourceTransposeLabel.setText("TRANSPOSE", juce::dontSendNotification);
+    sourceFineTuneLabel.setText("FINE TUNE", juce::dontSendNotification);
     sourceGainLabel.setText("SELECTED GAIN", juce::dontSendNotification);
     sourceWeightLabel.setText("SELECTION WEIGHT", juce::dontSendNotification);
+    targetKeyLabel.setText("TARGET KEY", juce::dontSendNotification);
+    for (auto* label : { &sourceKeyLabel, &sourceTransposeLabel, &sourceFineTuneLabel,
+                         &sourceGainLabel, &sourceWeightLabel, &targetKeyLabel })
+        label->setColour(juce::Label::textColourId, juce::Colour(0xffc8cad1));
+    sourceKey.onChange = [this]
+    {
+        if (selectedSourceId.isNotEmpty()) processor.samples.updateSettings(selectedSourceId,
+            [this](SampleSettings& s) { s.sourceKey = sourceKey.getSelectedItemIndex(); });
+    };
+    sourceTranspose.onValueChange = [this]
+    {
+        if (selectedSourceId.isNotEmpty()) processor.samples.updateSettings(selectedSourceId,
+            [this](SampleSettings& s)
+            {
+                s.transposeSemitones = static_cast<int>(sourceTranspose.getValue());
+            });
+    };
+    sourceFineTune.onValueChange = [this]
+    {
+        if (selectedSourceId.isNotEmpty()) processor.samples.updateSettings(selectedSourceId,
+            [this](SampleSettings& s)
+            {
+                s.fineTuneCents = static_cast<float>(sourceFineTune.getValue());
+            });
+    };
     sourceGain.onValueChange = [this]
     {
         if (selectedSourceId.isNotEmpty()) processor.samples.updateSettings(selectedSourceId,
@@ -268,11 +312,17 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     configureKnob(release, releaseLabel, "RELEASE");
     configureKnob(output, outputLabel, "OUTPUT");
     configureKnob(seed, seedLabel, "SEED");
+    configureKnob(rootNote, rootNoteLabel, "ROOT MIDI NOTE");
+    rootNote.setSliderStyle(juce::Slider::LinearHorizontal);
+    rootNote.setTextBoxStyle(juce::Slider::TextBoxRight, false, 52, 22);
     randomStartAttachment = std::make_unique<SliderAttachment>(p.parameters, "randomStart", randomStart);
     attackAttachment = std::make_unique<SliderAttachment>(p.parameters, "attack", attack);
     releaseAttachment = std::make_unique<SliderAttachment>(p.parameters, "release", release);
     outputAttachment = std::make_unique<SliderAttachment>(p.parameters, "output", output);
     seedAttachment = std::make_unique<SliderAttachment>(p.parameters, "seed", seed);
+    rootNoteAttachment = std::make_unique<SliderAttachment>(p.parameters, "rootNote", rootNote);
+    targetKeyAttachment = std::make_unique<ComboBoxAttachment>(p.parameters, "targetKey", targetKey);
+    midiPitchAttachment = std::make_unique<ButtonAttachment>(p.parameters, "midiPitch", midiPitch);
 
     addButton.onClick = [this]
     {
@@ -338,7 +388,9 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     disableAllButton.setBounds(toolbar.removeFromLeft(105).reduced(2));
 
     auto globalControls = area.removeFromBottom(135);
-    auto sourceControls = area.removeFromBottom(62);
+    auto globalPitchControls = area.removeFromBottom(58);
+    auto sourcePitchControls = area.removeFromBottom(58);
+    auto sourceControls = area.removeFromBottom(58);
     auto waveformArea = area.removeFromBottom(190);
     auto gainCell = sourceControls.removeFromLeft(350).reduced(3);
     sourceGainLabel.setBounds(gainCell.removeFromLeft(125));
@@ -346,6 +398,24 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     auto weightCell = sourceControls.removeFromLeft(390).reduced(3);
     sourceWeightLabel.setBounds(weightCell.removeFromLeft(145));
     sourceWeight.setBounds(weightCell);
+
+    auto sourceKeyCell = sourcePitchControls.removeFromLeft(260).reduced(3);
+    sourceKeyLabel.setBounds(sourceKeyCell.removeFromLeft(105));
+    sourceKey.setBounds(sourceKeyCell.reduced(2, 10));
+    auto transposeCell = sourcePitchControls.removeFromLeft(340).reduced(3);
+    sourceTransposeLabel.setBounds(transposeCell.removeFromLeft(105));
+    sourceTranspose.setBounds(transposeCell);
+    auto fineTuneCell = sourcePitchControls.removeFromLeft(340).reduced(3);
+    sourceFineTuneLabel.setBounds(fineTuneCell.removeFromLeft(105));
+    sourceFineTune.setBounds(fineTuneCell);
+
+    auto targetCell = globalPitchControls.removeFromLeft(265).reduced(3);
+    targetKeyLabel.setBounds(targetCell.removeFromLeft(105));
+    targetKey.setBounds(targetCell.reduced(2, 10));
+    midiPitch.setBounds(globalPitchControls.removeFromLeft(150).reduced(10));
+    auto rootCell = globalPitchControls.removeFromLeft(250).reduced(3);
+    rootNoteLabel.setBounds(rootCell.removeFromLeft(120));
+    rootNote.setBounds(rootCell);
 
     const int knobWidth = globalControls.getWidth() / 5;
     juce::Slider* sliders[] = { &randomStart, &attack, &release, &output, &seed };
@@ -398,6 +468,12 @@ void RandomChopSamplerAudioProcessorEditor::refresh()
     if (displayPool && selected >= 0 && selected < static_cast<int>(displayPool->size()))
     {
         const auto& selectedSource = (*displayPool)[static_cast<size_t>(selected)];
+        sourceKey.setSelectedItemIndex(selectedSource->settings.sourceKey,
+                                       juce::dontSendNotification);
+        sourceTranspose.setValue(selectedSource->settings.transposeSemitones,
+                                 juce::dontSendNotification);
+        sourceFineTune.setValue(selectedSource->settings.fineTuneCents,
+                                juce::dontSendNotification);
         sourceGain.setValue(selectedSource->settings.gainDb, juce::dontSendNotification);
         sourceWeight.setValue(selectedSource->settings.selectionWeight, juce::dontSendNotification);
         waveform.setSource(selectedSource);
@@ -464,6 +540,9 @@ void RandomChopSamplerAudioProcessorEditor::selectedRowsChanged(int row)
     {
         const auto& settings = (*displayPool)[static_cast<size_t>(row)]->settings;
         selectedSourceId = settings.id;
+        sourceKey.setSelectedItemIndex(settings.sourceKey, juce::dontSendNotification);
+        sourceTranspose.setValue(settings.transposeSemitones, juce::dontSendNotification);
+        sourceFineTune.setValue(settings.fineTuneCents, juce::dontSendNotification);
         sourceGain.setValue(settings.gainDb, juce::dontSendNotification);
         sourceWeight.setValue(settings.selectionWeight, juce::dontSendNotification);
         waveform.setSource((*displayPool)[static_cast<size_t>(row)]);

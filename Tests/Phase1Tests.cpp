@@ -1,4 +1,5 @@
 #include <JuceHeader.h>
+#include "HarmonicPitch.h"
 #include "RandomSamplerVoice.h"
 #include "SampleManager.h"
 #include "SourceSelection.h"
@@ -133,7 +134,10 @@ void testPoolLimitAndPersistentSettings()
             settings.enabled = false;
             settings.startNormalised = 0.2;
             settings.endNormalised = 0.8;
+            settings.sourceKey = 10;
             settings.gainDb = -7.5f;
+            settings.transposeSemitones = -13;
+            settings.fineTuneCents = 37.5f;
             settings.selectionWeight = 3.25f;
         });
 
@@ -149,8 +153,14 @@ void testPoolLimitAndPersistentSettings()
               "source Start marker was not restored");
         check(std::abs(restored->front()->settings.endNormalised - 0.8) < 0.000001,
               "source End marker was not restored");
+        check(restored->front()->settings.sourceKey == 10,
+              "source tonic was not restored");
         check(std::abs(restored->front()->settings.gainDb + 7.5f) < 0.001f,
               "source gain was not restored");
+        check(restored->front()->settings.transposeSemitones == -13,
+              "source transpose was not restored");
+        check(std::abs(restored->front()->settings.fineTuneCents - 37.5f) < 0.001f,
+              "source Fine Tune was not restored");
         check(std::abs(restored->front()->settings.selectionWeight - 3.25f) < 0.001f,
               "source weight was not restored");
         check(restored->front()->waveformPeaks != nullptr
@@ -208,6 +218,9 @@ void testRegionClampingAndRestore()
     source.setProperty("path", "missing-region-fixture.wav", nullptr);
     source.setProperty("start", 0.9, nullptr);
     source.setProperty("end", 0.1, nullptr);
+    source.setProperty("sourceKey", 99, nullptr);
+    source.setProperty("transpose", -99, nullptr);
+    source.setProperty("fineTune", std::numeric_limits<double>::infinity(), nullptr);
     state.appendChild(source, nullptr);
 
     SampleManager manager;
@@ -218,6 +231,10 @@ void testRegionClampingAndRestore()
     check(std::abs(restored->front()->settings.startNormalised - 0.9) < 0.000001
               && std::abs(restored->front()->settings.endNormalised - 0.9) < 0.000001,
           "invalid restored marker order was not clamped");
+    check(restored->front()->settings.sourceKey == 12
+              && restored->front()->settings.transposeSemitones == -24
+              && restored->front()->settings.fineTuneCents == 0.0f,
+          "invalid restored pitch settings were not clamped safely");
     check(!restored->front()->isPlayable(),
           "missing invalid-region source was considered playable");
 }
@@ -278,7 +295,7 @@ void testVoiceRegionBoundaries()
         juce::AudioBuffer<float> output(2, 16);
         output.clear();
         const auto start = reverse ? randomchop::lastInterpolationPosition(region) : 3.0;
-        voice.start(source, 60, 1.0f, start, region, reverse,
+        voice.start(source, 60, 1.0f, start, region, 1.0, reverse,
                     1.0f, 0.0f, 0.1f, 1);
         voice.render(output, 0, output.getNumSamples());
 
@@ -329,6 +346,71 @@ void testWaveformPeakExtrema()
         check(file.deleteFile(), "could not remove constant waveform fixture");
     }
 }
+
+void testHarmonicPitch()
+{
+    constexpr int none = 0;
+    constexpr int c = 1;
+    constexpr int cSharp = 2;
+    constexpr int fSharp = 7;
+    constexpr int b = 12;
+
+    check(randomchop::shortestTonicCorrection(c, b) == -1,
+          "C to B did not choose the shortest downward correction");
+    check(randomchop::shortestTonicCorrection(c, cSharp) == 1,
+          "C to C sharp did not choose the shortest upward correction");
+    check(randomchop::shortestTonicCorrection(c, fSharp) == 6
+              && randomchop::shortestTonicCorrection(fSharp, c) == 6,
+          "tritone ties did not resolve consistently upward");
+    check(randomchop::shortestTonicCorrection(none, b) == 0
+              && randomchop::shortestTonicCorrection(c, none) == 0,
+          "NONE tonic did not disable automatic correction");
+
+    const auto midiOff = randomchop::totalPitchSemitones(
+        c, b, 12, 50.0f, false, 84, 72);
+    check(std::abs(midiOff - 11.5) < 0.000001,
+          "MIDI Pitch OFF did not ignore the incoming note");
+    const auto midiOn = randomchop::totalPitchSemitones(
+        c, b, 12, 50.0f, true, 84, 72);
+    check(std::abs(midiOn - 23.5) < 0.000001,
+          "combined tonic, transpose, Fine Tune, and MIDI pitch math was incorrect");
+    const auto atRoot = randomchop::totalPitchSemitones(
+        none, none, 0, 0.0f, true, 72, 72);
+    check(atRoot == 0.0, "default C5 root note introduced a pitch offset");
+
+    check(std::abs(randomchop::pitchRatioForSemitones(12.0) - 2.0) < 0.000001
+              && std::abs(randomchop::pitchRatioForSemitones(-12.0) - 0.5) < 0.000001,
+          "semitone-to-playback-ratio conversion was inaccurate");
+    check(randomchop::clampTranspose(99) == 24
+              && randomchop::clampFineTune(-150.0f) == -100.0f
+              && randomchop::clampFineTune(std::numeric_limits<float>::quiet_NaN()) == 0.0f,
+          "pitch setting bounds did not sanitize invalid values");
+    check(std::isfinite(randomchop::pitchRatioForSemitones(1.0e300))
+              && randomchop::pitchRatioForSemitones(
+                     std::numeric_limits<double>::infinity()) == 1.0,
+          "invalid pitch input produced a non-finite playback ratio");
+}
+
+void testVoicePitchRatio()
+{
+    auto audio = std::make_shared<juce::AudioBuffer<float>>(1, 128);
+    for (int frame = 0; frame < audio->getNumSamples(); ++frame)
+        audio->setSample(0, frame, static_cast<float>(frame) / 100.0f);
+    auto mutableSource = std::make_shared<SampleData>();
+    mutableSource->audio = audio;
+    mutableSource->sampleRate = 1000.0;
+    SampleManager::SamplePtr source = mutableSource;
+
+    RandomSamplerVoice voice;
+    voice.prepare(1000.0);
+    juce::AudioBuffer<float> output(2, 4);
+    output.clear();
+    voice.start(source, 60, 1.0f, 0.0, { 0, 127 }, 2.0, false,
+                1.0f, 0.0f, 0.1f, 1);
+    voice.render(output, 0, output.getNumSamples());
+    check(std::abs(output.getSample(0, 1) - 0.02f) < 0.0001f,
+          "voice playback increment did not apply the resolved pitch ratio");
+}
 }
 
 int main()
@@ -340,7 +422,9 @@ int main()
     testRandomStartAndReadBounds();
     testVoiceRegionBoundaries();
     testWaveformPeakExtrema();
+    testHarmonicPitch();
+    testVoicePitchRatio();
     if (failures == 0)
-        std::cout << "All Phase 1 tests passed.\n";
+        std::cout << "All sampler tests passed.\n";
     return failures == 0 ? 0 : 1;
 }
