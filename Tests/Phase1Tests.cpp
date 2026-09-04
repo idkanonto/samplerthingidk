@@ -436,6 +436,14 @@ PreparedSamplePtr makeVoiceSample(float value, int frames = 1024)
     return randomchop::prepareStretch(audio, 1000.0, 1.0f, 0);
 }
 
+PreparedSamplePtr makeRampVoiceSample(int frames = 2048)
+{
+    auto audio = std::make_shared<juce::AudioBuffer<float>>(1, frames);
+    for (int frame = 0; frame < frames; ++frame)
+        audio->setSample(0, frame, static_cast<float>(frame) / static_cast<float>(frames));
+    return randomchop::prepareStretch(audio, 1000.0, 1.0f, 0);
+}
+
 void testFinalLengthAndEnvelope()
 {
     const auto prepared = makeVoiceSample(1.0f);
@@ -566,6 +574,190 @@ void testPolyMonoAndVoiceStealing()
     switched.render(switchedOutput, 0, switchedOutput.getNumSamples());
     check(switched.activeCount() == 1 && switched[0].getNote() == 67,
           "entering MONO did not release prior POLY voices cleanly");
+}
+
+void testChanceDecisionResolution()
+{
+    const randomchop::FrameRegion region { 100, 2099 };
+    RandomizationEngine noChanceRandom;
+    RandomizationEngine untouchedRandom;
+    noChanceRandom.setSeed(12345);
+    untouchedRandom.setSeed(12345);
+    const auto none = randomchop::resolveChanceEvent(
+        {}, region, 400.0, 1000.0, 1000.0, noChanceRandom);
+    check(none == randomchop::EventDecision {}, "0% Chance unexpectedly enabled an effect");
+    check(noChanceRandom.next() == untouchedRandom.next(),
+          "0% Chance consumed random values and changed the existing trigger sequence");
+
+    randomchop::ChanceSettings settings;
+    settings.reverseChance = 100.0f;
+    settings.retriggerChance = 100.0f;
+    settings.skipChance = 100.0f;
+    settings.reorderChance = 100.0f;
+    settings.bendChance = 100.0f;
+    settings.dropChance = 100.0f;
+    settings.retriggerSizeMilliseconds = 37.0f;
+    settings.retriggerCount = 6;
+    RandomizationEngine firstRandom;
+    RandomizationEngine secondRandom;
+    firstRandom.setSeed(987654321);
+    secondRandom.setSeed(987654321);
+    const auto first = randomchop::resolveChanceEvent(
+        settings, region, 400.0, 1000.0, 2000.0, firstRandom);
+    const auto second = randomchop::resolveChanceEvent(
+        settings, region, 400.0, 1000.0, 2000.0, secondRandom);
+    check(first == second, "stored Chance decisions were not deterministic for a fixed seed");
+    check(first.reverseEnabled && first.retriggerEnabled && first.skipEnabled
+              && first.reorderEnabled && first.bendEnabled && first.dropEnabled,
+          "a 100% Chance effect was not enabled");
+    check(first.retriggerSizeFrames == 74 && first.retriggerCount == 6,
+          "Retrigger did not store the resolved size and count");
+    check(randomchop::isInterpolationPositionLegal(
+              region, randomchop::resolvedEventStart(region, 400.0, first)),
+          "Skip resolved outside the legal source region");
+    bool permutationSlots[4] { false, false, false, false };
+    for (const auto piece : first.reorderPermutation)
+        if (piece < 4)
+            permutationSlots[piece] = true;
+    check(permutationSlots[0] && permutationSlots[1]
+              && permutationSlots[2] && permutationSlots[3]
+              && first.reorderPermutation != std::array<std::uint8_t, 4> { 0, 1, 2, 3 },
+          "Reorder did not store a non-identity four-piece permutation");
+    check(first.reorderPieceSpanFrames > 0.0
+              && first.reorderPieceSpanFrames * 4.0 <= 1000.000001,
+          "Reorder fragment was empty or exceeded the one-second cap");
+    check(std::isfinite(first.bendDepthSemitones)
+              && std::abs(first.bendDepthSemitones) >= 0.05f
+              && std::abs(first.bendDepthSemitones) <= 12.0f,
+          "Bend depth was not explicit and bounded");
+    check(first.dropMask != 0, "Drop did not store an eight-slot mute mask");
+}
+
+void testChanceVoiceRendering()
+{
+    const auto ramp = makeRampVoiceSample();
+    const auto constant = makeVoiceSample(1.0f, 2048);
+    const randomchop::FrameRegion region { 0, 1999 };
+
+    randomchop::EventDecision reverse;
+    reverse.reverseEnabled = true;
+    RandomSamplerVoice reverseVoice;
+    reverseVoice.prepare(1000.0);
+    reverseVoice.start(ramp, 60, 1.0f, 100.0, region, 1.0, false,
+                       1.0f, 0.0f, 0.01f, 1, 0.0f, reverse);
+    juce::AudioBuffer<float> reverseOutput(2, 2);
+    reverseOutput.clear();
+    reverseVoice.render(reverseOutput, 0, 2);
+    check(reverseOutput.getSample(0, 0) > 0.8f
+              && reverseOutput.getSample(0, 1) < reverseOutput.getSample(0, 0),
+          "Reverse did not mirror the resolved start and read backward");
+
+    randomchop::EventDecision skip;
+    skip.skipEnabled = true;
+    skip.skipJumpFrames = 400.0;
+    RandomSamplerVoice skipVoice;
+    skipVoice.prepare(1000.0);
+    skipVoice.start(ramp, 60, 1.0f, 100.0, region, 1.0, false,
+                    1.0f, 0.0f, 0.01f, 2, 0.0f, skip);
+    juce::AudioBuffer<float> skipOutput(2, 1);
+    skipOutput.clear();
+    skipVoice.render(skipOutput, 0, 1);
+    check(std::abs(skipOutput.getSample(0, 0) - 500.0f / 2048.0f) < 0.0001f,
+          "Skip did not apply its exact stored read-head jump");
+
+    randomchop::EventDecision retrigger;
+    retrigger.retriggerEnabled = true;
+    retrigger.retriggerSizeFrames = 2;
+    retrigger.retriggerCount = 1;
+    RandomSamplerVoice retriggerVoice;
+    retriggerVoice.prepare(1000.0);
+    retriggerVoice.start(ramp, 60, 1.0f, 0.0, region, 1.0, false,
+                         1.0f, 0.0f, 0.01f, 3, 0.0f, retrigger);
+    juce::AudioBuffer<float> retriggerOutput(2, 5);
+    retriggerOutput.clear();
+    retriggerVoice.render(retriggerOutput, 0, 5);
+    check(std::abs(retriggerOutput.getSample(0, 0) - retriggerOutput.getSample(0, 2))
+                  < 0.000001f
+              && std::abs(retriggerOutput.getSample(0, 1) - retriggerOutput.getSample(0, 3))
+                  < 0.000001f
+              && retriggerOutput.getSample(0, 4) > retriggerOutput.getSample(0, 3),
+          "Retrigger did not repeat the exact stored segment and continue");
+
+    randomchop::EventDecision reorder;
+    reorder.reorderEnabled = true;
+    reorder.reorderPermutation = { 2, 0, 3, 1 };
+    reorder.reorderPieceSpanFrames = 10.0;
+    RandomSamplerVoice reorderVoice;
+    reorderVoice.prepare(1000.0);
+    reorderVoice.start(ramp, 60, 1.0f, 100.0, region, 1.0, false,
+                       1.0f, 0.0f, 0.01f, 4, 0.0f, reorder);
+    juce::AudioBuffer<float> reorderOutput(2, 12);
+    reorderOutput.clear();
+    reorderVoice.render(reorderOutput, 0, 12);
+    check(std::abs(reorderOutput.getSample(0, 0) - 120.0f / 2048.0f) < 0.0001f
+              && std::abs(reorderOutput.getSample(0, 10) - 100.0f / 2048.0f) < 0.0001f,
+          "Reorder did not render stored pieces from the event's resolved start");
+
+    randomchop::EventDecision bend;
+    bend.bendEnabled = true;
+    bend.bendDepthSemitones = 12.0f;
+    RandomSamplerVoice bendVoice;
+    bendVoice.prepare(1000.0);
+    bendVoice.start(ramp, 60, 1.0f, 0.0, region, 1.0, false,
+                    1.0f, 0.0f, 0.01f, 5, 0.0f, bend);
+    juce::AudioBuffer<float> bendOutput(2, 600);
+    bendOutput.clear();
+    bendVoice.render(bendOutput, 0, bendOutput.getNumSamples());
+    check(bendOutput.getSample(0, 500) > 0.27f,
+          "Bend did not apply its stored playback-rate ramp");
+
+    randomchop::EventDecision drop;
+    drop.dropEnabled = true;
+    drop.dropMask = 0x01;
+    RandomSamplerVoice dropVoice;
+    dropVoice.prepare(1000.0);
+    dropVoice.start(constant, 60, 1.0f, 0.0, { 0, 79 }, 1.0, false,
+                    1.0f, 0.0f, 0.005f, 6, 80.0f, drop);
+    juce::AudioBuffer<float> dropOutput(2, 20);
+    dropOutput.clear();
+    dropVoice.render(dropOutput, 0, dropOutput.getNumSamples());
+    check(std::abs(dropOutput.getSample(0, 0)) < 0.000001f
+              && dropOutput.getSample(0, 10) > 0.99f,
+          "Drop did not apply its stored slots with bounded edge smoothing");
+
+    randomchop::EventDecision combined;
+    combined.reverseEnabled = true;
+    combined.retriggerEnabled = true;
+    combined.retriggerSizeFrames = 12;
+    combined.retriggerCount = 2;
+    combined.skipEnabled = true;
+    combined.skipJumpFrames = -100.0;
+    combined.reorderEnabled = true;
+    combined.reorderPermutation = { 3, 1, 0, 2 };
+    combined.reorderPieceSpanFrames = 25.0;
+    combined.bendEnabled = true;
+    combined.bendDepthSemitones = -12.0f;
+    combined.dropEnabled = true;
+    combined.dropMask = 0x5a;
+    RandomSamplerVoice combinedVoice;
+    combinedVoice.prepare(1000.0);
+    combinedVoice.start(ramp, 60, 1.0f, 200.0, region, 1.0, false,
+                        1.0f, 0.0f, 0.005f, 7, 100.0f, combined);
+    juce::AudioBuffer<float> combinedOutput(2, 120);
+    combinedOutput.clear();
+    combinedVoice.render(combinedOutput, 0, combinedOutput.getNumSamples());
+    bool allFiniteAndBounded = true;
+    float combinedMaximum = 0.0f;
+    for (int channel = 0; channel < combinedOutput.getNumChannels(); ++channel)
+        for (int frame = 0; frame < combinedOutput.getNumSamples(); ++frame)
+        {
+            const auto value = combinedOutput.getSample(channel, frame);
+            allFiniteAndBounded = allFiniteAndBounded
+                && std::isfinite(value) && std::abs(value) <= 2.0f;
+            combinedMaximum = juce::jmax(combinedMaximum, std::abs(value));
+        }
+    check(allFiniteAndBounded && combinedMaximum > 0.01f,
+          "combined Chance rendering was silent, non-finite, or unbounded");
 }
 
 void testPitchPreservingStretchPreparation()
@@ -806,6 +998,8 @@ int main()
     testFinalLengthAndEnvelope();
     testNoteOffRelease();
     testPolyMonoAndVoiceStealing();
+    testChanceDecisionResolution();
+    testChanceVoiceRendering();
     testPitchPreservingStretchPreparation();
     testAsynchronousStretchPublication();
     if (failures == 0)

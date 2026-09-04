@@ -46,6 +46,7 @@ private:
     void refresh();
     void addFiles(const juce::StringArray&);
     void configureKnob(juce::Slider&, juce::Label&, const juce::String&);
+    void configureLinearControl(juce::Slider&, juce::Label&, const juce::String&);
 
     RandomChopSamplerAudioProcessor& processor;
     juce::Label title, status;
@@ -60,13 +61,21 @@ private:
     juce::ComboBox targetKey, voiceMode;
     juce::ToggleButton midiPitch { "MIDI Pitch" };
     juce::Slider rootNote, randomStart, finalLength, attack, release, output, seed;
+    juce::Slider reverseChance, retriggerChance, retriggerSize, retriggerCount,
+        skipChance, reorderChance, bendChance, dropChance;
     juce::Label targetKeyLabel, rootNoteLabel, voiceModeLabel, randomStartLabel,
         finalLengthLabel, attackLabel, releaseLabel, outputLabel, seedLabel;
+    juce::Label reverseChanceLabel, retriggerChanceLabel, retriggerSizeLabel,
+        retriggerCountLabel, skipChanceLabel, reorderChanceLabel, bendChanceLabel,
+        dropChanceLabel;
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ComboBoxAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
     std::unique_ptr<SliderAttachment> randomStartAttachment, finalLengthAttachment,
         attackAttachment, releaseAttachment, outputAttachment, seedAttachment, rootNoteAttachment;
+    std::unique_ptr<SliderAttachment> reverseChanceAttachment, retriggerChanceAttachment,
+        retriggerSizeAttachment, retriggerCountAttachment, skipChanceAttachment,
+        reorderChanceAttachment, bendChanceAttachment, dropChanceAttachment;
     std::unique_ptr<ComboBoxAttachment> targetKeyAttachment, voiceModeAttachment;
     std::unique_ptr<ButtonAttachment> midiPitchAttachment;
     std::shared_ptr<const SampleManager::Pool> displayPool;

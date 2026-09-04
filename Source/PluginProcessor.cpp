@@ -13,6 +13,14 @@ constexpr auto midiPitch = "midiPitch";
 constexpr auto rootNote = "rootNote";
 constexpr auto finalLength = "finalLength";
 constexpr auto voiceMode = "voiceMode";
+constexpr auto reverseChance = "reverseChance";
+constexpr auto retriggerChance = "retriggerChance";
+constexpr auto retriggerSize = "retriggerSize";
+constexpr auto retriggerCount = "retriggerCount";
+constexpr auto skipChance = "skipChance";
+constexpr auto reorderChance = "reorderChance";
+constexpr auto bendChance = "bendChance";
+constexpr auto dropChance = "dropChance";
 }
 
 RandomChopSamplerAudioProcessor::RandomChopSamplerAudioProcessor()
@@ -44,6 +52,19 @@ juce::AudioProcessorValueTreeState::ParameterLayout RandomChopSamplerAudioProces
         juce::NormalisableRange<float>(0.0f, 5000.0f, 10.0f), 0.0f, "ms"));
     layout.add(std::make_unique<juce::AudioParameterChoice>(
         IDs::voiceMode, "Voice Mode", juce::StringArray { "POLY", "MONO" }, 0));
+    for (const auto& parameter : std::initializer_list<std::pair<const char*, const char*>> {
+             { IDs::reverseChance, "Reverse Chance" },
+             { IDs::retriggerChance, "Retrigger Chance" },
+             { IDs::skipChance, "Skip Chance" },
+             { IDs::reorderChance, "Reorder Chance" },
+             { IDs::bendChance, "Bend Chance" },
+             { IDs::dropChance, "Drop Chance" } })
+        layout.add(std::make_unique<juce::AudioParameterFloat>(parameter.first, parameter.second,
+            juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, "%"));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::retriggerSize, "Repeat Size",
+        juce::NormalisableRange<float>(10.0f, 500.0f, 1.0f), 100.0f, "ms"));
+    layout.add(std::make_unique<juce::AudioParameterInt>(
+        IDs::retriggerCount, "Repeat Count", 1, 8, 2));
     return layout;
 }
 
@@ -83,13 +104,25 @@ void RandomChopSamplerAudioProcessor::noteOn(int note, float velocity) noexcept
 
     const auto mode = parameters.getRawParameterValue(IDs::voiceMode)->load() >= 0.5f
         ? randomchop::VoiceMode::mono : randomchop::VoiceMode::poly;
+    const randomchop::ChanceSettings chanceSettings {
+        parameters.getRawParameterValue(IDs::reverseChance)->load(),
+        parameters.getRawParameterValue(IDs::retriggerChance)->load(),
+        parameters.getRawParameterValue(IDs::skipChance)->load(),
+        parameters.getRawParameterValue(IDs::reorderChance)->load(),
+        parameters.getRawParameterValue(IDs::bendChance)->load(),
+        parameters.getRawParameterValue(IDs::dropChance)->load(),
+        parameters.getRawParameterValue(IDs::retriggerSize)->load(),
+        static_cast<int>(parameters.getRawParameterValue(IDs::retriggerCount)->load())
+    };
+    const auto eventDecision = randomchop::resolveChanceEvent(
+        chanceSettings, region, start, prepared->sampleRate, currentRate, random);
     auto& voice = voices.acquire(mode);
 
     voice.start(prepared, note, velocity, start, region, pitchRatio, false,
                 juce::Decibels::decibelsToGain(sample->settings.gainDb),
                 juce::jmax(0.001f, parameters.getRawParameterValue(IDs::attack)->load()),
                 parameters.getRawParameterValue(IDs::release)->load(), ++voiceCounter,
-                parameters.getRawParameterValue(IDs::finalLength)->load());
+                parameters.getRawParameterValue(IDs::finalLength)->load(), eventDecision);
     lastTriggeredRuntimeId.store(sample->runtimeId, std::memory_order_relaxed);
     triggeredWhileEmpty.store(false, std::memory_order_relaxed);
 }
