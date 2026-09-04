@@ -99,6 +99,21 @@ void SampleManager::enqueueStretch(StretchJob job)
     stretchCondition.notify_one();
 }
 
+void SampleManager::discardQueuedStretch(const juce::String& sourceId)
+{
+    const std::lock_guard<std::mutex> lock(stretchMutex);
+    std::erase_if(stretchJobs, [&sourceId](const auto& queued)
+    {
+        return queued.sourceId == sourceId;
+    });
+}
+
+void SampleManager::discardAllQueuedStretch()
+{
+    const std::lock_guard<std::mutex> lock(stretchMutex);
+    stretchJobs.clear();
+}
+
 void SampleManager::stretchWorkerLoop()
 {
     for (;;)
@@ -313,19 +328,25 @@ std::vector<juce::String> SampleManager::addFiles(const juce::StringArray& paths
 
 void SampleManager::remove(const juce::String& id)
 {
-    const std::lock_guard<std::mutex> lock(mutationMutex);
-    auto current = getSnapshot();
-    const auto index = findSource(*current, id);
-    if (index >= current->size()) return;
-    auto next = std::make_shared<Pool>(*current);
-    next->erase(next->begin() + static_cast<std::ptrdiff_t>(index));
-    publish(std::shared_ptr<const Pool>(std::move(next)));
+    {
+        const std::lock_guard<std::mutex> lock(mutationMutex);
+        auto current = getSnapshot();
+        const auto index = findSource(*current, id);
+        if (index >= current->size()) return;
+        auto next = std::make_shared<Pool>(*current);
+        next->erase(next->begin() + static_cast<std::ptrdiff_t>(index));
+        publish(std::shared_ptr<const Pool>(std::move(next)));
+    }
+    discardQueuedStretch(id);
 }
 
 void SampleManager::clear()
 {
-    const std::lock_guard<std::mutex> lock(mutationMutex);
-    publish(std::make_shared<const Pool>());
+    {
+        const std::lock_guard<std::mutex> lock(mutationMutex);
+        publish(std::make_shared<const Pool>());
+    }
+    discardAllQueuedStretch();
 }
 
 void SampleManager::setEnabled(const juce::String& id, bool enabled)
@@ -353,6 +374,7 @@ void SampleManager::updateSettings(const juce::String& id,
 {
     StretchJob job;
     bool shouldEnqueue = false;
+    bool shouldDiscardQueued = false;
     {
         const std::lock_guard<std::mutex> lock(mutationMutex);
         const auto current = getSnapshot();
@@ -401,6 +423,7 @@ void SampleManager::updateSettings(const juce::String& id,
                         copy->settings.stretchRatio, copy->requestedStretchRevision };
                 shouldEnqueue = true;
             }
+            shouldDiscardQueued = !shouldEnqueue;
         }
 
         (*next)[index] = std::move(copy);
@@ -409,6 +432,8 @@ void SampleManager::updateSettings(const juce::String& id,
 
     if (shouldEnqueue)
         enqueueStretch(std::move(job));
+    else if (shouldDiscardQueued)
+        discardQueuedStretch(id);
 }
 
 std::shared_ptr<const SampleManager::Pool> SampleManager::getSnapshot() const noexcept
@@ -475,6 +500,7 @@ std::vector<juce::String> SampleManager::restoreState(const juce::ValueTree& sta
         publish(std::shared_ptr<const Pool>(std::move(next)));
     }
 
+    discardAllQueuedStretch();
     for (auto& job : pendingJobs)
         enqueueStretch(std::move(job));
     return errors;

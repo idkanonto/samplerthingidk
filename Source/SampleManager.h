@@ -102,6 +102,8 @@ private:
                        std::vector<juce::String>& errors);
     void publish(std::shared_ptr<const Pool> next);
     void enqueueStretch(StretchJob);
+    void discardQueuedStretch(const juce::String& sourceId);
+    void discardAllQueuedStretch();
     void stretchWorkerLoop();
     void publishStretchResult(const StretchJob&, PreparedSamplePtr);
     void collectGarbageLocked();
