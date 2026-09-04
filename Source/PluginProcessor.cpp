@@ -60,11 +60,12 @@ void RandomChopSamplerAudioProcessor::noteOn(int note, float velocity) noexcept
     const int selected = randomchop::chooseWeightedSource(*pool, random);
     if (selected < 0) { triggeredWhileEmpty.store(true, std::memory_order_relaxed); return; }
     const auto& sample = (*pool)[static_cast<size_t>(selected)];
+    const auto prepared = sample->prepared;
     const double amount = parameters.getRawParameterValue(IDs::randomStart)->load() * 0.01;
-    const auto region = randomchop::makeFrameRegion(sample->audio->getNumSamples(),
+    const auto region = randomchop::makeFrameRegion(prepared->audio->getNumSamples(),
                                                      sample->settings.startNormalised,
                                                      sample->settings.endNormalised);
-    const double start = randomchop::resolveRandomStart(region, sample->sampleRate,
+    const double start = randomchop::resolveRandomStart(region, prepared->sampleRate,
                                                         amount, random.unit());
     const auto targetKey = static_cast<int>(parameters.getRawParameterValue(IDs::targetKey)->load());
     const auto midiPitch = parameters.getRawParameterValue(IDs::midiPitch)->load() >= 0.5f;
@@ -79,7 +80,7 @@ void RandomChopSamplerAudioProcessor::noteOn(int note, float velocity) noexcept
         if (!candidate.isActive()) { voice = &candidate; break; }
         else if (candidate.getAge() < voice->getAge()) voice = &candidate;
 
-    voice->start(sample, note, velocity, start, region, pitchRatio, false,
+    voice->start(prepared, note, velocity, start, region, pitchRatio, false,
                  juce::Decibels::decibelsToGain(sample->settings.gainDb),
                  juce::jmax(0.001f, parameters.getRawParameterValue(IDs::attack)->load()),
                  parameters.getRawParameterValue(IDs::release)->load(), ++voiceCounter);

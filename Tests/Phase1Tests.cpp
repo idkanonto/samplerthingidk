@@ -3,6 +3,7 @@
 #include "RandomSamplerVoice.h"
 #include "SampleManager.h"
 #include "SourceSelection.h"
+#include <atomic>
 #include <iostream>
 #include <limits>
 
@@ -29,6 +30,8 @@ SampleManager::SamplePtr makeSource(float weight, bool enabled = true, bool miss
     source->settings.missing = missing;
     source->settings.selectionWeight = weight;
     source->audio = std::move(buffer);
+    source->prepared = randomchop::prepareStretch(source->audio, source->sampleRate,
+                                                  1.0f, 0);
     return source;
 }
 
@@ -221,6 +224,7 @@ void testRegionClampingAndRestore()
     source.setProperty("sourceKey", 99, nullptr);
     source.setProperty("transpose", -99, nullptr);
     source.setProperty("fineTune", std::numeric_limits<double>::infinity(), nullptr);
+    source.setProperty("stretch", 1.75, nullptr);
     state.appendChild(source, nullptr);
 
     SampleManager manager;
@@ -235,6 +239,13 @@ void testRegionClampingAndRestore()
               && restored->front()->settings.transposeSemitones == -24
               && restored->front()->settings.fineTuneCents == 0.0f,
           "invalid restored pitch settings were not clamped safely");
+    check(std::abs(restored->front()->settings.stretchRatio - 1.75f) < 0.000001f,
+          "restored Stretch duration multiplier changed");
+    const auto saved = manager.createState();
+    check(saved.getNumChildren() == 1
+              && std::abs(static_cast<float>(saved.getChild(0).getProperty("stretch"))
+                          - 1.75f) < 0.000001f,
+          "Stretch duration multiplier was not persisted");
     check(!restored->front()->isPlayable(),
           "missing invalid-region source was considered playable");
 }
@@ -285,6 +296,8 @@ void testVoiceRegionBoundaries()
     mutableSource->sampleRate = 1000.0;
     mutableSource->settings.startNormalised = 3.0 / 11.0;
     mutableSource->settings.endNormalised = 7.0 / 11.0;
+    mutableSource->prepared = randomchop::prepareStretch(
+        mutableSource->audio, mutableSource->sampleRate, 1.0f, 0);
     SampleManager::SamplePtr source = mutableSource;
     const randomchop::FrameRegion region { 3, 7 };
 
@@ -295,7 +308,7 @@ void testVoiceRegionBoundaries()
         juce::AudioBuffer<float> output(2, 16);
         output.clear();
         const auto start = reverse ? randomchop::lastInterpolationPosition(region) : 3.0;
-        voice.start(source, 60, 1.0f, start, region, 1.0, reverse,
+        voice.start(source->prepared, 60, 1.0f, start, region, 1.0, reverse,
                     1.0f, 0.0f, 0.1f, 1);
         voice.render(output, 0, output.getNumSamples());
 
@@ -405,11 +418,192 @@ void testVoicePitchRatio()
     voice.prepare(1000.0);
     juce::AudioBuffer<float> output(2, 4);
     output.clear();
-    voice.start(source, 60, 1.0f, 0.0, { 0, 127 }, 2.0, false,
+    mutableSource->prepared = randomchop::prepareStretch(
+        mutableSource->audio, mutableSource->sampleRate, 1.0f, 0);
+    voice.start(source->prepared, 60, 1.0f, 0.0, { 0, 127 }, 2.0, false,
                 1.0f, 0.0f, 0.1f, 1);
     voice.render(output, 0, output.getNumSamples());
     check(std::abs(output.getSample(0, 1) - 0.02f) < 0.0001f,
           "voice playback increment did not apply the resolved pitch ratio");
+}
+
+void testPitchPreservingStretchPreparation()
+{
+    constexpr double sampleRate = 48000.0;
+    constexpr double frequency = 440.0;
+    constexpr int inputFrames = 32768;
+    auto input = std::make_shared<juce::AudioBuffer<float>>(1, inputFrames);
+    for (int frame = 0; frame < inputFrames; ++frame)
+        input->setSample(0, frame, 0.5f * std::sin(
+            juce::MathConstants<double>::twoPi * frequency * frame / sampleRate));
+
+    const auto unchanged = randomchop::prepareStretch(input, sampleRate, 1.0f, 7);
+    check(unchanged != nullptr && unchanged->audio == input
+              && unchanged->revision == 7 && unchanged->stretchRatio == 1.0f,
+          "1x stretch did not reuse the immutable decoded buffer");
+
+    for (const auto ratio : { 0.5f, 2.0f })
+    {
+        const auto prepared = randomchop::prepareStretch(input, sampleRate, ratio, 11);
+        const auto expectedFrames = static_cast<int>(std::llround(inputFrames * ratio));
+        check(prepared != nullptr && prepared->audio != nullptr,
+              "Signalsmith stretch preparation failed");
+        if (prepared == nullptr || prepared->audio == nullptr)
+            continue;
+
+        check(prepared->audio->getNumSamples() == expectedFrames
+                  && prepared->revision == 11
+                  && std::abs(prepared->stretchRatio - ratio) < 0.000001f,
+              "stretch duration or version metadata was incorrect");
+
+        const auto* samples = prepared->audio->getReadPointer(0);
+        float maximumMagnitude = 0.0f;
+        bool allFinite = true;
+        for (int frame = 0; frame < expectedFrames; ++frame)
+        {
+            allFinite = allFinite && std::isfinite(samples[frame]);
+            maximumMagnitude = juce::jmax(maximumMagnitude, std::abs(samples[frame]));
+        }
+        check(allFinite && maximumMagnitude > 0.01f && maximumMagnitude <= 8.0f,
+              "stretch output was silent, non-finite, or outside its safety bound");
+
+        const int first = expectedFrames / 8;
+        const int last = expectedFrames - first;
+        int risingCrossings = 0;
+        for (int frame = first + 1; frame < last; ++frame)
+            if (samples[frame - 1] <= 0.0f && samples[frame] > 0.0f)
+                ++risingCrossings;
+        const auto measuredFrequency = risingCrossings * sampleRate
+            / static_cast<double>(last - first);
+        check(std::abs(measuredFrequency - frequency) < 70.0,
+              "stretch changed pitch outside the allowed test tolerance");
+    }
+
+    check(randomchop::clampStretchRatio(0.1f) == 0.5f
+              && randomchop::clampStretchRatio(3.0f) == 2.0f
+              && randomchop::clampStretchRatio(
+                     std::numeric_limits<float>::quiet_NaN()) == 1.0f,
+          "stretch bounds did not sanitize invalid values");
+}
+
+void testAsynchronousStretchPublication()
+{
+    const auto file = makeTinyWaveFile();
+    check(file.existsAsFile(), "could not create the asynchronous stretch fixture");
+    if (!file.existsAsFile())
+        return;
+
+    std::atomic<bool> firstJobStarted { false };
+    auto deterministicPrepare = [&firstJobStarted](
+        const std::shared_ptr<const juce::AudioBuffer<float>>& decoded,
+        double sampleRate, float ratio, uint64_t revision) -> PreparedSamplePtr
+    {
+        if (revision == 1)
+        {
+            firstJobStarted.store(true, std::memory_order_release);
+            juce::Thread::sleep(100);
+        }
+
+        const auto outputFrames = juce::jmax(2, static_cast<int>(
+            std::llround(decoded->getNumSamples() * static_cast<double>(ratio))));
+        auto output = std::make_shared<juce::AudioBuffer<float>>(
+            decoded->getNumChannels(), outputFrames);
+        for (int channel = 0; channel < output->getNumChannels(); ++channel)
+        {
+            const auto* source = decoded->getReadPointer(channel);
+            auto* destination = output->getWritePointer(channel);
+            for (int frame = 0; frame < outputFrames; ++frame)
+                destination[frame] = source[juce::jlimit(
+                    0, decoded->getNumSamples() - 1,
+                    static_cast<int>(frame / static_cast<double>(ratio)))];
+        }
+
+        auto prepared = std::make_shared<PreparedSampleData>();
+        prepared->audio = std::move(output);
+        prepared->sampleRate = sampleRate;
+        prepared->revision = revision;
+        prepared->stretchRatio = ratio;
+        return prepared;
+    };
+
+    {
+        SampleManager manager(deterministicPrepare);
+        juce::StringArray paths;
+        paths.add(file.getFullPathName());
+        check(manager.addFiles(paths).empty(), "asynchronous stretch fixture did not load");
+
+        auto initial = manager.getSnapshot();
+        check(initial->size() == 1, "asynchronous stretch fixture was not added");
+        if (initial->empty())
+        {
+            check(file.deleteFile(), "could not remove failed asynchronous stretch fixture");
+            return;
+        }
+        const auto id = initial->front()->settings.id;
+        auto oldPrepared = initial->front()->prepared;
+        std::weak_ptr<const PreparedSampleData> oldPreparedWeak = oldPrepared;
+        RandomSamplerVoice activeVoice;
+        activeVoice.prepare(44100.0);
+        activeVoice.start(oldPrepared, 60, 1.0f, 0.0,
+                          { 0, oldPrepared->audio->getNumSamples() - 1 },
+                          1.0, false, 1.0f, 0.0f, 0.1f, 1);
+        oldPrepared.reset();
+        initial.reset();
+
+        manager.updateSettings(id, [](SampleSettings& settings)
+        {
+            settings.stretchRatio = 2.0f;
+        });
+        for (int attempt = 0; attempt < 200
+                && !firstJobStarted.load(std::memory_order_acquire); ++attempt)
+            juce::Thread::sleep(1);
+        check(firstJobStarted.load(std::memory_order_acquire),
+              "background stretch worker did not start");
+
+        manager.updateSettings(id, [](SampleSettings& settings)
+        {
+            settings.stretchRatio = 0.5f;
+        });
+
+        std::shared_ptr<const SampleManager::Pool> current;
+        for (int attempt = 0; attempt < 300; ++attempt)
+        {
+            current = manager.getSnapshot();
+            if (!current->empty() && !current->front()->stretchPending
+                && current->front()->prepared->revision == 2)
+                break;
+            current.reset();
+            juce::Thread::sleep(10);
+        }
+
+        check(current != nullptr && !current->empty()
+                  && !current->front()->stretchPending
+                  && !current->front()->stretchFailed
+                  && current->front()->prepared->revision == 2
+                  && std::abs(current->front()->prepared->stretchRatio - 0.5f) < 0.000001f
+                  && current->front()->prepared->audio->getNumSamples() == 16,
+              "latest stretch revision did not win over a stale result");
+        manager.collectGarbage();
+        check(!oldPreparedWeak.expired() && activeVoice.isActive(),
+              "an active voice lost its superseded prepared sample");
+        current.reset();
+
+        manager.updateSettings(id, [](SampleSettings& settings)
+        {
+            settings.stretchRatio = 2.0f;
+        });
+        manager.remove(id);
+        juce::Thread::sleep(150);
+        check(manager.getSnapshot()->empty(),
+              "removing a source during stretch preparation republished it");
+
+        activeVoice.forceStop();
+        manager.collectGarbage();
+        check(oldPreparedWeak.expired(),
+              "superseded prepared data was not reclaimed after realtime owners released it");
+    }
+
+    check(file.deleteFile(), "could not remove the asynchronous stretch fixture");
 }
 }
 
@@ -424,6 +618,8 @@ int main()
     testWaveformPeakExtrema();
     testHarmonicPitch();
     testVoicePitchRatio();
+    testPitchPreservingStretchPreparation();
+    testAsynchronousStretchPublication();
     if (failures == 0)
         std::cout << "All sampler tests passed.\n";
     return failures == 0 ? 0 : 1;

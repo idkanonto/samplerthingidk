@@ -46,6 +46,11 @@ jobs:
           if ($module.Count -lt 1) {
             throw "The VST3 bundle does not contain a module binary."
           }
+          $notices = Join-Path $plugin 'Contents\Resources\THIRD_PARTY_NOTICES.md'
+          if (-not (Test-Path -LiteralPath $notices -PathType Leaf) -or
+              (Get-Item -LiteralPath $notices).Length -eq 0) {
+            throw "The VST3 bundle does not contain its third-party notices."
+          }
           Write-Host "Verified $plugin"
           $module | ForEach-Object { Write-Host "Module: $($_.FullName) ($($_.Length) bytes)" }
 

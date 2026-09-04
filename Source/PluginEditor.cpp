@@ -230,9 +230,10 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
 
     juce::Component* components[] = { &title, &status, &addButton, &clearButton,
         &enableAllButton, &disableAllButton, &list, &waveform, &sourceKey,
-        &sourceTranspose, &sourceFineTune, &sourceGain, &sourceWeight, &sourceKeyLabel,
+        &sourceTranspose, &sourceFineTune, &sourceGain, &sourceWeight, &sourceStretch,
+        &sourceKeyLabel,
         &sourceTransposeLabel, &sourceFineTuneLabel, &sourceGainLabel, &sourceWeightLabel,
-        &targetKey, &targetKeyLabel, &midiPitch };
+        &sourceStretchLabel, &targetKey, &targetKeyLabel, &midiPitch };
     for (auto* component : components) addAndMakeVisible(component);
     list.setColour(juce::ListBox::backgroundColourId, juce::Colour(0xff191b21));
     list.setRowHeight(34);
@@ -249,7 +250,10 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     sourceGain.setRange(-60.0, 12.0, 0.1);
     sourceGain.setTextValueSuffix(" dB");
     sourceWeight.setRange(0.01, 10.0, 0.01);
-    for (auto* slider : { &sourceTranspose, &sourceFineTune, &sourceGain, &sourceWeight })
+    sourceStretch.setRange(0.5, 2.0, 0.01);
+    sourceStretch.setTextValueSuffix(" x");
+    for (auto* slider : { &sourceTranspose, &sourceFineTune, &sourceGain, &sourceWeight,
+                          &sourceStretch })
     {
         slider->setSliderStyle(juce::Slider::LinearHorizontal);
         slider->setTextBoxStyle(juce::Slider::TextBoxRight, false, 84, 22);
@@ -259,9 +263,11 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     sourceFineTuneLabel.setText("FINE TUNE", juce::dontSendNotification);
     sourceGainLabel.setText("SELECTED GAIN", juce::dontSendNotification);
     sourceWeightLabel.setText("SELECTION WEIGHT", juce::dontSendNotification);
+    sourceStretchLabel.setText("STRETCH", juce::dontSendNotification);
     targetKeyLabel.setText("TARGET KEY", juce::dontSendNotification);
     for (auto* label : { &sourceKeyLabel, &sourceTransposeLabel, &sourceFineTuneLabel,
-                         &sourceGainLabel, &sourceWeightLabel, &targetKeyLabel })
+                         &sourceGainLabel, &sourceWeightLabel, &sourceStretchLabel,
+                         &targetKeyLabel })
         label->setColour(juce::Label::textColourId, juce::Colour(0xffc8cad1));
     sourceKey.onChange = [this]
     {
@@ -293,6 +299,16 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     {
         if (selectedSourceId.isNotEmpty()) processor.samples.updateSettings(selectedSourceId,
             [this](SampleSettings& s) { s.selectionWeight = static_cast<float>(sourceWeight.getValue()); });
+    };
+    sourceStretch.onValueChange = [this]
+    {
+        if (selectedSourceId.isNotEmpty()) processor.samples.updateSettings(selectedSourceId,
+            [this](SampleSettings& s)
+            {
+                s.stretchRatio = static_cast<float>(sourceStretch.getValue());
+            });
+        displayPool = processor.samples.getSnapshot();
+        list.repaint();
     };
     waveform.onRegionChanged = [this](double start, double end)
     {
@@ -398,6 +414,9 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     auto weightCell = sourceControls.removeFromLeft(390).reduced(3);
     sourceWeightLabel.setBounds(weightCell.removeFromLeft(145));
     sourceWeight.setBounds(weightCell);
+    auto stretchCell = sourceControls.reduced(3);
+    sourceStretchLabel.setBounds(stretchCell.removeFromLeft(95));
+    sourceStretch.setBounds(stretchCell);
 
     auto sourceKeyCell = sourcePitchControls.removeFromLeft(260).reduced(3);
     sourceKeyLabel.setBounds(sourceKeyCell.removeFromLeft(105));
@@ -476,6 +495,8 @@ void RandomChopSamplerAudioProcessorEditor::refresh()
                                 juce::dontSendNotification);
         sourceGain.setValue(selectedSource->settings.gainDb, juce::dontSendNotification);
         sourceWeight.setValue(selectedSource->settings.selectionWeight, juce::dontSendNotification);
+        sourceStretch.setValue(selectedSource->settings.stretchRatio,
+                               juce::dontSendNotification);
         waveform.setSource(selectedSource);
     }
     else
@@ -501,7 +522,10 @@ void RandomChopSamplerAudioProcessorEditor::paintListBoxItem(int row, juce::Grap
     g.fillAll(selected ? juce::Colour(0xff343746)
                        : (recent ? juce::Colour(0xff29233a) : juce::Colour(0xff191b21)));
     g.setColour(source->settings.missing ? juce::Colour(0xffff8a8a) : juce::Colour(0xffe3e4e8));
-    const auto suffix = source->settings.missing ? "  [MISSING]" : juce::String();
+    const auto suffix = source->settings.missing ? juce::String("  [MISSING]")
+        : (source->stretchPending ? juce::String("  [STRETCHING]")
+                                  : (source->stretchFailed ? juce::String("  [STRETCH FAILED]")
+                                                           : juce::String()));
     g.drawText(juce::String(row + 1).paddedLeft('0', 2) + ".  "
                    + source->settings.displayName + suffix,
                10, 0, width - 155, height, juce::Justification::centredLeft, true);
@@ -545,6 +569,7 @@ void RandomChopSamplerAudioProcessorEditor::selectedRowsChanged(int row)
         sourceFineTune.setValue(settings.fineTuneCents, juce::dontSendNotification);
         sourceGain.setValue(settings.gainDb, juce::dontSendNotification);
         sourceWeight.setValue(settings.selectionWeight, juce::dontSendNotification);
+        sourceStretch.setValue(settings.stretchRatio, juce::dontSendNotification);
         waveform.setSource((*displayPool)[static_cast<size_t>(row)]);
     }
 }
@@ -552,6 +577,8 @@ void RandomChopSamplerAudioProcessorEditor::selectedRowsChanged(int row)
 void RandomChopSamplerAudioProcessorEditor::timerCallback()
 {
     processor.samples.collectGarbage();
+    if (processor.samples.getSnapshot() != displayPool)
+        refresh();
     const int count = processor.samples.size();
     auto message = juce::String(count).paddedLeft('0', 2) + " / 20 sources";
     if (processor.triggeredWhileEmpty.load(std::memory_order_relaxed))
