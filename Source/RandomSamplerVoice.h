@@ -9,7 +9,7 @@ public:
     bool isActive() const noexcept { return sample != nullptr; }
     int getNote() const noexcept { return midiNote; }
     uint64_t getAge() const noexcept { return age; }
-    void start(SampleManager::SamplePtr newSample, int note, float velocity, double startFrame,
+    void start(PreparedSamplePtr newSample, int note, float velocity, double startFrame,
                randomchop::FrameRegion sourceRegion, double playbackPitchRatio,
                bool reverse, float voiceGain,
                float attackSeconds, float releaseSeconds,
@@ -19,7 +19,7 @@ public:
     void render(juce::AudioBuffer<float>& output, int startSample, int numSamples) noexcept;
 
 private:
-    SampleManager::SamplePtr sample;
+    PreparedSamplePtr sample;
     double sourcePosition = 0.0, increment = 1.0, hostRate = 44100.0;
     randomchop::FrameRegion region;
     bool playingInReverse = false;

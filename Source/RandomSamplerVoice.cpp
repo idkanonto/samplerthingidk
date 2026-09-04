@@ -1,12 +1,17 @@
 #include "RandomSamplerVoice.h"
 #include <cmath>
 
-void RandomSamplerVoice::start(SampleManager::SamplePtr newSample, int note, float velocity,
+void RandomSamplerVoice::start(PreparedSamplePtr newSample, int note, float velocity,
                                double startFrame, randomchop::FrameRegion sourceRegion,
                                double playbackPitchRatio, bool reverse, float voiceGain,
                                float attackSeconds,
                                float releaseSeconds, uint64_t newAge) noexcept
 {
+    if (newSample == nullptr || newSample->audio == nullptr)
+    {
+        forceStop();
+        return;
+    }
     if (isActive())
     {
         stealTail[0] = lastOutput[0];

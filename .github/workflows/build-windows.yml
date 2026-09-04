@@ -46,6 +46,18 @@ jobs:
           if ($module.Count -lt 1) {
             throw "The VST3 bundle does not contain a module binary."
           }
+          $requiredNotices = @(
+            'THIRD_PARTY_NOTICES.md',
+            'JUCE_LICENSE.md',
+            'SIGNALSMITH_LINEAR_LICENSE.txt'
+          )
+          foreach ($noticeName in $requiredNotices) {
+            $notice = Join-Path $plugin "Contents\Resources\$noticeName"
+            if (-not (Test-Path -LiteralPath $notice -PathType Leaf) -or
+                (Get-Item -LiteralPath $notice).Length -eq 0) {
+              throw "The VST3 bundle is missing required notice: $noticeName"
+            }
+          }
           Write-Host "Verified $plugin"
           $module | ForEach-Object { Write-Host "Module: $($_.FullName) ($($_.Length) bytes)" }
 

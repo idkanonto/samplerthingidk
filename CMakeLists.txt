@@ -19,6 +19,16 @@ FetchContent_Declare(
     GIT_PROGRESS TRUE)
 FetchContent_MakeAvailable(JUCE)
 
+FetchContent_Declare(
+    signalsmith_stretch
+    GIT_REPOSITORY https://github.com/Signalsmith-Audio/signalsmith-stretch.git
+    GIT_TAG 57b93f4e9206a089a45387eaa39bdc9f310d3308
+    GIT_SHALLOW FALSE
+    GIT_PROGRESS TRUE)
+FetchContent_MakeAvailable(signalsmith_stretch)
+FetchContent_GetProperties(JUCE SOURCE_DIR juce_source_dir)
+FetchContent_GetProperties(signalsmith-linear SOURCE_DIR signalsmith_linear_source_dir)
+
 juce_add_plugin(RandomChopSampler
     COMPANY_NAME "Random Chop Audio"
     BUNDLE_ID "com.randomchopaudio.randomchopsampler"
@@ -44,6 +54,8 @@ target_sources(RandomChopSampler PRIVATE
     Source/PluginEditor.h
     Source/SampleManager.cpp
     Source/SampleManager.h
+    Source/StretchPreparation.cpp
+    Source/StretchPreparation.h
     Source/RandomSamplerVoice.cpp
     Source/RandomSamplerVoice.h
     Source/RandomizationEngine.h
@@ -59,9 +71,24 @@ target_compile_definitions(RandomChopSampler PUBLIC
 
 target_link_libraries(RandomChopSampler PRIVATE
     juce::juce_audio_utils
+    signalsmith-stretch
     PUBLIC juce::juce_recommended_config_flags
            juce::juce_recommended_lto_flags
            juce::juce_recommended_warning_flags)
+
+add_custom_command(TARGET RandomChopSampler_VST3 POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        "$<TARGET_FILE_DIR:RandomChopSampler_VST3>/../Resources"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md"
+        "$<TARGET_FILE_DIR:RandomChopSampler_VST3>/../Resources/THIRD_PARTY_NOTICES.md"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${juce_source_dir}/LICENSE.md"
+        "$<TARGET_FILE_DIR:RandomChopSampler_VST3>/../Resources/JUCE_LICENSE.md"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${signalsmith_linear_source_dir}/LICENSE.txt"
+        "$<TARGET_FILE_DIR:RandomChopSampler_VST3>/../Resources/SIGNALSMITH_LINEAR_LICENSE.txt"
+    COMMENT "Copying third-party notices into the VST3 bundle")
 
 if (BUILD_TESTING)
     juce_add_console_app(RandomChopSamplerTests
@@ -71,6 +98,8 @@ if (BUILD_TESTING)
         Tests/Phase1Tests.cpp
         Source/SampleManager.cpp
         Source/SampleManager.h
+        Source/StretchPreparation.cpp
+        Source/StretchPreparation.h
         Source/RandomSamplerVoice.cpp
         Source/RandomSamplerVoice.h
         Source/RandomizationEngine.h
@@ -85,6 +114,7 @@ if (BUILD_TESTING)
     target_link_libraries(RandomChopSamplerTests PRIVATE
         juce::juce_audio_formats
         juce::juce_data_structures
+        signalsmith-stretch
         PUBLIC juce::juce_recommended_config_flags
                juce::juce_recommended_warning_flags)
     add_test(NAME RandomChopSamplerTests COMMAND RandomChopSamplerTests)

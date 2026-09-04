@@ -54,9 +54,9 @@ private:
     juce::ListBox list { "Samples", this };
     SourceWaveformComponent waveform;
     juce::ComboBox sourceKey;
-    juce::Slider sourceTranspose, sourceFineTune, sourceGain, sourceWeight;
+    juce::Slider sourceTranspose, sourceFineTune, sourceGain, sourceWeight, sourceStretch;
     juce::Label sourceKeyLabel, sourceTransposeLabel, sourceFineTuneLabel,
-        sourceGainLabel, sourceWeightLabel;
+        sourceGainLabel, sourceWeightLabel, sourceStretchLabel;
     juce::ComboBox targetKey;
     juce::ToggleButton midiPitch { "MIDI Pitch" };
     juce::Slider rootNote, randomStart, attack, release, output, seed;
