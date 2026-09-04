@@ -222,7 +222,7 @@ public:
 RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(RandomChopSamplerAudioProcessor& p)
     : AudioProcessorEditor(&p), processor(p)
 {
-    setSize(1050, 900);
+    setSize(1050, 1020);
     title.setText("RANDOM CHOP SAMPLER V2", juce::dontSendNotification);
     title.setFont(juce::Font(24.0f, juce::Font::bold));
     title.setColour(juce::Label::textColourId, juce::Colour(0xfff2f2f5));
@@ -335,6 +335,14 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     configureKnob(output, outputLabel, "OUTPUT");
     configureKnob(seed, seedLabel, "SEED");
     configureKnob(rootNote, rootNoteLabel, "ROOT MIDI NOTE");
+    configureLinearControl(reverseChance, reverseChanceLabel, "REVERSE CHANCE");
+    configureLinearControl(retriggerChance, retriggerChanceLabel, "RETRIGGER CHANCE");
+    configureLinearControl(skipChance, skipChanceLabel, "SKIP CHANCE");
+    configureLinearControl(reorderChance, reorderChanceLabel, "REORDER CHANCE");
+    configureLinearControl(bendChance, bendChanceLabel, "BEND CHANCE");
+    configureLinearControl(dropChance, dropChanceLabel, "DROP CHANCE");
+    configureLinearControl(retriggerSize, retriggerSizeLabel, "REPEAT SIZE");
+    configureLinearControl(retriggerCount, retriggerCountLabel, "REPEAT COUNT");
     finalLength.setNumDecimalPlacesToDisplay(0);
     finalLength.textFromValueFunction = [](double value)
     {
@@ -357,6 +365,22 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     targetKeyAttachment = std::make_unique<ComboBoxAttachment>(p.parameters, "targetKey", targetKey);
     voiceModeAttachment = std::make_unique<ComboBoxAttachment>(p.parameters, "voiceMode", voiceMode);
     midiPitchAttachment = std::make_unique<ButtonAttachment>(p.parameters, "midiPitch", midiPitch);
+    reverseChanceAttachment = std::make_unique<SliderAttachment>(
+        p.parameters, "reverseChance", reverseChance);
+    retriggerChanceAttachment = std::make_unique<SliderAttachment>(
+        p.parameters, "retriggerChance", retriggerChance);
+    retriggerSizeAttachment = std::make_unique<SliderAttachment>(
+        p.parameters, "retriggerSize", retriggerSize);
+    retriggerCountAttachment = std::make_unique<SliderAttachment>(
+        p.parameters, "retriggerCount", retriggerCount);
+    skipChanceAttachment = std::make_unique<SliderAttachment>(
+        p.parameters, "skipChance", skipChance);
+    reorderChanceAttachment = std::make_unique<SliderAttachment>(
+        p.parameters, "reorderChance", reorderChance);
+    bendChanceAttachment = std::make_unique<SliderAttachment>(
+        p.parameters, "bendChance", bendChance);
+    dropChanceAttachment = std::make_unique<SliderAttachment>(
+        p.parameters, "dropChance", dropChance);
 
     addButton.onClick = [this]
     {
@@ -385,6 +409,19 @@ void RandomChopSamplerAudioProcessorEditor::configureKnob(juce::Slider& slider, 
     slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 82, 20);
     slider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff8b5cf6));
+    label.setText(text, juce::dontSendNotification);
+    label.setJustificationType(juce::Justification::centred);
+    label.setColour(juce::Label::textColourId, juce::Colour(0xffc8cad1));
+    addAndMakeVisible(slider);
+    addAndMakeVisible(label);
+}
+
+void RandomChopSamplerAudioProcessorEditor::configureLinearControl(
+    juce::Slider& slider, juce::Label& label, const juce::String& text)
+{
+    slider.setSliderStyle(juce::Slider::LinearHorizontal);
+    slider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 72, 20);
+    slider.setColour(juce::Slider::trackColourId, juce::Colour(0xff8b5cf6));
     label.setText(text, juce::dontSendNotification);
     label.setJustificationType(juce::Justification::centred);
     label.setColour(juce::Label::textColourId, juce::Colour(0xffc8cad1));
@@ -422,6 +459,8 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     disableAllButton.setBounds(toolbar.removeFromLeft(105).reduced(2));
 
     auto globalControls = area.removeFromBottom(135);
+    auto chanceControls2 = area.removeFromBottom(58);
+    auto chanceControls1 = area.removeFromBottom(58);
     auto globalPitchControls = area.removeFromBottom(58);
     auto sourcePitchControls = area.removeFromBottom(58);
     auto sourceControls = area.removeFromBottom(58);
@@ -466,6 +505,27 @@ void RandomChopSamplerAudioProcessorEditor::resized()
         auto cell = globalControls.removeFromLeft(knobWidth);
         labels[i]->setBounds(cell.removeFromTop(22));
         sliders[i]->setBounds(cell.reduced(4));
+    }
+    juce::Slider* chanceSliders1[] = {
+        &reverseChance, &retriggerChance, &skipChance, &reorderChance
+    };
+    juce::Label* chanceLabels1[] = {
+        &reverseChanceLabel, &retriggerChanceLabel, &skipChanceLabel, &reorderChanceLabel
+    };
+    juce::Slider* chanceSliders2[] = {
+        &bendChance, &dropChance, &retriggerSize, &retriggerCount
+    };
+    juce::Label* chanceLabels2[] = {
+        &bendChanceLabel, &dropChanceLabel, &retriggerSizeLabel, &retriggerCountLabel
+    };
+    for (int index = 0; index < 4; ++index)
+    {
+        auto cell1 = chanceControls1.removeFromLeft(chanceControls1.getWidth() / (4 - index));
+        chanceLabels1[index]->setBounds(cell1.removeFromTop(20));
+        chanceSliders1[index]->setBounds(cell1.reduced(4, 2));
+        auto cell2 = chanceControls2.removeFromLeft(chanceControls2.getWidth() / (4 - index));
+        chanceLabels2[index]->setBounds(cell2.removeFromTop(20));
+        chanceSliders2[index]->setBounds(cell2.reduced(4, 2));
     }
     waveform.setBounds(waveformArea.reduced(10));
     list.setBounds(area.reduced(10));

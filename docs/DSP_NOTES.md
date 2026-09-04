@@ -22,6 +22,7 @@ status: active
 - Playback uses linear interpolation for source-rate conversion.
 - Each voice has Attack/Release, optional sample-counted Final Length, a 3 ms source-region boundary fade, and a 3 ms tail crossfade on stealing.
 - Sixteen voices are preallocated. POLY steals the oldest active voice; MONO reuses the primary voice with that same crossfade and releases residual POLY voices.
+- Chance randomness is resolved once during Note On into a fixed-size value. Voice rendering uses only stored values, bounded four-piece Reorder work, a precomputed Bend multiplier, and a smoothed eight-slot Drop gain; it performs no RNG calls or allocation.
 - A xorshift64* generator supplies allocation-free seeded random decisions.
 
 ## Stretch teardown

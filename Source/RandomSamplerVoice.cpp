@@ -6,7 +6,8 @@ void RandomSamplerVoice::start(PreparedSamplePtr newSample, int note, float velo
                                double playbackPitchRatio, bool reverse, float voiceGain,
                                float attackSeconds,
                                float releaseSeconds, uint64_t newAge,
-                               float finalLengthMilliseconds) noexcept
+                               float finalLengthMilliseconds,
+                               randomchop::EventDecision eventDecision) noexcept
 {
     if (newSample == nullptr || newSample->audio == nullptr)
     {
@@ -28,14 +29,16 @@ void RandomSamplerVoice::start(PreparedSamplePtr newSample, int note, float velo
     midiNote = note;
     age = newAge;
     region = sourceRegion;
-    playingInReverse = reverse;
-    sourcePosition = juce::jlimit(static_cast<double>(region.firstFrame),
-                                  randomchop::lastInterpolationPosition(region), startFrame);
+    event = eventDecision;
+    playingInReverse = reverse || event.reverseEnabled;
+    playbackStart = randomchop::resolvedEventStart(region, startFrame, event);
+    reorderStart = playbackStart;
     const auto safePitchRatio = std::isfinite(playbackPitchRatio) && playbackPitchRatio > 0.0
         ? playbackPitchRatio : 1.0;
-    increment = (sample->sampleRate / juce::jmax(1.0, hostRate)) * safePitchRatio;
+    baseIncrement = (sample->sampleRate / juce::jmax(1.0, hostRate)) * safePitchRatio;
     if (playingInReverse)
-        increment = -increment;
+        baseIncrement = -baseIncrement;
+    increment = baseIncrement;
     targetLevel = juce::jmax(0.0f, velocity * voiceGain);
     level = 0.0f;
     attackStep = attackSeconds <= 0.00001f ? targetLevel
@@ -53,7 +56,82 @@ void RandomSamplerVoice::start(PreparedSamplePtr newSample, int note, float velo
         finalBoundaryReleaseFrames = static_cast<int>(juce::jmin<std::int64_t>(
             finalBoundaryReleaseFrames, finalLengthFrames));
     renderedFrames = 0;
+    retriggerFrames = 0;
+    retriggersRemaining = event.retriggerEnabled ? event.retriggerCount : 0;
+    bendRatio = 1.0;
+    bendTargetRatio = event.bendEnabled
+        ? std::exp2(static_cast<double>(juce::jlimit(
+            -12.0f, 12.0f, event.bendDepthSemitones)) / 12.0) : 1.0;
+    bendFramesRemaining = event.bendEnabled
+        ? juce::jmax<std::int64_t>(1, static_cast<std::int64_t>(std::llround(hostRate))) : 0;
+    bendMultiplier = bendFramesRemaining > 0
+        ? std::pow(bendTargetRatio, 1.0 / static_cast<double>(bendFramesRemaining)) : 1.0;
+    const auto availableSourceFrames = playingInReverse
+        ? playbackStart - static_cast<double>(region.firstFrame)
+        : randomchop::lastInterpolationPosition(region) - playbackStart;
+    const auto naturalOutputFrames = std::max(1.0,
+        availableSourceFrames / juce::jmax(0.000001, std::abs(baseIncrement)));
+    const auto estimatedOutputFrames = naturalOutputFrames + (event.retriggerEnabled
+        ? static_cast<double>(event.retriggerSizeFrames) * event.retriggerCount : 0.0);
+    dropSlotFrames = juce::jmax<std::int64_t>(1, static_cast<std::int64_t>(
+        std::ceil(estimatedOutputFrames / 8.0)));
+    dropGain = 1.0f;
+    dropSmoothingStep = 1.0f / juce::jmax(1.0f, static_cast<float>(hostRate * 0.001));
+    resetPlaybackPass();
     stage = Stage::attack;
+}
+
+void RandomSamplerVoice::resetPlaybackPass() noexcept
+{
+    sourcePosition = playbackStart;
+    reorderPieceIndex = 0;
+    reorderPieceProgress = 0.0;
+    if (event.reorderEnabled && event.reorderPieceSpanFrames > 0.0)
+    {
+        const auto direction = playingInReverse ? -1.0 : 1.0;
+        sourcePosition = reorderStart + direction * event.reorderPieceSpanFrames
+            * static_cast<double>(event.reorderPermutation[0]);
+    }
+}
+
+void RandomSamplerVoice::advancePlayback(double step) noexcept
+{
+    sourcePosition += step;
+    if (!event.reorderEnabled || event.reorderPieceSpanFrames <= 0.0
+        || reorderPieceIndex >= 4)
+        return;
+
+    reorderPieceProgress += std::abs(step);
+    const auto direction = playingInReverse ? -1.0 : 1.0;
+    while (reorderPieceProgress >= event.reorderPieceSpanFrames && reorderPieceIndex < 4)
+    {
+        reorderPieceProgress -= event.reorderPieceSpanFrames;
+        ++reorderPieceIndex;
+        if (reorderPieceIndex < 4)
+            sourcePosition = reorderStart + direction * (
+                event.reorderPieceSpanFrames
+                    * static_cast<double>(event.reorderPermutation[
+                        static_cast<std::size_t>(reorderPieceIndex)])
+                + reorderPieceProgress);
+        else
+            sourcePosition = reorderStart + direction * (
+                4.0 * event.reorderPieceSpanFrames + reorderPieceProgress);
+    }
+}
+
+float RandomSamplerVoice::updateDropGain() noexcept
+{
+    if (!event.dropEnabled)
+        return 1.0f;
+    const auto slot = static_cast<int>(juce::jmin<std::int64_t>(
+        7, renderedFrames / dropSlotFrames));
+    const auto muted = (event.dropMask & static_cast<std::uint8_t>(1u << slot)) != 0;
+    const auto target = muted ? 0.0f : 1.0f;
+    if (dropGain < target)
+        dropGain = juce::jmin(target, dropGain + dropSmoothingStep);
+    else if (dropGain > target)
+        dropGain = juce::jmax(target, dropGain - dropSmoothingStep);
+    return dropGain;
 }
 
 void RandomSamplerVoice::release(float releaseSeconds) noexcept
@@ -70,6 +148,13 @@ void RandomSamplerVoice::render(juce::AudioBuffer<float>& output, int startSampl
 
     for (int i = 0; i < numSamples; ++i)
     {
+        if (event.retriggerEnabled && retriggersRemaining > 0
+            && retriggerFrames >= event.retriggerSizeFrames)
+        {
+            resetPlaybackPass();
+            retriggerFrames = 0;
+            --retriggersRemaining;
+        }
         if (finalLengthFrames > 0 && renderedFrames >= finalLengthFrames)
         {
             sample.reset();
@@ -77,8 +162,22 @@ void RandomSamplerVoice::render(juce::AudioBuffer<float>& output, int startSampl
         }
         if (!randomchop::isInterpolationPositionLegal(region, sourcePosition))
         {
-            sample.reset();
-            break;
+            if (event.retriggerEnabled && retriggersRemaining > 0)
+            {
+                resetPlaybackPass();
+                retriggerFrames = 0;
+                --retriggersRemaining;
+                if (!randomchop::isInterpolationPositionLegal(region, sourcePosition))
+                {
+                    sample.reset();
+                    break;
+                }
+            }
+            else
+            {
+                sample.reset();
+                break;
+            }
         }
         const int index = static_cast<int>(sourcePosition);
         const float fraction = static_cast<float>(sourcePosition - index);
@@ -115,6 +214,7 @@ void RandomSamplerVoice::render(juce::AudioBuffer<float>& output, int startSampl
                             / static_cast<float>(finalBoundaryReleaseFrames - 1));
             }
         }
+        const auto dropEnvelope = updateDropGain();
         const float tailGain = stealTailRemaining > 0
             ? static_cast<float>(stealTailRemaining) / static_cast<float>(stealTailLength) : 0.0f;
         for (int channel = 0; channel < output.getNumChannels(); ++channel)
@@ -122,14 +222,23 @@ void RandomSamplerVoice::render(juce::AudioBuffer<float>& output, int startSampl
             const int sourceChannel = sourceChannels == 1 ? 0 : juce::jmin(channel, sourceChannels - 1);
             const float* data = sample->audio->getReadPointer(sourceChannel);
             const float value = data[index] + fraction * (data[index + 1] - data[index]);
-            const float voiceOutput = value * level * endGain * finalLengthGain;
+            const float voiceOutput = value * level * endGain * finalLengthGain * dropEnvelope;
             const int stereoChannel = juce::jmin(channel, 1);
             output.addSample(channel, startSample + i, voiceOutput + stealTail[stereoChannel] * tailGain);
             lastOutput[stereoChannel] = voiceOutput;
         }
         if (stealTailRemaining > 0) --stealTailRemaining;
-        sourcePosition += increment;
+        advancePlayback(increment);
+        ++retriggerFrames;
         ++renderedFrames;
+        if (bendFramesRemaining > 0)
+        {
+            bendRatio *= bendMultiplier;
+            --bendFramesRemaining;
+            if (bendFramesRemaining == 0)
+                bendRatio = bendTargetRatio;
+            increment = baseIncrement * bendRatio;
+        }
         if (finalLengthFrames > 0 && renderedFrames >= finalLengthFrames)
         {
             sample.reset();
