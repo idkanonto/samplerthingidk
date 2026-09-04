@@ -494,14 +494,33 @@ void testAsynchronousStretchPublication()
         return;
 
     std::atomic<bool> firstJobStarted { false };
-    auto deterministicPrepare = [&firstJobStarted](
+    std::atomic<bool> releaseFirstJob { false };
+    std::atomic<bool> secondJobStarted { false };
+    std::atomic<bool> releaseSecondJob { false };
+    std::atomic<bool> thirdJobStarted { false };
+    std::atomic<bool> releaseThirdJob { false };
+    std::atomic<bool> thirdJobReturned { false };
+    auto deterministicPrepare = [&] (
         const std::shared_ptr<const juce::AudioBuffer<float>>& decoded,
         double sampleRate, float ratio, uint64_t revision) -> PreparedSamplePtr
     {
         if (revision == 1)
         {
             firstJobStarted.store(true, std::memory_order_release);
-            juce::Thread::sleep(100);
+            while (!releaseFirstJob.load(std::memory_order_acquire))
+                juce::Thread::sleep(1);
+        }
+        else if (revision == 2)
+        {
+            secondJobStarted.store(true, std::memory_order_release);
+            while (!releaseSecondJob.load(std::memory_order_acquire))
+                juce::Thread::sleep(1);
+        }
+        else if (revision == 3)
+        {
+            thirdJobStarted.store(true, std::memory_order_release);
+            while (!releaseThirdJob.load(std::memory_order_acquire))
+                juce::Thread::sleep(1);
         }
 
         const auto outputFrames = juce::jmax(2, static_cast<int>(
@@ -523,6 +542,8 @@ void testAsynchronousStretchPublication()
         prepared->sampleRate = sampleRate;
         prepared->revision = revision;
         prepared->stretchRatio = ratio;
+        if (revision == 3)
+            thirdJobReturned.store(true, std::memory_order_release);
         return prepared;
     };
 
@@ -554,7 +575,7 @@ void testAsynchronousStretchPublication()
         {
             settings.stretchRatio = 2.0f;
         });
-        for (int attempt = 0; attempt < 200
+        for (int attempt = 0; attempt < 2000
                 && !firstJobStarted.load(std::memory_order_acquire); ++attempt)
             juce::Thread::sleep(1);
         check(firstJobStarted.load(std::memory_order_acquire),
@@ -564,6 +585,19 @@ void testAsynchronousStretchPublication()
         {
             settings.stretchRatio = 0.5f;
         });
+        releaseFirstJob.store(true, std::memory_order_release);
+        for (int attempt = 0; attempt < 2000
+                && !secondJobStarted.load(std::memory_order_acquire); ++attempt)
+            juce::Thread::sleep(1);
+        check(secondJobStarted.load(std::memory_order_acquire),
+              "replacement stretch revision did not start");
+        const auto beforeSecondPublish = manager.getSnapshot();
+        check(!beforeSecondPublish->empty()
+                  && beforeSecondPublish->front()->stretchPending
+                  && beforeSecondPublish->front()->requestedStretchRevision == 2
+                  && beforeSecondPublish->front()->prepared->revision == 0,
+              "a stale stretch revision published before its replacement");
+        releaseSecondJob.store(true, std::memory_order_release);
 
         std::shared_ptr<const SampleManager::Pool> current;
         for (int attempt = 0; attempt < 300; ++attempt)
@@ -592,8 +626,17 @@ void testAsynchronousStretchPublication()
         {
             settings.stretchRatio = 2.0f;
         });
+        for (int attempt = 0; attempt < 2000
+                && !thirdJobStarted.load(std::memory_order_acquire); ++attempt)
+            juce::Thread::sleep(1);
+        check(thirdJobStarted.load(std::memory_order_acquire),
+              "removal test stretch revision did not start");
         manager.remove(id);
-        juce::Thread::sleep(150);
+        releaseThirdJob.store(true, std::memory_order_release);
+        for (int attempt = 0; attempt < 2000
+                && !thirdJobReturned.load(std::memory_order_acquire); ++attempt)
+            juce::Thread::sleep(1);
+        juce::Thread::sleep(5);
         check(manager.getSnapshot()->empty(),
               "removing a source during stretch preparation republished it");
 

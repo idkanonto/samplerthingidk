@@ -26,6 +26,8 @@ FetchContent_Declare(
     GIT_SHALLOW FALSE
     GIT_PROGRESS TRUE)
 FetchContent_MakeAvailable(signalsmith_stretch)
+FetchContent_GetProperties(JUCE SOURCE_DIR juce_source_dir)
+FetchContent_GetProperties(signalsmith-linear SOURCE_DIR signalsmith_linear_source_dir)
 
 juce_add_plugin(RandomChopSampler
     COMPANY_NAME "Random Chop Audio"
@@ -80,6 +82,12 @@ add_custom_command(TARGET RandomChopSampler_VST3 POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/THIRD_PARTY_NOTICES.md"
         "$<TARGET_FILE_DIR:RandomChopSampler_VST3>/../Resources/THIRD_PARTY_NOTICES.md"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${juce_source_dir}/LICENSE.md"
+        "$<TARGET_FILE_DIR:RandomChopSampler_VST3>/../Resources/JUCE_LICENSE.md"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${signalsmith_linear_source_dir}/LICENSE.txt"
+        "$<TARGET_FILE_DIR:RandomChopSampler_VST3>/../Resources/SIGNALSMITH_LINEAR_LICENSE.txt"
     COMMENT "Copying third-party notices into the VST3 bundle")
 
 if (BUILD_TESTING)

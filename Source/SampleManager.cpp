@@ -141,7 +141,15 @@ void SampleManager::stretchWorkerLoop()
         {
             prepared.reset();
         }
-        publishStretchResult(job, std::move(prepared));
+        try
+        {
+            publishStretchResult(job, std::move(prepared));
+        }
+        catch (...)
+        {
+            // Publication allocates only on this background thread. If the
+            // host is out of memory, leave the still-valid prior version in use.
+        }
     }
 }
 

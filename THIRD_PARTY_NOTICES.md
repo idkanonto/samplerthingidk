@@ -4,6 +4,11 @@
 
 Random Chop Sampler uses Signalsmith Stretch at commit `57b93f4e9206a089a45387eaa39bdc9f310d3308`.
 
+The VST3 bundle also includes `JUCE_LICENSE.md` for JUCE 8.0.13 and
+`SIGNALSMITH_LINEAR_LICENSE.txt` for Signalsmith Linear 0.3.1, the pinned
+transitive dependency used by Signalsmith Stretch. Those files are copied
+unchanged from their respective upstream source packages at build time.
+
 MIT License
 
 Copyright (c) 2022 Geraint Luff / Signalsmith Audio Ltd.
