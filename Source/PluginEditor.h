@@ -57,17 +57,17 @@ private:
     juce::Slider sourceTranspose, sourceFineTune, sourceGain, sourceWeight, sourceStretch;
     juce::Label sourceKeyLabel, sourceTransposeLabel, sourceFineTuneLabel,
         sourceGainLabel, sourceWeightLabel, sourceStretchLabel;
-    juce::ComboBox targetKey;
+    juce::ComboBox targetKey, voiceMode;
     juce::ToggleButton midiPitch { "MIDI Pitch" };
-    juce::Slider rootNote, randomStart, attack, release, output, seed;
-    juce::Label targetKeyLabel, rootNoteLabel, randomStartLabel, attackLabel,
-        releaseLabel, outputLabel, seedLabel;
+    juce::Slider rootNote, randomStart, finalLength, attack, release, output, seed;
+    juce::Label targetKeyLabel, rootNoteLabel, voiceModeLabel, randomStartLabel,
+        finalLengthLabel, attackLabel, releaseLabel, outputLabel, seedLabel;
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ComboBoxAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
-    std::unique_ptr<SliderAttachment> randomStartAttachment, attackAttachment, releaseAttachment,
-        outputAttachment, seedAttachment, rootNoteAttachment;
-    std::unique_ptr<ComboBoxAttachment> targetKeyAttachment;
+    std::unique_ptr<SliderAttachment> randomStartAttachment, finalLengthAttachment,
+        attackAttachment, releaseAttachment, outputAttachment, seedAttachment, rootNoteAttachment;
+    std::unique_ptr<ComboBoxAttachment> targetKeyAttachment, voiceModeAttachment;
     std::unique_ptr<ButtonAttachment> midiPitchAttachment;
     std::shared_ptr<const SampleManager::Pool> displayPool;
     juce::String selectedSourceId;

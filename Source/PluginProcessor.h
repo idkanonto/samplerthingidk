@@ -1,10 +1,9 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include "RandomSamplerVoice.h"
+#include "VoicePool.h"
 #include "RandomizationEngine.h"
 #include "SourceSelection.h"
-#include <array>
 
 class RandomChopSamplerAudioProcessor final : public juce::AudioProcessor
 {
@@ -39,7 +38,7 @@ public:
 private:
     void noteOn(int note, float velocity) noexcept;
     void noteOff(int note) noexcept;
-    std::array<RandomSamplerVoice, 16> voices;
+    randomchop::VoicePool voices;
     RandomizationEngine random;
     double currentRate = 44100.0;
     uint64_t voiceCounter = 0;

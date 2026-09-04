@@ -233,7 +233,8 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
         &sourceTranspose, &sourceFineTune, &sourceGain, &sourceWeight, &sourceStretch,
         &sourceKeyLabel,
         &sourceTransposeLabel, &sourceFineTuneLabel, &sourceGainLabel, &sourceWeightLabel,
-        &sourceStretchLabel, &targetKey, &targetKeyLabel, &midiPitch };
+        &sourceStretchLabel, &targetKey, &targetKeyLabel, &midiPitch,
+        &voiceMode, &voiceModeLabel };
     for (auto* component : components) addAndMakeVisible(component);
     list.setColour(juce::ListBox::backgroundColourId, juce::Colour(0xff191b21));
     list.setRowHeight(34);
@@ -243,6 +244,8 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
         sourceKey.addItem(randomchop::tonicNames[static_cast<size_t>(index)], index + 1);
         targetKey.addItem(randomchop::tonicNames[static_cast<size_t>(index)], index + 1);
     }
+    voiceMode.addItem("POLY", 1);
+    voiceMode.addItem("MONO", 2);
     sourceTranspose.setRange(-24.0, 24.0, 1.0);
     sourceTranspose.setTextValueSuffix(" st");
     sourceFineTune.setRange(-100.0, 100.0, 1.0);
@@ -265,9 +268,11 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     sourceWeightLabel.setText("SELECTION WEIGHT", juce::dontSendNotification);
     sourceStretchLabel.setText("STRETCH", juce::dontSendNotification);
     targetKeyLabel.setText("TARGET KEY", juce::dontSendNotification);
+    voiceModeLabel.setText("VOICE MODE", juce::dontSendNotification);
+    voiceModeLabel.setJustificationType(juce::Justification::centredLeft);
     for (auto* label : { &sourceKeyLabel, &sourceTransposeLabel, &sourceFineTuneLabel,
                          &sourceGainLabel, &sourceWeightLabel, &sourceStretchLabel,
-                         &targetKeyLabel })
+                         &targetKeyLabel, &voiceModeLabel })
         label->setColour(juce::Label::textColourId, juce::Colour(0xffc8cad1));
     sourceKey.onChange = [this]
     {
@@ -324,20 +329,33 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     };
 
     configureKnob(randomStart, randomStartLabel, "RANDOM START");
+    configureKnob(finalLength, finalLengthLabel, "FINAL LENGTH");
     configureKnob(attack, attackLabel, "ATTACK");
     configureKnob(release, releaseLabel, "RELEASE");
     configureKnob(output, outputLabel, "OUTPUT");
     configureKnob(seed, seedLabel, "SEED");
     configureKnob(rootNote, rootNoteLabel, "ROOT MIDI NOTE");
+    finalLength.setNumDecimalPlacesToDisplay(0);
+    finalLength.textFromValueFunction = [](double value)
+    {
+        return value < 5.0 ? juce::String("FULL")
+                           : juce::String(juce::roundToInt(value)) + " ms";
+    };
+    finalLength.valueFromTextFunction = [](const juce::String& text)
+    {
+        return text.trim().equalsIgnoreCase("FULL") ? 0.0 : text.getDoubleValue();
+    };
     rootNote.setSliderStyle(juce::Slider::LinearHorizontal);
     rootNote.setTextBoxStyle(juce::Slider::TextBoxRight, false, 52, 22);
     randomStartAttachment = std::make_unique<SliderAttachment>(p.parameters, "randomStart", randomStart);
+    finalLengthAttachment = std::make_unique<SliderAttachment>(p.parameters, "finalLength", finalLength);
     attackAttachment = std::make_unique<SliderAttachment>(p.parameters, "attack", attack);
     releaseAttachment = std::make_unique<SliderAttachment>(p.parameters, "release", release);
     outputAttachment = std::make_unique<SliderAttachment>(p.parameters, "output", output);
     seedAttachment = std::make_unique<SliderAttachment>(p.parameters, "seed", seed);
     rootNoteAttachment = std::make_unique<SliderAttachment>(p.parameters, "rootNote", rootNote);
     targetKeyAttachment = std::make_unique<ComboBoxAttachment>(p.parameters, "targetKey", targetKey);
+    voiceModeAttachment = std::make_unique<ComboBoxAttachment>(p.parameters, "voiceMode", voiceMode);
     midiPitchAttachment = std::make_unique<ButtonAttachment>(p.parameters, "midiPitch", midiPitch);
 
     addButton.onClick = [this]
@@ -435,11 +453,15 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     auto rootCell = globalPitchControls.removeFromLeft(250).reduced(3);
     rootNoteLabel.setBounds(rootCell.removeFromLeft(120));
     rootNote.setBounds(rootCell);
+    auto voiceCell = globalPitchControls.removeFromLeft(250).reduced(3);
+    voiceModeLabel.setBounds(voiceCell.removeFromLeft(105));
+    voiceMode.setBounds(voiceCell.reduced(2, 10));
 
-    const int knobWidth = globalControls.getWidth() / 5;
-    juce::Slider* sliders[] = { &randomStart, &attack, &release, &output, &seed };
-    juce::Label* labels[] = { &randomStartLabel, &attackLabel, &releaseLabel, &outputLabel, &seedLabel };
-    for (int i = 0; i < 5; ++i)
+    const int knobWidth = globalControls.getWidth() / 6;
+    juce::Slider* sliders[] = { &randomStart, &finalLength, &attack, &release, &output, &seed };
+    juce::Label* labels[] = { &randomStartLabel, &finalLengthLabel, &attackLabel,
+                             &releaseLabel, &outputLabel, &seedLabel };
+    for (int i = 0; i < 6; ++i)
     {
         auto cell = globalControls.removeFromLeft(knobWidth);
         labels[i]->setBounds(cell.removeFromTop(22));

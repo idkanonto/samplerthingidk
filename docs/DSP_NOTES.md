@@ -20,8 +20,8 @@ status: active
 - Sources are decoded fully into RAM on control/state paths.
 - Non-unity Stretch is prepared by one background worker with Signalsmith Stretch. Immutable prepared versions are selected by source runtime identity and revision; stale results are discarded, queued work is coalesced/cancelled, and superseded buffers are reclaimed off the audio thread after voices release them.
 - Playback uses linear interpolation for source-rate conversion.
-- Each voice has Attack/Release, a 3 ms source-region boundary fade, and a 3 ms tail crossfade on stealing.
-- Sixteen voices are preallocated; oldest active voice is stolen.
+- Each voice has Attack/Release, optional sample-counted Final Length, a 3 ms source-region boundary fade, and a 3 ms tail crossfade on stealing.
+- Sixteen voices are preallocated. POLY steals the oldest active voice; MONO reuses the primary voice with that same crossfade and releases residual POLY voices.
 - A xorshift64* generator supplies allocation-free seeded random decisions.
 
 ## Stretch teardown

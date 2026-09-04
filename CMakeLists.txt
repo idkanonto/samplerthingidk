@@ -58,6 +58,7 @@ target_sources(RandomChopSampler PRIVATE
     Source/StretchPreparation.h
     Source/RandomSamplerVoice.cpp
     Source/RandomSamplerVoice.h
+    Source/VoicePool.h
     Source/RandomizationEngine.h
     Source/HarmonicPitch.h
     Source/PlaybackRegion.h
@@ -102,6 +103,7 @@ if (BUILD_TESTING)
         Source/StretchPreparation.h
         Source/RandomSamplerVoice.cpp
         Source/RandomSamplerVoice.h
+        Source/VoicePool.h
         Source/RandomizationEngine.h
         Source/HarmonicPitch.h
         Source/PlaybackRegion.h
