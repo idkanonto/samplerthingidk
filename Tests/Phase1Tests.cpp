@@ -3,6 +3,7 @@
 #include "RandomSamplerVoice.h"
 #include "SampleManager.h"
 #include "SourceSelection.h"
+#include "VoicePool.h"
 #include <atomic>
 #include <iostream>
 #include <limits>
@@ -427,6 +428,144 @@ void testVoicePitchRatio()
           "voice playback increment did not apply the resolved pitch ratio");
 }
 
+PreparedSamplePtr makeVoiceSample(float value, int frames = 1024)
+{
+    auto audio = std::make_shared<juce::AudioBuffer<float>>(1, frames);
+    for (int frame = 0; frame < frames; ++frame)
+        audio->setSample(0, frame, value);
+    return randomchop::prepareStretch(audio, 1000.0, 1.0f, 0);
+}
+
+void testFinalLengthAndEnvelope()
+{
+    const auto prepared = makeVoiceSample(1.0f);
+    const randomchop::FrameRegion region { 0, 1023 };
+
+    RandomSamplerVoice fullVoice;
+    fullVoice.prepare(1000.0);
+    fullVoice.start(prepared, 60, 1.0f, 0.0, region, 1.0, false,
+                    1.0f, 0.0f, 0.005f, 1, 0.0f);
+    juce::AudioBuffer<float> fullOutput(2, 32);
+    fullOutput.clear();
+    fullVoice.render(fullOutput, 0, fullOutput.getNumSamples());
+    check(fullVoice.isActive() && fullOutput.getSample(0, 31) > 0.99f,
+          "FULL final length did not preserve natural playback");
+
+    RandomSamplerVoice limitedVoice;
+    limitedVoice.prepare(1000.0);
+    limitedVoice.start(prepared, 60, 1.0f, 0.0, region, 1.0, false,
+                       1.0f, 0.0f, 0.005f, 2, 20.0f);
+    juce::AudioBuffer<float> limitedOutput(2, 40);
+    limitedOutput.clear();
+    limitedVoice.render(limitedOutput, 0, limitedOutput.getNumSamples());
+    check(!limitedVoice.isActive(), "forced Final Length did not stop the event");
+    check(limitedOutput.getSample(0, 14) > 0.99f
+              && std::abs(limitedOutput.getSample(0, 16) - 0.75f) < 0.0001f
+              && std::abs(limitedOutput.getSample(0, 19)) < 0.000001f
+              && std::abs(limitedOutput.getSample(0, 20)) < 0.000001f,
+          "Final Length did not place the Release envelope inside its boundary");
+
+    RandomSamplerVoice shapedVoice;
+    shapedVoice.prepare(1000.0);
+    shapedVoice.start(prepared, 60, 1.0f, 0.0, region, 1.0, false,
+                      1.0f, 0.010f, 0.010f, 3, 20.0f);
+    juce::AudioBuffer<float> shapedOutput(2, 24);
+    shapedOutput.clear();
+    shapedVoice.render(shapedOutput, 0, shapedOutput.getNumSamples());
+    check(std::abs(shapedOutput.getSample(0, 0) - 0.1f) < 0.0001f
+              && std::abs(shapedOutput.getSample(0, 9) - 1.0f) < 0.0001f
+              && shapedOutput.getSample(0, 15) < shapedOutput.getSample(0, 11)
+              && std::abs(shapedOutput.getSample(0, 19)) < 0.000001f,
+          "Attack and Release did not shape the forced-length event cleanly");
+}
+
+void testNoteOffRelease()
+{
+    const auto prepared = makeVoiceSample(1.0f);
+    RandomSamplerVoice voice;
+    voice.prepare(1000.0);
+    voice.start(prepared, 60, 1.0f, 0.0, { 0, 1023 }, 1.0, false,
+                1.0f, 0.0f, 0.005f, 1);
+    juce::AudioBuffer<float> output(2, 16);
+    output.clear();
+    voice.render(output, 0, 4);
+    voice.release(0.005f);
+    voice.render(output, 4, 8);
+    check(!voice.isActive(), "Note Off release did not finish the voice");
+    check(output.getSample(0, 4) > output.getSample(0, 7)
+              && output.getSample(0, 7) > 0.0f
+              && std::abs(output.getSample(0, 10)) < 0.000001f,
+          "Note Off did not produce a bounded descending Release envelope");
+}
+
+void testPolyMonoAndVoiceStealing()
+{
+    const auto positive = makeVoiceSample(1.0f);
+    const auto negative = makeVoiceSample(-1.0f);
+    const randomchop::FrameRegion region { 0, 1023 };
+    randomchop::VoicePool poly;
+    poly.prepare(1000.0);
+
+    for (size_t index = 0; index < randomchop::VoicePool::capacity; ++index)
+    {
+        auto& voice = poly.acquire(randomchop::VoiceMode::poly);
+        voice.start(positive, 60 + static_cast<int>(index), 1.0f, 0.0, region,
+                    1.0, false, 1.0f, 0.0f, 0.01f,
+                    static_cast<uint64_t>(index + 1));
+    }
+    check(poly.activeCount() == randomchop::VoicePool::capacity,
+          "POLY did not retain a full 16-note chord");
+
+    auto& stolen = poly.acquire(randomchop::VoiceMode::poly);
+    check(stolen.getNote() == 60, "voice stealing did not select the oldest voice");
+    stolen.start(positive, 100, 1.0f, 0.0, region, 1.0, false,
+                 1.0f, 0.0f, 0.01f, 17);
+    size_t replacementCount = 0;
+    size_t oldestCount = 0;
+    for (size_t index = 0; index < randomchop::VoicePool::capacity; ++index)
+    {
+        replacementCount += poly[index].getNote() == 100 ? 1u : 0u;
+        oldestCount += poly[index].getNote() == 60 ? 1u : 0u;
+    }
+    check(poly.activeCount() == randomchop::VoicePool::capacity
+              && replacementCount == 1 && oldestCount == 0,
+          "oldest-voice stealing changed the fixed POLY voice count");
+
+    randomchop::VoicePool mono;
+    mono.prepare(1000.0);
+    auto& first = mono.acquire(randomchop::VoiceMode::mono);
+    first.start(positive, 60, 1.0f, 0.0, region, 1.0, false,
+                1.0f, 0.0f, 0.01f, 1);
+    juce::AudioBuffer<float> monoOutput(2, 16);
+    monoOutput.clear();
+    mono.render(monoOutput, 0, 5);
+    auto& replacement = mono.acquire(randomchop::VoiceMode::mono);
+    replacement.start(negative, 62, 1.0f, 0.0, region, 1.0, false,
+                      1.0f, 0.0f, 0.01f, 2);
+    mono.render(monoOutput, 5, 1);
+    check(mono.activeCount() == 1 && mono[0].getNote() == 62,
+          "MONO did not replace the previous event");
+    check(std::abs(monoOutput.getSample(0, 5)) < 0.05f,
+          "MONO replacement bypassed the short voice-steal crossfade");
+
+    randomchop::VoicePool switched;
+    switched.prepare(1000.0);
+    for (int note : { 60, 64 })
+    {
+        auto& voice = switched.acquire(randomchop::VoiceMode::poly);
+        voice.start(positive, note, 1.0f, 0.0, region, 1.0, false,
+                    1.0f, 0.0f, 0.01f, static_cast<uint64_t>(note));
+    }
+    auto& monoVoice = switched.acquire(randomchop::VoiceMode::mono);
+    monoVoice.start(positive, 67, 1.0f, 0.0, region, 1.0, false,
+                    1.0f, 0.0f, 0.01f, 100);
+    juce::AudioBuffer<float> switchedOutput(2, 8);
+    switchedOutput.clear();
+    switched.render(switchedOutput, 0, switchedOutput.getNumSamples());
+    check(switched.activeCount() == 1 && switched[0].getNote() == 67,
+          "entering MONO did not release prior POLY voices cleanly");
+}
+
 void testPitchPreservingStretchPreparation()
 {
     constexpr double sampleRate = 48000.0;
@@ -662,6 +801,9 @@ int main()
     testWaveformPeakExtrema();
     testHarmonicPitch();
     testVoicePitchRatio();
+    testFinalLengthAndEnvelope();
+    testNoteOffRelease();
+    testPolyMonoAndVoiceStealing();
     testPitchPreservingStretchPreparation();
     testAsynchronousStretchPublication();
     if (failures == 0)

@@ -11,6 +11,8 @@ constexpr auto seed = "seed";
 constexpr auto targetKey = "targetKey";
 constexpr auto midiPitch = "midiPitch";
 constexpr auto rootNote = "rootNote";
+constexpr auto finalLength = "finalLength";
+constexpr auto voiceMode = "voiceMode";
 }
 
 RandomChopSamplerAudioProcessor::RandomChopSamplerAudioProcessor()
@@ -38,13 +40,17 @@ juce::AudioProcessorValueTreeState::ParameterLayout RandomChopSamplerAudioProces
         IDs::midiPitch, "MIDI Pitch", false));
     layout.add(std::make_unique<juce::AudioParameterInt>(
         IDs::rootNote, "Root MIDI Note", 0, 127, 72));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::finalLength, "Final Length",
+        juce::NormalisableRange<float>(0.0f, 5000.0f, 10.0f), 0.0f, "ms"));
+    layout.add(std::make_unique<juce::AudioParameterChoice>(
+        IDs::voiceMode, "Voice Mode", juce::StringArray { "POLY", "MONO" }, 0));
     return layout;
 }
 
 void RandomChopSamplerAudioProcessor::prepareToPlay(double rate, int)
 {
     currentRate = rate;
-    for (auto& voice : voices) { voice.forceStop(); voice.prepare(rate); }
+    voices.prepare(rate);
     lastSeed = -1;
 }
 
@@ -75,15 +81,15 @@ void RandomChopSamplerAudioProcessor::noteOn(int note, float velocity) noexcept
         sample->settings.fineTuneCents, midiPitch, note, rootNote);
     const auto pitchRatio = randomchop::pitchRatioForSemitones(pitchSemitones);
 
-    auto* voice = &voices[0];
-    for (auto& candidate : voices)
-        if (!candidate.isActive()) { voice = &candidate; break; }
-        else if (candidate.getAge() < voice->getAge()) voice = &candidate;
+    const auto mode = parameters.getRawParameterValue(IDs::voiceMode)->load() >= 0.5f
+        ? randomchop::VoiceMode::mono : randomchop::VoiceMode::poly;
+    auto& voice = voices.acquire(mode);
 
-    voice->start(prepared, note, velocity, start, region, pitchRatio, false,
-                 juce::Decibels::decibelsToGain(sample->settings.gainDb),
-                 juce::jmax(0.001f, parameters.getRawParameterValue(IDs::attack)->load()),
-                 parameters.getRawParameterValue(IDs::release)->load(), ++voiceCounter);
+    voice.start(prepared, note, velocity, start, region, pitchRatio, false,
+                juce::Decibels::decibelsToGain(sample->settings.gainDb),
+                juce::jmax(0.001f, parameters.getRawParameterValue(IDs::attack)->load()),
+                parameters.getRawParameterValue(IDs::release)->load(), ++voiceCounter,
+                parameters.getRawParameterValue(IDs::finalLength)->load());
     lastTriggeredRuntimeId.store(sample->runtimeId, std::memory_order_relaxed);
     triggeredWhileEmpty.store(false, std::memory_order_relaxed);
 }
@@ -91,7 +97,7 @@ void RandomChopSamplerAudioProcessor::noteOn(int note, float velocity) noexcept
 void RandomChopSamplerAudioProcessor::noteOff(int note) noexcept
 {
     const float release = parameters.getRawParameterValue(IDs::release)->load();
-    for (auto& voice : voices) if (voice.isActive() && voice.getNote() == note) voice.release(release);
+    voices.noteOff(note, release);
 }
 
 void RandomChopSamplerAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
@@ -106,14 +112,14 @@ void RandomChopSamplerAudioProcessor::processBlock(juce::AudioBuffer<float>& buf
     {
         const int eventPosition = juce::jlimit(0, buffer.getNumSamples(), metadata.samplePosition);
         const int span = eventPosition - rendered;
-        if (span > 0) for (auto& voice : voices) voice.render(buffer, rendered, span);
+        if (span > 0) voices.render(buffer, rendered, span);
         const auto message = metadata.getMessage();
         if (message.isNoteOn()) noteOn(message.getNoteNumber(), message.getFloatVelocity());
         else if (message.isNoteOff()) noteOff(message.getNoteNumber());
         rendered = eventPosition;
     }
     if (rendered < buffer.getNumSamples())
-        for (auto& voice : voices) voice.render(buffer, rendered, buffer.getNumSamples() - rendered);
+        voices.render(buffer, rendered, buffer.getNumSamples() - rendered);
 
     buffer.applyGain(juce::Decibels::decibelsToGain(parameters.getRawParameterValue(IDs::output)->load()));
 }

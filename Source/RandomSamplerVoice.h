@@ -1,6 +1,7 @@
 #pragma once
 
 #include "SampleManager.h"
+#include <cstdint>
 
 class RandomSamplerVoice final
 {
@@ -13,9 +14,15 @@ public:
                randomchop::FrameRegion sourceRegion, double playbackPitchRatio,
                bool reverse, float voiceGain,
                float attackSeconds, float releaseSeconds,
-               uint64_t newAge) noexcept;
+               uint64_t newAge, float finalLengthMilliseconds = 0.0f) noexcept;
     void release(float releaseSeconds) noexcept;
-    void forceStop() noexcept { sample.reset(); stealTailRemaining = 0; lastOutput[0] = lastOutput[1] = 0.0f; }
+    void forceStop() noexcept
+    {
+        sample.reset();
+        stealTailRemaining = 0;
+        renderedFrames = finalLengthFrames = 0;
+        lastOutput[0] = lastOutput[1] = 0.0f;
+    }
     void render(juce::AudioBuffer<float>& output, int startSample, int numSamples) noexcept;
 
 private:
@@ -29,5 +36,7 @@ private:
     float lastOutput[2] { 0.0f, 0.0f };
     float stealTail[2] { 0.0f, 0.0f };
     int stealTailRemaining = 0, stealTailLength = 1;
+    std::int64_t renderedFrames = 0, finalLengthFrames = 0;
+    int finalBoundaryReleaseFrames = 1;
     enum class Stage { attack, sustain, release } stage = Stage::attack;
 };

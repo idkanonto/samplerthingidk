@@ -5,7 +5,8 @@ void RandomSamplerVoice::start(PreparedSamplePtr newSample, int note, float velo
                                double startFrame, randomchop::FrameRegion sourceRegion,
                                double playbackPitchRatio, bool reverse, float voiceGain,
                                float attackSeconds,
-                               float releaseSeconds, uint64_t newAge) noexcept
+                               float releaseSeconds, uint64_t newAge,
+                               float finalLengthMilliseconds) noexcept
 {
     if (newSample == nullptr || newSample->audio == nullptr)
     {
@@ -40,6 +41,18 @@ void RandomSamplerVoice::start(PreparedSamplePtr newSample, int note, float velo
     attackStep = attackSeconds <= 0.00001f ? targetLevel
         : targetLevel / juce::jmax(1.0f, attackSeconds * static_cast<float>(hostRate));
     releaseStep = targetLevel / juce::jmax(1.0f, releaseSeconds * static_cast<float>(hostRate));
+    const auto safeFinalLength = !std::isfinite(finalLengthMilliseconds)
+            || finalLengthMilliseconds <= 0.0f
+        ? 0.0f : juce::jlimit(10.0f, 5000.0f, finalLengthMilliseconds);
+    finalLengthFrames = safeFinalLength == 0.0f ? 0
+        : juce::jmax<std::int64_t>(1, static_cast<std::int64_t>(std::llround(
+            static_cast<double>(safeFinalLength) * hostRate / 1000.0)));
+    finalBoundaryReleaseFrames = juce::jmax(1, static_cast<int>(std::llround(
+        juce::jmax(0.0f, releaseSeconds) * static_cast<float>(hostRate))));
+    if (finalLengthFrames > 0)
+        finalBoundaryReleaseFrames = static_cast<int>(juce::jmin<std::int64_t>(
+            finalBoundaryReleaseFrames, finalLengthFrames));
+    renderedFrames = 0;
     stage = Stage::attack;
 }
 
@@ -57,6 +70,11 @@ void RandomSamplerVoice::render(juce::AudioBuffer<float>& output, int startSampl
 
     for (int i = 0; i < numSamples; ++i)
     {
+        if (finalLengthFrames > 0 && renderedFrames >= finalLengthFrames)
+        {
+            sample.reset();
+            break;
+        }
         if (!randomchop::isInterpolationPositionLegal(region, sourcePosition))
         {
             sample.reset();
@@ -85,6 +103,18 @@ void RandomSamplerVoice::render(juce::AudioBuffer<float>& output, int startSampl
             0.0, 1.0, framesLeft / (0.003 * sample->sampleRate)));
         if (!randomchop::isInterpolationPositionLegal(region, sourcePosition + increment))
             endGain = 0.0f;
+        float finalLengthGain = 1.0f;
+        if (finalLengthFrames > 0)
+        {
+            const auto framesRemaining = finalLengthFrames - renderedFrames;
+            if (framesRemaining <= finalBoundaryReleaseFrames)
+            {
+                finalLengthGain = finalBoundaryReleaseFrames <= 1 ? 0.0f
+                    : juce::jlimit(0.0f, 1.0f,
+                        static_cast<float>(framesRemaining - 1)
+                            / static_cast<float>(finalBoundaryReleaseFrames - 1));
+            }
+        }
         const float tailGain = stealTailRemaining > 0
             ? static_cast<float>(stealTailRemaining) / static_cast<float>(stealTailLength) : 0.0f;
         for (int channel = 0; channel < output.getNumChannels(); ++channel)
@@ -92,12 +122,13 @@ void RandomSamplerVoice::render(juce::AudioBuffer<float>& output, int startSampl
             const int sourceChannel = sourceChannels == 1 ? 0 : juce::jmin(channel, sourceChannels - 1);
             const float* data = sample->audio->getReadPointer(sourceChannel);
             const float value = data[index] + fraction * (data[index + 1] - data[index]);
-            const float voiceOutput = value * level * endGain;
+            const float voiceOutput = value * level * endGain * finalLengthGain;
             const int stereoChannel = juce::jmin(channel, 1);
             output.addSample(channel, startSample + i, voiceOutput + stealTail[stereoChannel] * tailGain);
             lastOutput[stereoChannel] = voiceOutput;
         }
         if (stealTailRemaining > 0) --stealTailRemaining;
         sourcePosition += increment;
+        ++renderedFrames;
     }
 }
