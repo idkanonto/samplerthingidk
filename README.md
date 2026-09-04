@@ -1,6 +1,6 @@
 # Random Chop Sampler
 
-A 16-voice JUCE VST3/standalone sampler instrument. Every MIDI note chooses a weighted random source and a random legal start point. V2 is being delivered through gated functionality phases; the current source-region phase adds a selected-source waveform and manual Start/End playback bounds for WAV, AIFF/AIF, MP3, and FLAC sources.
+A 16-voice JUCE VST3/standalone sampler instrument. Every MIDI note chooses a weighted random source and a random legal start point. The current V2 build adds manual source/target tonic correction, per-source Transpose and Fine Tune, and optional MIDI-note pitch around a configurable root for WAV, AIFF/AIF, MP3, and FLAC sources.
 
 ## Build without local development tools (recommended)
 
@@ -30,7 +30,7 @@ Then rescan VST3 plug-ins in the DAW, create an instrument track, insert **Rando
 
 - `SampleManager` decodes files only from message/host state threads and publishes immutable pool snapshots atomically.
 - `SampleData` is reference-counted. Voices retain their own reference, so removing or clearing a sample cannot invalidate active playback. Superseded snapshots and sources are reclaimed only from control-thread maintenance after realtime references have drained.
-- `RandomSamplerVoice` performs linear sample-rate conversion, mono-to-stereo routing, per-voice attack/release, a source-region boundary fade, and a 3 ms tail crossfade when a voice is stolen.
+- `RandomSamplerVoice` performs linear sample-rate conversion combined with the Note-On-resolved pitch ratio, mono-to-stereo routing, per-voice attack/release, a source-region boundary fade, and a 3 ms tail crossfade when a voice is stolen.
 - `PluginProcessor` owns 16 fixed voices and an allocation-free xorshift64* randomizer. Voice stealing selects the oldest voice.
 - MIDI rendering is sample-accurate within each host block. No disk access, decoding, blocking mutex, logging, or explicit allocation occurs in the audio callback.
 
@@ -42,6 +42,8 @@ Then rescan VST3 plug-ins in the DAW, create an instrument track, insert **Rando
 - [x] Visible scrollable list, per-file Enable/Remove, Enable All, Disable All, Clear All, and status feedback
 - [x] Weighted enabled-source selection plus per-source gain
 - [x] Selected-source waveform with draggable Start/End markers and region-bounded Random Start
+- [x] Source Key/Target Key tonic correction, per-source Transpose and Fine Tune
+- [x] MIDI Pitch on/off with configurable Root MIDI Note (default C5/MIDI 72)
 - [x] Reproducible Seed sequence (sequence restarts after prepare or a Seed change)
 - [x] 16-voice polyphony with oldest-voice stealing and clean Note Off release
 - [x] Source-rate conversion via linear interpolation; mono and stereo playback
@@ -55,7 +57,7 @@ Then rescan VST3 plug-ins in the DAW, create an instrument track, insert **Rando
 - Samples are decoded fully into RAM; very large libraries are not streamed.
 - Linear interpolation favors low CPU use over premium resampling quality.
 - Restoring sample paths is synchronous because JUCE host state restoration provides no completion callback; it never occurs in `processBlock`, but an unusually large library can briefly delay project loading.
-- MIDI notes do not transpose samples yet. Later gated V2 phases add manual pitch, stretch, event processing, Step Mask, Take History, and master digital processing.
+- Pitch-preserving Stretch, event processing, Step Mask, Take History, and master digital processing remain in later gated V2 phases.
 - A reproducible Seed gives a deterministic trigger sequence for the same pool/order and parameter/MIDI event sequence; changing the pool changes the results.
 
 ## Practical test pass

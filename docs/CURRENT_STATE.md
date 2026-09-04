@@ -6,12 +6,12 @@ tags:
   - implementation
   - current-state
 status: active
-verified: 2026-09-03
+verified: 2026-09-04
 ---
 
 # Current Implementation State
 
-Evidence: source inspection plus [Windows Release CI run #10](https://github.com/idkanonto/samplerthingidk/actions/runs/33791050526) at commit `6b1b209a5062626c31e6887f8bf7ce00af655a2b` on 2026-09-03. The workflow configured a Windows Server 2022 Release build, built `RandomChopSampler_VST3` and `RandomChopSamplerTests`, passed `ctest --test-dir build -C Release --output-on-failure`, verified that the VST3 bundle contained a module, and uploaded the bundle artifact. No DAW/host audio test or full format/sample-rate matrix was run.
+Evidence: source inspection plus [Windows Release CI run #13](https://github.com/idkanonto/samplerthingidk/actions/runs/33793508182) at commit `7ef3b9223c53edc1874b3384a059f182b89a8e3d`. The Windows Server 2022 Release workflow built `RandomChopSampler_VST3` and `RandomChopSamplerTests`, passed `ctest --test-dir build -C Release --output-on-failure`, verified the bundle, and uploaded it. The inspected archive matched GitHub's SHA-256 `c9ec5e48b27cb506ee6544b41e7f4ddf0164c7496c89eff6f470c63d6d711027` and contained a 7,266,816-byte module at `Random Chop Sampler.vst3/Contents/x86_64-win/Random Chop Sampler.vst3`. No DAW/host audio test or full format/sample-rate matrix was run.
 
 ## Implemented in code
 
@@ -23,19 +23,20 @@ Evidence: source inspection plus [Windows Release CI run #10](https://github.com
 - Per-source Gain affects playback. Per-source Gain and Weight are editable in the UI and persisted.
 - The selected source displays an immutable, decode-time peak envelope with draggable normalized Start/End markers and percentage, seconds, and sample-position feedback.
 - Random Start expands proportionally from Start and remains inside the manual Start/End region with interpolation and boundary-fade margins.
+- Per-source Source Key (`NONE` or chromatic tonic), Transpose (-24 to +24 semitones), and Fine Tune (-100 to +100 cents) are editable and persisted. Global Target Key, MIDI Pitch, and Root MIDI Note are automatable host-state parameters; MIDI Pitch defaults off and the root defaults to C5/MIDI 72.
+- Note On resolves the shortest signed tonic correction (with the six-semitone tie upward), manual Transpose, Fine Tune, and optional MIDI offset into one finite playback ratio. This is a uniform pitch shift and does not transform chord quality.
 - Sample-accurate MIDI event handling within each block; Note Off starts the global release envelope.
-- Global Attack, Release, Output Gain, and deterministic Seed parameters with host state persistence.
+- Global Attack, Release, Output Gain, deterministic Seed, Target Key, MIDI Pitch, and Root MIDI Note parameters with host state persistence.
 - Path and source-setting persistence, missing-file representation, immutable pool snapshots, and deferred control-thread reclamation after realtime references drain.
-- Linear source-rate conversion, mono-to-stereo playback, source-region boundary fade, and a short voice-steal tail crossfade.
-- `RandomChopSamplerTests` CTest coverage for weighted playable-source selection, the 20-source cap, persistent source identity/settings, parameter-only state replacement, region clamping/random bounds, and forward/reverse boundary reads; the Windows workflow builds and runs the test target.
+- Linear source-rate conversion combined with the resolved pitch ratio, mono-to-stereo playback, source-region boundary fade, and a short voice-steal tail crossfade.
+- `RandomChopSamplerTests` CTest coverage for weighted playable-source selection, the 20-source cap, persistent source identity/settings, parameter-only state replacement, region clamping/random bounds, forward/reverse boundary reads, tonic correction, manual/MIDI pitch math, finite ratio handling, and pitched voice increments; the Windows workflow builds and runs the test target.
 
 ## Stored scaffolding, not functional behavior
 
-`SampleSettings` persists Source Key, Transpose, Fine Tune, and Stretch Ratio, but these fields are not exposed in the editor and do not affect audio. Their presence must not be reported as feature completion.
+`SampleSettings` persists Stretch Ratio, but stretching is not exposed in the editor and does not affect audio. Its presence must not be reported as feature completion.
 
 ## Not implemented
 
-- Global Target Key; functional Source Key, Transpose, Fine Tune, or MIDI pitch/root-note behavior.
 - Signalsmith or any pitch-preserving stretch processing/cache.
 - Mono/Poly mode selection; current behavior is polyphonic.
 - Step Mask, Chance effects, Takes, Take History, LIVE/HISTORY replay.
