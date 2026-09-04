@@ -29,6 +29,6 @@ Take History records the decisions that drive this path; it does not store rende
 
 ## Current code path
 
-The current implementation is shorter: MIDI event → weighted playable-source selection → region-bounded random start → Source/Target tonic correction + Transpose + Fine Tune + optional MIDI pitch/root offset → linear source-rate conversion and per-source Gain → per-voice Attack/Release/region-boundary fade → voice mix → global Output Gain. See [[CURRENT_STATE]] for omissions.
+The current implementation is shorter: decoded PCM → cached pitch-preserving Stretch preparation off the audio thread → MIDI event → weighted playable-source selection → region-bounded random start in the immutable prepared version → Source/Target tonic correction + Transpose + Fine Tune + optional MIDI pitch/root offset → linear source-rate conversion and per-source Gain → per-voice Attack/Release/region-boundary fade → voice mix → global Output Gain. See [[CURRENT_STATE]] for omissions.
 
 The approved chain fixes stage order; individual Chance-effect algorithms must remain consistent with [[PRODUCT_SPEC_V2]] and [[DECISIONS]].

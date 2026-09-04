@@ -18,14 +18,14 @@ status: active
 ## Current engine
 
 - Sources are decoded fully into RAM on control/state paths.
+- Non-unity Stretch is prepared by one background worker with Signalsmith Stretch. Immutable prepared versions are selected by source runtime identity and revision; stale results are discarded, queued work is coalesced/cancelled, and superseded buffers are reclaimed off the audio thread after voices release them.
 - Playback uses linear interpolation for source-rate conversion.
-- Each voice has Attack/Release, a 3 ms physical-end fade, and a 3 ms tail crossfade on stealing.
+- Each voice has Attack/Release, a 3 ms source-region boundary fade, and a 3 ms tail crossfade on stealing.
 - Sixteen voices are preallocated; oldest active voice is stolen.
 - A xorshift64* generator supplies allocation-free seeded random decisions.
 
-## V2 stretch direction
+## Stretch teardown
 
-Signalsmith Stretch is preferred because an MIT-licensed implementation was selected. It is not currently integrated. Before integration, confirm the pinned upstream version/license, cache key and invalidation rules, memory bounds for 20 sources, failure fallback, and that cache publication never blocks the audio thread.
+Queued stretch work is cancelled during source removal, pool replacement, and teardown. An already-running pinned Signalsmith `exact()` call is joined off the realtime thread because the upstream one-shot API has no safe mid-call cancellation hook; detaching it would permit code to run after plugin unload.
 
 Processing order is defined in [[SIGNAL_CHAIN]]. Verification belongs in [[TEST_MATRIX]].
-
