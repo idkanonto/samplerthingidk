@@ -457,8 +457,10 @@ void testFinalLengthAndEnvelope()
                        1.0f, 0.0f, 0.005f, 2, 20.0f);
     juce::AudioBuffer<float> limitedOutput(2, 40);
     limitedOutput.clear();
-    limitedVoice.render(limitedOutput, 0, limitedOutput.getNumSamples());
-    check(!limitedVoice.isActive(), "forced Final Length did not stop the event");
+    limitedVoice.render(limitedOutput, 0, 20);
+    check(!limitedVoice.isActive(),
+          "forced Final Length did not stop exactly at its sample boundary");
+    limitedVoice.render(limitedOutput, 20, 20);
     check(limitedOutput.getSample(0, 14) > 0.99f
               && std::abs(limitedOutput.getSample(0, 16) - 0.75f) < 0.0001f
               && std::abs(limitedOutput.getSample(0, 19)) < 0.000001f

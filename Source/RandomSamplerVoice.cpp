@@ -130,5 +130,10 @@ void RandomSamplerVoice::render(juce::AudioBuffer<float>& output, int startSampl
         if (stealTailRemaining > 0) --stealTailRemaining;
         sourcePosition += increment;
         ++renderedFrames;
+        if (finalLengthFrames > 0 && renderedFrames >= finalLengthFrames)
+        {
+            sample.reset();
+            break;
+        }
     }
 }
