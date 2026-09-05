@@ -32,6 +32,9 @@ jobs:
       - name: Build VST3, standalone, and tests
         run: cmake --build build --config Release --target RandomChopSampler_VST3 RandomChopSampler_Standalone RandomChopSamplerTests --parallel
 
+      - name: Install MP3 fixture encoder
+        run: choco install ffmpeg --yes --no-progress
+
       - name: Run tests
         shell: pwsh
         run: |
