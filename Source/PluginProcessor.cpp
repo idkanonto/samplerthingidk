@@ -100,12 +100,31 @@ bool RandomChopSamplerAudioProcessor::isBusesLayoutSupported(const BusesLayout& 
 
 void RandomChopSamplerAudioProcessor::noteOn(int note, float velocity) noexcept
 {
-    // The event-driven mask advances for every Note On, even when no source can play.
+    const auto historyTrigger = takeHistory.beginTrigger();
+    if (!historyTrigger.isLive)
+    {
+        startTakeEvent(*historyTrigger.replayEvent, note, velocity);
+        return;
+    }
+    if (historyTrigger.resetLiveSequence)
+        stepMask.requestSequenceReset();
+
+    // In LIVE, the event-driven mask advances for every Note On, even when no source can play.
     const auto step = stepMask.consume(randomchop::StepMask::lengthFromChoice(
         static_cast<int>(parameters.getRawParameterValue(IDs::stepLength)->load())));
+    if (step.sequenceReset)
+        takeHistory.discardIncompleteLiveTake();
+
+    randomchop::TakeEvent takeEvent;
+    takeEvent.chanceAllowed = step.chanceAllowed;
     const auto pool = samples.getSnapshot();
     const int selected = randomchop::chooseWeightedSource(*pool, random);
-    if (selected < 0) { triggeredWhileEmpty.store(true, std::memory_order_relaxed); return; }
+    if (selected < 0)
+    {
+        takeHistory.recordLiveEvent(takeEvent, step.length, step.cycleCompleted);
+        triggeredWhileEmpty.store(true, std::memory_order_relaxed);
+        return;
+    }
     const auto& sample = (*pool)[static_cast<size_t>(selected)];
     const auto prepared = sample->prepared;
     const double amount = parameters.getRawParameterValue(IDs::randomStart)->load() * 0.01;
@@ -114,16 +133,6 @@ void RandomChopSamplerAudioProcessor::noteOn(int note, float velocity) noexcept
                                                      sample->settings.endNormalised);
     const double start = randomchop::resolveRandomStart(region, prepared->sampleRate,
                                                         amount, random.unit());
-    const auto targetKey = static_cast<int>(parameters.getRawParameterValue(IDs::targetKey)->load());
-    const auto midiPitch = parameters.getRawParameterValue(IDs::midiPitch)->load() >= 0.5f;
-    const auto rootNote = static_cast<int>(parameters.getRawParameterValue(IDs::rootNote)->load());
-    const auto pitchSemitones = randomchop::totalPitchSemitones(
-        sample->settings.sourceKey, targetKey, sample->settings.transposeSemitones,
-        sample->settings.fineTuneCents, midiPitch, note, rootNote);
-    const auto pitchRatio = randomchop::pitchRatioForSemitones(pitchSemitones);
-
-    const auto mode = parameters.getRawParameterValue(IDs::voiceMode)->load() >= 0.5f
-        ? randomchop::VoiceMode::mono : randomchop::VoiceMode::poly;
     randomchop::EventDecision eventDecision;
     if (step.chanceAllowed)
     {
@@ -140,14 +149,47 @@ void RandomChopSamplerAudioProcessor::noteOn(int note, float velocity) noexcept
         eventDecision = randomchop::resolveChanceEvent(
             chanceSettings, region, start, prepared->sampleRate, currentRate, random);
     }
+
+    takeEvent.sourceId = randomchop::copyStableSourceId(sample->settings.id);
+    takeEvent.prepared = prepared;
+    takeEvent.region = region;
+    takeEvent.randomStart = start;
+    takeEvent.sourceRuntimeId = sample->runtimeId;
+    takeEvent.sourceKey = sample->settings.sourceKey;
+    takeEvent.transposeSemitones = sample->settings.transposeSemitones;
+    takeEvent.fineTuneCents = sample->settings.fineTuneCents;
+    takeEvent.sourceGain = juce::Decibels::decibelsToGain(sample->settings.gainDb);
+    takeEvent.decision = eventDecision;
+    startTakeEvent(takeEvent, note, velocity);
+    takeHistory.recordLiveEvent(takeEvent, step.length, step.cycleCompleted);
+}
+
+void RandomChopSamplerAudioProcessor::startTakeEvent(
+    const randomchop::TakeEvent& event, int note, float velocity) noexcept
+{
+    if (!event.isPlayable())
+    {
+        triggeredWhileEmpty.store(true, std::memory_order_relaxed);
+        return;
+    }
+
+    const auto targetKey = static_cast<int>(parameters.getRawParameterValue(IDs::targetKey)->load());
+    const auto midiPitch = parameters.getRawParameterValue(IDs::midiPitch)->load() >= 0.5f;
+    const auto rootNote = static_cast<int>(parameters.getRawParameterValue(IDs::rootNote)->load());
+    const auto pitchSemitones = randomchop::totalPitchSemitones(
+        event.sourceKey, targetKey, event.transposeSemitones,
+        event.fineTuneCents, midiPitch, note, rootNote);
+    const auto pitchRatio = randomchop::pitchRatioForSemitones(pitchSemitones);
+    const auto mode = parameters.getRawParameterValue(IDs::voiceMode)->load() >= 0.5f
+        ? randomchop::VoiceMode::mono : randomchop::VoiceMode::poly;
     auto& voice = voices.acquire(mode);
 
-    voice.start(prepared, note, velocity, start, region, pitchRatio, false,
-                juce::Decibels::decibelsToGain(sample->settings.gainDb),
+    voice.start(event.prepared, note, velocity, event.randomStart, event.region, pitchRatio, false,
+                event.sourceGain,
                 juce::jmax(0.001f, parameters.getRawParameterValue(IDs::attack)->load()),
                 parameters.getRawParameterValue(IDs::release)->load(), ++voiceCounter,
-                parameters.getRawParameterValue(IDs::finalLength)->load(), eventDecision);
-    lastTriggeredRuntimeId.store(sample->runtimeId, std::memory_order_relaxed);
+                parameters.getRawParameterValue(IDs::finalLength)->load(), event.decision);
+    lastTriggeredRuntimeId.store(event.sourceRuntimeId, std::memory_order_relaxed);
     triggeredWhileEmpty.store(false, std::memory_order_relaxed);
 }
 
@@ -205,6 +247,8 @@ void RandomChopSamplerAudioProcessor::setStateInformation(const void* data, int 
             // must replace, rather than silently retain, the current pool.
             samples.restoreState(files);
             stepMask.restoreState(mask);
+            // Take History is intentionally session-only and is never serialized.
+            takeHistory.requestClear();
         }
     }
 }

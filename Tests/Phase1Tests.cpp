@@ -4,6 +4,7 @@
 #include "SampleManager.h"
 #include "SourceSelection.h"
 #include "StepMask.h"
+#include "TakeHistory.h"
 #include "VoicePool.h"
 #include <atomic>
 #include <iostream>
@@ -206,6 +207,184 @@ void testStepMaskSequencingAndState()
         : randomchop::EventDecision {};
     check(fxStep.index == 1 && fxDecision.reverseEnabled,
           "an FX step did not allow Chance processing");
+}
+
+void testTakeHistoryCaptureReplayAndLifetime()
+{
+    const auto source = makeSource(1.0f);
+    auto makeEvent = [&source](double marker)
+    {
+        randomchop::TakeEvent event;
+        event.sourceId = randomchop::copyStableSourceId(source->settings.id);
+        event.prepared = source->prepared;
+        event.region = { 0, 7 };
+        event.randomStart = marker;
+        event.sourceRuntimeId = static_cast<std::uint64_t>(1000.0 + marker);
+        event.sourceKey = 3;
+        event.transposeSemitones = -5;
+        event.fineTuneCents = 27.0f;
+        event.sourceGain = 0.75f;
+        event.chanceAllowed = true;
+        event.decision.reverseEnabled = true;
+        event.decision.skipEnabled = true;
+        event.decision.skipJumpFrames = -1.25;
+        event.decision.reorderEnabled = true;
+        event.decision.reorderPermutation = { 2, 0, 3, 1 };
+        event.decision.reorderPieceSpanFrames = 0.5;
+        event.decision.bendEnabled = true;
+        event.decision.bendDepthSemitones = -4.5f;
+        event.decision.dropEnabled = true;
+        event.decision.dropMask = 0x52;
+        return event;
+    };
+
+    randomchop::TakeHistory boundaryHistory;
+    randomchop::StepMask boundaryMask;
+    for (int index = 0; index < 4; ++index)
+    {
+        const auto step = boundaryMask.consume(4);
+        const auto completed = boundaryHistory.recordLiveEvent(
+            makeEvent(index), step.length, step.cycleCompleted);
+        check(completed == (index == 3),
+              "Take completion did not follow the current Step Mask boundary");
+        check(boundaryHistory.getTakeCount() == (index == 3 ? 1 : 0),
+              "an incomplete Step Mask pass was exposed as a Take");
+    }
+
+    randomchop::TakeHistory resetHistory;
+    randomchop::StepMask resetMask;
+    for (int index = 0; index < 3; ++index)
+    {
+        const auto step = resetMask.consume(8);
+        resetHistory.recordLiveEvent(makeEvent(index), step.length, step.cycleCompleted);
+    }
+    const auto resetStep = resetMask.consume(4);
+    check(resetStep.sequenceReset && resetStep.index == 0,
+          "Take reset fixture did not observe its Step Mask length change");
+    resetHistory.discardIncompleteLiveTake();
+    resetHistory.recordLiveEvent(makeEvent(40.0), 4, false);
+    resetHistory.recordLiveEvent(makeEvent(41.0), 4, false);
+    resetHistory.recordLiveEvent(makeEvent(42.0), 4, false);
+    resetHistory.recordLiveEvent(makeEvent(43.0), 4, true);
+    resetHistory.requestHistory(0);
+    const auto resetReplay = resetHistory.beginTrigger();
+    check(resetHistory.getTakeCount() == 1 && resetReplay.replayEvent != nullptr
+              && resetReplay.replayEvent->randomStart == 40.0,
+          "changing Step Mask length retained an incomplete LIVE pass");
+
+    randomchop::TakeHistory replayHistory;
+    const auto first = makeEvent(1.25);
+    auto second = makeEvent(5.5);
+    second.chanceAllowed = false;
+    second.decision = {};
+    check(!replayHistory.recordLiveEvent(first, 2, false)
+              && replayHistory.recordLiveEvent(second, 2, true),
+          "a complete two-event Take was not captured");
+    replayHistory.requestHistory(0);
+    const auto replay1 = replayHistory.beginTrigger();
+    const auto replay2 = replayHistory.beginTrigger();
+    const auto replay3 = replayHistory.beginTrigger();
+    check(!replay1.isLive && !replay2.isLive && !replay3.isLive
+              && replay1.replayEvent != nullptr && replay2.replayEvent != nullptr
+              && replay3.replayEvent != nullptr,
+          "HISTORY did not supply stored Take events");
+    if (replay1.replayEvent != nullptr && replay2.replayEvent != nullptr
+        && replay3.replayEvent != nullptr)
+    {
+        check(replay1.replayEvent->randomStart == first.randomStart
+                  && replay2.replayEvent->randomStart == second.randomStart
+                  && replay3.replayEvent->randomStart == first.randomStart,
+              "HISTORY did not cycle its selected Take indefinitely");
+        check(replay1.replayEvent->sourceId == first.sourceId
+                  && replay1.replayEvent->prepared == first.prepared
+                  && replay1.replayEvent->region.firstFrame == first.region.firstFrame
+                  && replay1.replayEvent->region.lastFrame == first.region.lastFrame
+                  && replay1.replayEvent->decision == first.decision
+                  && replay2.replayEvent->decision == second.decision
+                  && replay2.replayEvent->chanceAllowed == second.chanceAllowed,
+              "HISTORY changed an explicit source, start, region, or Chance decision");
+    }
+    const auto countBeforeIgnoredRecord = replayHistory.getTakeCount();
+    check(!replayHistory.recordLiveEvent(makeEvent(99.0), 1, true)
+              && replayHistory.getTakeCount() == countBeforeIgnoredRecord,
+          "HISTORY created a new Take");
+    replayHistory.requestLive();
+    const auto returnedLive = replayHistory.beginTrigger();
+    check(returnedLive.isLive && returnedLive.resetLiveSequence
+              && replayHistory.getSelectedTake() == -1,
+          "returning to LIVE did not request a fresh Step Mask pass");
+
+    randomchop::TakeHistory ringHistory;
+    for (int take = 0; take < 9; ++take)
+    {
+        check(!ringHistory.recordLiveEvent(makeEvent(take * 10.0), 2, false),
+              "a half-complete ring Take was committed");
+        check(ringHistory.recordLiveEvent(makeEvent(take * 10.0 + 1.0), 2, true),
+              "a complete ring Take was not committed");
+    }
+    check(ringHistory.getTakeCount() == randomchop::TakeHistory::maximumTakes,
+          "Take History did not retain exactly its latest eight Takes");
+    ringHistory.requestHistory(0);
+    const auto oldestRemaining = ringHistory.beginTrigger();
+    check(oldestRemaining.replayEvent != nullptr
+              && oldestRemaining.replayEvent->randomStart == 10.0,
+          "Take History did not evict its oldest Take");
+    ringHistory.requestHistory(7);
+    const auto newestFirst = ringHistory.beginTrigger();
+    ringHistory.beginTrigger();
+    ringHistory.beginTrigger();
+    ringHistory.requestHistory(7);
+    const auto newestReset = ringHistory.beginTrigger();
+    check(newestFirst.replayEvent != nullptr && newestReset.replayEvent != nullptr
+              && newestFirst.replayEvent->randomStart == 80.0
+              && newestReset.replayEvent->randomStart == 80.0,
+          "selecting a Take did not reset its replay cursor to event one");
+    ringHistory.requestClear();
+    const auto afterClear = ringHistory.beginTrigger();
+    check(afterClear.isLive && afterClear.resetLiveSequence
+              && ringHistory.getTakeCount() == 0,
+          "session-only Take History was not cleared safely");
+
+    const auto file = makeTinyWaveFile();
+    check(file.existsAsFile(), "could not create the Take ownership fixture");
+    if (!file.existsAsFile())
+        return;
+    {
+        SampleManager manager;
+        juce::StringArray paths;
+        paths.add(file.getFullPathName());
+        check(manager.addFiles(paths).empty(), "could not load the Take ownership fixture");
+        auto snapshot = manager.getSnapshot();
+        auto prepared = snapshot->front()->prepared;
+        std::weak_ptr<const PreparedSampleData> preparedWeak = prepared;
+        randomchop::TakeHistory ownershipHistory;
+        randomchop::TakeEvent owned;
+        owned.sourceId = randomchop::copyStableSourceId(snapshot->front()->settings.id);
+        owned.prepared = prepared;
+        owned.region = { 0, prepared->audio->getNumSamples() - 1 };
+        ownershipHistory.recordLiveEvent(owned, 2, false);
+        ownershipHistory.recordLiveEvent(owned, 2, true);
+        owned.prepared.reset();
+        prepared.reset();
+        snapshot.reset();
+        manager.clear();
+        manager.collectGarbage();
+        check(!preparedWeak.expired(),
+              "clearing a source invalidated a PreparedSampleData version held by a Take");
+
+        randomchop::TakeEvent silent;
+        for (int take = 0; take < 8; ++take)
+        {
+            ownershipHistory.recordLiveEvent(silent, 2, false);
+            ownershipHistory.recordLiveEvent(silent, 2, true);
+        }
+        check(!preparedWeak.expired(),
+              "Take eviction destroyed retired prepared data on the capture thread");
+        manager.collectGarbage();
+        check(preparedWeak.expired(),
+              "evicted Take prepared data was not reclaimed by non-realtime maintenance");
+    }
+    check(file.deleteFile(), "could not remove the Take ownership fixture");
 }
 
 void testPoolLimitAndPersistentSettings()
@@ -1082,6 +1261,7 @@ int main()
 {
     testWeightedSelection();
     testStepMaskSequencingAndState();
+    testTakeHistoryCaptureReplayAndLifetime();
     testPoolLimitAndPersistentSettings();
     testParameterOnlyStateClearsSamples();
     testRegionClampingAndRestore();

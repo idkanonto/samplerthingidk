@@ -49,6 +49,7 @@ private:
     void configureKnob(juce::Slider&, juce::Label&, const juce::String&);
     void configureLinearControl(juce::Slider&, juce::Label&, const juce::String&);
     void refreshStepMaskControls();
+    void refreshTakeControls();
 
     RandomChopSamplerAudioProcessor& processor;
     juce::Label title, status;
@@ -66,6 +67,9 @@ private:
     std::array<juce::ToggleButton, randomchop::StepMask::maximumSteps> stepButtons;
     juce::TextButton allNormalButton { "All NORMAL" }, allFxButton { "All FX" },
         randomiseStepsButton { "Randomize" };
+    juce::TextButton previousTakeButton { "Previous" }, liveButton { "LIVE" },
+        nextTakeButton { "Next" };
+    juce::ComboBox takeSelector;
     juce::Slider rootNote, randomStart, finalLength, attack, release, output, seed;
     juce::Slider reverseChance, retriggerChance, retriggerSize, retriggerCount,
         skipChance, reorderChance, bendChance, dropChance;
@@ -75,6 +79,7 @@ private:
         retriggerCountLabel, skipChanceLabel, reorderChanceLabel, bendChanceLabel,
         dropChanceLabel;
     juce::Label stepLengthLabel;
+    juce::Label takeStatus;
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ComboBoxAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
@@ -90,5 +95,6 @@ private:
     juce::String selectedSourceId;
     std::unique_ptr<juce::FileChooser> chooser;
     juce::String transientMessage;
+    int displayedTakeCount = -1;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(RandomChopSamplerAudioProcessorEditor)
 };
