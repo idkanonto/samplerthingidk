@@ -26,6 +26,8 @@ status: active
 - Step Mask bits and reset generation are atomically published from control/state paths. Its fixed cursor belongs to the audio thread, advances once per Note On in MIDI-buffer order, and bypasses Chance resolution entirely on NORMAL steps.
 - Take capture and replay use fixed arrays owned by the audio thread. `TakeEvent` stores fixed UUID bytes, an immutable prepared reference, and resolved event values; HISTORY performs no RNG calls. UI mode/selection requests and status use bounded atomics rather than locks or mutable UI access.
 - Prepared versions referenced by Takes remain rooted in SampleManager's current or retired storage. Replacing a Take may decrement a reference on the audio thread, but cannot destroy the prepared audio there; the last retained reference is erased only by control-thread garbage collection or processor teardown.
+- Master processing runs after the voice mix with Bit Crush first, stereo sample-and-hold rate reduction second, and Output Gain last. It keeps two held floats plus a bounded phase counter, preserves phase across blocks, resets on factor changes/prepare, and performs no allocation, locking, or RNG.
+- The master stage sanitizes non-finite samples to zero and clamps pathological finite values to ±64 before quantization. With the parameter's maximum +6 dB Output Gain, this keeps the final scalar range finite and bounded while leaving ordinary bypassed audio unchanged.
 - A xorshift64* generator supplies allocation-free seeded random decisions.
 
 ## Stretch teardown

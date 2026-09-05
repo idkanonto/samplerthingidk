@@ -36,6 +36,7 @@ Then rescan VST3 plug-ins in the DAW, create an instrument track, insert **Rando
 - Each Note On resolves Chance once into a fixed-size `EventDecision`; rendering uses only those stored choices, so no render-time RNG or heap allocation is required and the event can later be replayed exactly.
 - The Step Mask owns a fixed audio-thread event cursor and uses atomically published bits/reset generation. NORMAL steps skip Chance resolution; FX steps permit it. The cursor advances only on MIDI Note On, with no tempo or transport dependency.
 - Take History uses fixed audio-thread-owned arrays and stores explicit decisions plus immutable prepared-version references, never rendered audio. HISTORY cycles the selected Take without RNG; browser requests/status cross threads through atomics, and final prepared-data reclamation remains on the control thread.
+- The stereo master chain is Bit Crush (OFF or 4–24 bit) → Sample Rate Reduction (1x/OFF through 64x) → Output Gain. It uses fixed state, stays deterministic across host blocks, and sanitizes non-finite input.
 - MIDI rendering is sample-accurate within each host block. No disk access, decoding, blocking mutex, logging, or explicit allocation occurs in the audio callback.
 
 ## MVP checklist
@@ -57,6 +58,7 @@ Then rescan VST3 plug-ins in the DAW, create an instrument track, insert **Rando
 - [x] Event-driven 2/4/8/16 Step Mask with NORMAL/FX, bulk/randomize controls, reset behavior, and persistence
 - [x] Latest-eight Take History with complete-pass LIVE capture and indefinite exact-decision HISTORY replay
 - [x] Previous/Next/dropdown/LIVE Take browser and session-only history lifecycle
+- [x] Global 4–24-bit Bit Crush and 1x–64x Sample Rate Reduction before Output Gain
 - [x] Source-rate conversion via linear interpolation; mono and stereo playback
 - [x] Per-voice attack/release plus 3 ms source-region boundary fade
 - [x] Random Start, Final Length, Voice Mode, Attack, Release, Output, and Seed automation/state
@@ -68,8 +70,8 @@ Then rescan VST3 plug-ins in the DAW, create an instrument track, insert **Rando
 - Samples are decoded fully into RAM; very large libraries are not streamed.
 - Linear interpolation favors low CPU use over premium resampling quality.
 - Restoring sample paths is synchronous because JUCE host state restoration provides no completion callback; it never occurs in `processBlock`, but an unusually large library can briefly delay project loading.
-- Master digital processing remains in a later gated V2 phase.
 - Take History is intentionally session-only and is not serialized with project state.
+- The final integration pass and DAW/host smoke testing remain before release sign-off.
 - A reproducible Seed gives a deterministic trigger sequence for the same pool/order and parameter/MIDI event sequence; changing the pool changes the results.
 
 ## Practical test pass
