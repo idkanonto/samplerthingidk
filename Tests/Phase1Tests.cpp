@@ -51,14 +51,21 @@ juce::File makeTinyWaveFile()
         .withBitsPerSample(16);
     auto writer = format.createWriterFor(stream, options);
     if (writer == nullptr)
+    {
+        file.deleteFile();
         return {};
+    }
 
     juce::AudioBuffer<float> audio(1, 32);
     for (int i = 0; i < audio.getNumSamples(); ++i)
         audio.setSample(0, i, 0.25f * std::sin(juce::MathConstants<float>::twoPi
                                                * static_cast<float>(i) / 16.0f));
     if (!writer->writeFromAudioSampleBuffer(audio, 0, audio.getNumSamples()))
+    {
+        writer.reset();
+        file.deleteFile();
         return {};
+    }
     writer.reset();
     return file;
 }
@@ -86,6 +93,128 @@ juce::File makeConstantWaveFile(float value)
         return {};
     writer.reset();
     return file;
+}
+
+juce::File makeAudioFormatFixture(juce::AudioFormat& format,
+                                  const juce::String& extension,
+                                  int channels,
+                                  double sampleRate)
+{
+    const auto directory = juce::File::getSpecialLocation(juce::File::tempDirectory);
+    const auto file = directory.getNonexistentChildFile(
+        "random-chop-format-" + juce::String(channels) + "ch-"
+            + juce::String(static_cast<int>(sampleRate)), extension, false);
+    std::unique_ptr<juce::OutputStream> stream = file.createOutputStream();
+    const auto options = juce::AudioFormatWriterOptions {}
+        .withSampleRate(sampleRate)
+        .withNumChannels(channels)
+        .withBitsPerSample(16);
+    auto writer = format.createWriterFor(stream, options);
+    if (writer == nullptr)
+        return {};
+
+    juce::AudioBuffer<float> audio(channels, 256);
+    for (int channel = 0; channel < channels; ++channel)
+        for (int frame = 0; frame < audio.getNumSamples(); ++frame)
+            audio.setSample(channel, frame,
+                (channel == 0 ? 0.25f : -0.125f)
+                    * std::sin(juce::MathConstants<float>::twoPi
+                               * static_cast<float>(frame) / 32.0f));
+    if (!writer->writeFromAudioSampleBuffer(audio, 0, audio.getNumSamples()))
+        return {};
+    writer.reset();
+    return file;
+}
+
+void testWritableFormatMatrix(juce::AudioFormat& format,
+                              const juce::String& extension,
+                              const char* label)
+{
+    for (const auto sampleRate : { 44100.0, 48000.0, 96000.0 })
+    {
+        for (const auto channels : { 1, 2 })
+        {
+            const auto file = makeAudioFormatFixture(format, extension, channels, sampleRate);
+            check(file.existsAsFile(), "could not create a format decode fixture");
+            if (!file.existsAsFile())
+                continue;
+
+            {
+                SampleManager manager;
+                juce::StringArray paths;
+                paths.add(file.getFullPathName());
+                const auto errors = manager.addFiles(paths);
+                const auto pool = manager.getSnapshot();
+                check(errors.empty(), "a supported format fixture did not decode");
+                check(pool->size() == 1, "a supported format fixture was not added");
+                if (pool->size() == 1)
+                {
+                    const auto& source = pool->front();
+                    check(source->audio != nullptr
+                              && source->audio->getNumChannels() == channels
+                              && source->audio->getNumSamples() == 256,
+                          "decoded fixture dimensions changed");
+                    check(std::abs(source->sampleRate - sampleRate) < 0.5,
+                          "decoded fixture sample rate changed");
+                    check(source->prepared != nullptr && source->isPlayable(),
+                          "decoded fixture was not prepared for playback");
+                }
+            }
+
+            if (!file.deleteFile())
+            {
+                std::cerr << "FAILED: could not remove " << label
+                          << " format fixture\n";
+                ++failures;
+            }
+        }
+    }
+}
+
+void testSupportedAudioFormatDecoding()
+{
+    juce::WavAudioFormat wav;
+    juce::AiffAudioFormat aiff;
+    juce::FlacAudioFormat flac;
+    testWritableFormatMatrix(wav, ".wav", "WAV");
+    testWritableFormatMatrix(aiff, ".aiff", "AIFF");
+    testWritableFormatMatrix(aiff, ".aif", "AIF");
+    testWritableFormatMatrix(flac, ".flac", "FLAC");
+
+    const auto mp3Path = juce::SystemStats::getEnvironmentVariable(
+        "RANDOM_CHOP_TEST_MP3", juce::String());
+    if (mp3Path.isEmpty())
+    {
+        const auto isCi = juce::SystemStats::getEnvironmentVariable("CI", juce::String())
+            .equalsIgnoreCase("true");
+        check(!isCi, "CI did not provide the required MP3 decode fixture");
+        if (!isCi)
+            std::cout << "MP3 decode fixture not provided; local MP3 check skipped.\n";
+        return;
+    }
+
+    const juce::File mp3(mp3Path);
+    check(mp3.existsAsFile(), "the configured MP3 decode fixture does not exist");
+    if (!mp3.existsAsFile())
+        return;
+
+    SampleManager manager;
+    juce::StringArray paths;
+    paths.add(mp3.getFullPathName());
+    const auto errors = manager.addFiles(paths);
+    const auto pool = manager.getSnapshot();
+    check(errors.empty() && pool->size() == 1,
+          "the MP3 fixture did not decode through SampleManager");
+    if (pool->size() == 1)
+    {
+        const auto& source = pool->front();
+        check(source->audio != nullptr && source->audio->getNumChannels() == 2,
+              "the stereo MP3 fixture decoded with unexpected channels");
+        check(std::abs(source->sampleRate - 48000.0) < 0.5,
+              "the MP3 fixture decoded with an unexpected sample rate");
+        check(source->prepared != nullptr && source->isPlayable(),
+              "the decoded MP3 fixture was not prepared for playback");
+    }
 }
 
 void testWeightedSelection()
@@ -1382,6 +1511,7 @@ void testAsynchronousStretchPublication()
 
 int main()
 {
+    testSupportedAudioFormatDecoding();
     testWeightedSelection();
     testStepMaskSequencingAndState();
     testTakeHistoryCaptureReplayAndLifetime();

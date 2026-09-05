@@ -9,7 +9,7 @@ A 16-voice JUCE VST3/standalone sampler instrument. In LIVE, every MIDI note adv
 3. When the run finishes, open it and download **Random-Chop-Sampler-Windows-VST3** from the Artifacts section.
 4. Extract the downloaded archive. Copy the complete `Random Chop Sampler.vst3` directory to `C:\Program Files\Common Files\VST3\` and rescan plug-ins in the DAW.
 
-The workflow uses GitHub's `windows-2022` runner with Visual Studio 2022 and CMake. CMake FetchContent downloads pinned JUCE 8.0.13 automatically, builds the Release VST3 and test targets, runs CTest, verifies that the bundle contains its module binary, and uploads the complete `.vst3` bundle. Nothing needs to be installed locally.
+The workflow uses GitHub's `windows-2022` runner with Visual Studio 2022 and CMake. CMake FetchContent downloads pinned JUCE 8.0.13 automatically, builds the Release VST3, Standalone, and test targets, runs CTest with real format-decoder fixtures, verifies both deliverables, and uploads the complete `.vst3` bundle. Nothing needs to be installed locally.
 
 ## Optional local build
 
@@ -71,9 +71,9 @@ Then rescan VST3 plug-ins in the DAW, create an instrument track, insert **Rando
 - Linear interpolation favors low CPU use over premium resampling quality.
 - Restoring sample paths is synchronous because JUCE host state restoration provides no completion callback; it never occurs in `processBlock`, but an unusually large library can briefly delay project loading.
 - Take History is intentionally session-only and is not serialized with project state.
-- The final integration pass and DAW/host smoke testing remain before release sign-off.
+- Automated Windows integration and artifact checks do not replace a DAW/host smoke test, listening pass, or realtime profiler session on the release machine.
 - A reproducible Seed gives a deterministic trigger sequence for the same pool/order and parameter/MIDI event sequence; changing the pool changes the results.
 
 ## Practical test pass
 
-Test in the standalone build first, then at least one VST3 DAW. Exercise mono/stereo WAV and AIFF at 44.1/48/96 kHz, rapid repeated notes, chords, Note Off, automation, Remove/Clear during playback, project save/reopen, and reopening after moving one source file.
+Test in the standalone build first, then at least one VST3 DAW. Exercise mono/stereo WAV, AIFF/AIF, MP3, and FLAC sources at 44.1/48/96 kHz where available, rapid repeated notes, chords, Note Off, automation, Remove/Clear during playback, project save/reopen, and reopening after moving one source file.

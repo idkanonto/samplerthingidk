@@ -6,12 +6,12 @@ tags:
   - implementation
   - current-state
 status: active
-verified: 2026-09-04
+verified: 2026-09-05
 ---
 
 # Current Implementation State
 
-Evidence: source inspection plus [Windows Release CI run #35](https://github.com/idkanonto/samplerthingidk/actions/runs/33938782477) at commit `a87842b3b944643fb71d2b5b8038a35451cd9fbf`. The Windows Server 2022 Release workflow built `RandomChopSampler_VST3` and `RandomChopSamplerTests`, passed `ctest --test-dir build -C Release --output-on-failure`, verified the bundle and license resources, and uploaded it. The inspected archive matched GitHub's SHA-256 `66cf70419ad16c131cea1859288e3325661fdf70b9ba92c2148239b70ac6d466` and contained a 7,410,176-byte module at `Random Chop Sampler.vst3/Contents/x86_64-win/Random Chop Sampler.vst3`. No DAW/host audio test or full format/sample-rate matrix was run.
+Evidence: source and [[REALTIME_AUDIT]] inspection plus [Windows Release CI run #39](https://github.com/idkanonto/samplerthingidk/actions/runs/33940234501) at commit `7265f77b44bf5db53eb2a59ba6abbbfccd9bcfb4`. The Windows Server 2022 Release workflow built `RandomChopSampler_VST3`, `RandomChopSampler_Standalone`, and `RandomChopSamplerTests`; decoded the supported-format fixture matrix; passed `ctest --test-dir build -C Release --output-on-failure`; verified the VST3 bundle, notices, and 7,460,352-byte Standalone executable; and uploaded the VST3. The independently inspected archive matched GitHub's SHA-256 `c1a2324c392e51ef7a869f0a21f2cfc44e42f0fb12755dbea063e7dd567cf020` and contained a 7,410,176-byte module at `Random Chop Sampler.vst3/Contents/x86_64-win/Random Chop Sampler.vst3`. No DAW/host audio interaction or realtime profiler session was run.
 
 ## Implemented in code
 
@@ -42,10 +42,10 @@ Evidence: source inspection plus [Windows Release CI run #35](https://github.com
 - Global Attack, Release, Final Length, Voice Mode, all six Chance percentages, Repeat Size/Count, Output Gain, deterministic Seed, Target Key, MIDI Pitch, and Root MIDI Note parameters with host state persistence. All Chance percentages default to 0% and consume no RNG state while disabled.
 - Path and source-setting persistence, missing-file representation, immutable pool snapshots, and deferred control-thread reclamation after realtime references drain.
 - Linear source-rate conversion combined with the resolved pitch ratio, mono-to-stereo playback, source-region boundary fade, and a short voice-steal tail crossfade.
-- `RandomChopSamplerTests` CTest coverage for the prior pool, region, pitch, stretch, lifetime, voice, envelope, Chance, Step Mask, and Take behavior plus master bypass identity, 4-bit quantization, independent stereo holds, Bit Crush-before-rate-reduction order, phase continuity across host blocks, parameter mappings, deterministic equality, and NaN/Inf/extreme-value containment; the Windows workflow builds and runs the test target.
+- `RandomChopSamplerTests` CTest coverage for the pool, region, pitch, stretch, lifetime, voice, envelope, Chance, Step Mask, Take, and master behavior. Phase 10 additionally performs real WAV, AIFF, AIF, and FLAC decoding for mono/stereo fixtures at 44.1/48/96 kHz plus a real stereo 48 kHz MP3 decode. The Windows workflow builds VST3, Standalone, and tests, runs CTest, and validates the complete VST3 bundle plus Standalone executable.
 
-## Remaining verification
+## Verification boundary
 
-- The approved V2 feature boundary is implemented. Phase 10 integration/hardening, broader format fixtures, final realtime audit, and host/DAW smoke testing remain before the finished V2 declaration.
+- The approved V2 feature boundary and Phase 10 integration/hardening work are implemented and pass the automated Windows gate. A DAW/host smoke test, interactive automation/save-reopen pass, listening evaluation, and instrumented realtime profiler/stress session remain external verification rather than automated evidence.
 
 See [[TEST_MATRIX]] before changing an item from planned to implemented.

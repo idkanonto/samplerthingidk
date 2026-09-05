@@ -35,3 +35,4 @@ status: active
 Queued stretch work is cancelled during source removal, pool replacement, and teardown. An already-running pinned Signalsmith `exact()` call is joined off the realtime thread because the upstream one-shot API has no safe mid-call cancellation hook; detaching it would permit code to run after plugin unload.
 
 Processing order is defined in [[SIGNAL_CHAIN]]. Verification belongs in [[TEST_MATRIX]].
+The path-by-path Phase 10 review is recorded in [[REALTIME_AUDIT]].

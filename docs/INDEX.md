@@ -16,8 +16,8 @@ Use this note as the router. Product intent and implementation state are deliber
 | What exists in code today | [[CURRENT_STATE]] |
 | Processing order | [[SIGNAL_CHAIN]] |
 | Realtime and DSP constraints | [[DSP_NOTES]] |
+| Realtime callback and lifetime audit | [[REALTIME_AUDIT]] |
 | Verification coverage | [[TEST_MATRIX]] |
 | Postponed ideas | [[FUTURE_IDEAS]] |
 
 Do not infer implementation from [[PRODUCT_SPEC_V2]]. Check [[CURRENT_STATE]] and the code first.
-
