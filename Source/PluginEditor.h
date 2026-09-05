@@ -61,7 +61,7 @@ private:
     juce::Slider sourceTranspose, sourceFineTune, sourceGain, sourceWeight, sourceStretch;
     juce::Label sourceKeyLabel, sourceTransposeLabel, sourceFineTuneLabel,
         sourceGainLabel, sourceWeightLabel, sourceStretchLabel;
-    juce::ComboBox targetKey, voiceMode;
+    juce::ComboBox targetKey, voiceMode, bitDepth, rateReduction;
     juce::ComboBox stepLength;
     juce::ToggleButton midiPitch { "MIDI Pitch" };
     std::array<juce::ToggleButton, randomchop::StepMask::maximumSteps> stepButtons;
@@ -80,6 +80,7 @@ private:
         dropChanceLabel;
     juce::Label stepLengthLabel;
     juce::Label takeStatus;
+    juce::Label bitDepthLabel, rateReductionLabel;
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ComboBoxAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
@@ -89,7 +90,7 @@ private:
         retriggerSizeAttachment, retriggerCountAttachment, skipChanceAttachment,
         reorderChanceAttachment, bendChanceAttachment, dropChanceAttachment;
     std::unique_ptr<ComboBoxAttachment> targetKeyAttachment, voiceModeAttachment,
-        stepLengthAttachment;
+        stepLengthAttachment, bitDepthAttachment, rateReductionAttachment;
     std::unique_ptr<ButtonAttachment> midiPitchAttachment;
     std::shared_ptr<const SampleManager::Pool> displayPool;
     juce::String selectedSourceId;

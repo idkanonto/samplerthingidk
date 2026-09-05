@@ -62,6 +62,7 @@ target_sources(RandomChopSampler PRIVATE
     Source/ChanceEvents.h
     Source/StepMask.h
     Source/TakeHistory.h
+    Source/MasterDigitalProcessor.h
     Source/RandomizationEngine.h
     Source/HarmonicPitch.h
     Source/PlaybackRegion.h
@@ -110,6 +111,7 @@ if (BUILD_TESTING)
         Source/ChanceEvents.h
         Source/StepMask.h
         Source/TakeHistory.h
+        Source/MasterDigitalProcessor.h
         Source/RandomizationEngine.h
         Source/HarmonicPitch.h
         Source/PlaybackRegion.h

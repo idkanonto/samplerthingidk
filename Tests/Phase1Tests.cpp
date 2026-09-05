@@ -1,5 +1,6 @@
 #include <JuceHeader.h>
 #include "HarmonicPitch.h"
+#include "MasterDigitalProcessor.h"
 #include "RandomSamplerVoice.h"
 #include "SampleManager.h"
 #include "SourceSelection.h"
@@ -385,6 +386,128 @@ void testTakeHistoryCaptureReplayAndLifetime()
               "evicted Take prepared data was not reclaimed by non-realtime maintenance");
     }
     check(file.deleteFile(), "could not remove the Take ownership fixture");
+}
+
+void testMasterDigitalProcessing()
+{
+    randomchop::MasterDigitalProcessor processor;
+    juce::AudioBuffer<float> off(2, 6);
+    const std::array<float, 6> left { -0.75f, -0.2f, 0.0f, 0.125f, 0.5f, 0.9f };
+    const std::array<float, 6> right { 0.75f, 0.2f, 0.0f, -0.125f, -0.5f, -0.9f };
+    for (int frame = 0; frame < off.getNumSamples(); ++frame)
+    {
+        off.setSample(0, frame, left[static_cast<std::size_t>(frame)]);
+        off.setSample(1, frame, right[static_cast<std::size_t>(frame)]);
+    }
+    processor.process(off, 0, 1);
+    bool unchanged = true;
+    for (int frame = 0; frame < off.getNumSamples(); ++frame)
+        unchanged = unchanged
+            && off.getSample(0, frame) == left[static_cast<std::size_t>(frame)]
+            && off.getSample(1, frame) == right[static_cast<std::size_t>(frame)];
+    check(unchanged, "OFF Bit Crush and 1x rate reduction changed finite audio");
+
+    processor.reset();
+    juce::AudioBuffer<float> crushed(2, 1);
+    crushed.setSample(0, 0, 0.2f);
+    crushed.setSample(1, 0, -0.2f);
+    processor.process(crushed, 4, 1);
+    check(std::abs(crushed.getSample(0, 0) - 0.25f) < 0.000001f
+              && std::abs(crushed.getSample(1, 0) + 0.25f) < 0.000001f,
+          "4-bit crush did not quantise stereo samples deterministically");
+
+    processor.reset();
+    juce::AudioBuffer<float> reduced(2, 6);
+    for (int frame = 0; frame < reduced.getNumSamples(); ++frame)
+    {
+        reduced.setSample(0, frame, 0.1f * static_cast<float>(frame + 1));
+        reduced.setSample(1, frame, -0.1f * static_cast<float>(frame + 1));
+    }
+    processor.process(reduced, 0, 4);
+    bool heldInStereo = true;
+    for (int frame = 0; frame < 4; ++frame)
+        heldInStereo = heldInStereo
+            && std::abs(reduced.getSample(0, frame) - 0.1f) < 0.000001f
+            && std::abs(reduced.getSample(1, frame) + 0.1f) < 0.000001f;
+    for (int frame = 4; frame < 6; ++frame)
+        heldInStereo = heldInStereo
+            && std::abs(reduced.getSample(0, frame) - 0.5f) < 0.000001f
+            && std::abs(reduced.getSample(1, frame) + 0.5f) < 0.000001f;
+    check(heldInStereo, "4x sample-rate reduction did not hold independent stereo samples");
+
+    processor.reset();
+    juce::AudioBuffer<float> ordered(2, 5);
+    ordered.clear();
+    ordered.setSample(0, 0, 0.2f);
+    for (int frame = 1; frame < ordered.getNumSamples(); ++frame)
+        ordered.setSample(0, frame, 0.9f);
+    processor.process(ordered, 4, 4);
+    check(std::abs(ordered.getSample(0, 0) - 0.25f) < 0.000001f
+              && std::abs(ordered.getSample(0, 3) - 0.25f) < 0.000001f
+              && std::abs(ordered.getSample(0, 4) - 0.875f) < 0.000001f,
+          "master processing did not apply Bit Crush before rate reduction");
+
+    processor.reset();
+    juce::AudioBuffer<float> firstBlock(2, 3);
+    firstBlock.clear();
+    firstBlock.setSample(0, 0, 0.1f);
+    firstBlock.setSample(0, 1, 0.2f);
+    firstBlock.setSample(0, 2, 0.3f);
+    processor.process(firstBlock, 0, 4);
+    juce::AudioBuffer<float> secondBlock(2, 2);
+    secondBlock.clear();
+    secondBlock.setSample(0, 0, 0.4f);
+    secondBlock.setSample(0, 1, 0.5f);
+    processor.process(secondBlock, 0, 4);
+    check(std::abs(secondBlock.getSample(0, 0) - 0.1f) < 0.000001f
+              && std::abs(secondBlock.getSample(0, 1) - 0.5f) < 0.000001f,
+          "sample-rate reduction did not preserve its phase across host blocks");
+
+    check(randomchop::MasterDigitalProcessor::bitDepthFromChoice(0) == 0
+              && randomchop::MasterDigitalProcessor::bitDepthFromChoice(1) == 4
+              && randomchop::MasterDigitalProcessor::bitDepthFromChoice(21) == 24
+              && randomchop::MasterDigitalProcessor::rateFactorFromChoice(0) == 1
+              && randomchop::MasterDigitalProcessor::rateFactorFromChoice(6) == 64,
+          "master parameter choice mappings changed");
+
+    processor.reset();
+    juce::AudioBuffer<float> unsafe(2, 4);
+    unsafe.setSample(0, 0, std::numeric_limits<float>::quiet_NaN());
+    unsafe.setSample(0, 1, std::numeric_limits<float>::infinity());
+    unsafe.setSample(0, 2, 1.0e30f);
+    unsafe.setSample(0, 3, -1.0e30f);
+    unsafe.copyFrom(1, 0, unsafe, 0, 0, unsafe.getNumSamples());
+    processor.process(unsafe, 24, 1);
+    unsafe.applyGain(2.0f);
+    bool finiteAndBounded = true;
+    for (int channel = 0; channel < unsafe.getNumChannels(); ++channel)
+        for (int frame = 0; frame < unsafe.getNumSamples(); ++frame)
+            finiteAndBounded = finiteAndBounded
+                && std::isfinite(unsafe.getSample(channel, frame))
+                && std::abs(unsafe.getSample(channel, frame)) <= 128.0f;
+    check(finiteAndBounded,
+          "master processing propagated non-finite or unbounded output");
+
+    randomchop::MasterDigitalProcessor deterministicA;
+    randomchop::MasterDigitalProcessor deterministicB;
+    juce::AudioBuffer<float> deterministic1(2, 17);
+    juce::AudioBuffer<float> deterministic2(2, 17);
+    for (int channel = 0; channel < 2; ++channel)
+        for (int frame = 0; frame < 17; ++frame)
+        {
+            const auto value = std::sin(static_cast<float>(frame + channel * 3));
+            deterministic1.setSample(channel, frame, value);
+            deterministic2.setSample(channel, frame, value);
+        }
+    deterministicA.process(deterministic1, 9, 8);
+    deterministicB.process(deterministic2, 9, 8);
+    bool exactlyEqual = true;
+    for (int channel = 0; channel < 2; ++channel)
+        for (int frame = 0; frame < 17; ++frame)
+            exactlyEqual = exactlyEqual
+                && deterministic1.getSample(channel, frame)
+                    == deterministic2.getSample(channel, frame);
+    check(exactlyEqual, "master digital processing was not deterministic");
 }
 
 void testPoolLimitAndPersistentSettings()
@@ -1262,6 +1385,7 @@ int main()
     testWeightedSelection();
     testStepMaskSequencingAndState();
     testTakeHistoryCaptureReplayAndLifetime();
+    testMasterDigitalProcessing();
     testPoolLimitAndPersistentSettings();
     testParameterOnlyStateClearsSamples();
     testRegionClampingAndRestore();

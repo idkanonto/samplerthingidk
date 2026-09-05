@@ -11,7 +11,7 @@ verified: 2026-09-04
 
 # Current Implementation State
 
-Evidence: source inspection plus [Windows Release CI run #32](https://github.com/idkanonto/samplerthingidk/actions/runs/33937562585) at commit `db18d0d4060d5fdca729017da09f9d5a3a460fb4`. The Windows Server 2022 Release workflow built `RandomChopSampler_VST3` and `RandomChopSamplerTests`, passed `ctest --test-dir build -C Release --output-on-failure`, verified the bundle and license resources, and uploaded it. The inspected archive matched GitHub's SHA-256 `4df0fd69d8e194bf81bcb5c99b7cb861e00170b123a57b566536244a2265661b` and contained a 7,405,056-byte module at `Random Chop Sampler.vst3/Contents/x86_64-win/Random Chop Sampler.vst3`. No DAW/host audio test or full format/sample-rate matrix was run.
+Evidence: source inspection plus [Windows Release CI run #35](https://github.com/idkanonto/samplerthingidk/actions/runs/33938782477) at commit `a87842b3b944643fb71d2b5b8038a35451cd9fbf`. The Windows Server 2022 Release workflow built `RandomChopSampler_VST3` and `RandomChopSamplerTests`, passed `ctest --test-dir build -C Release --output-on-failure`, verified the bundle and license resources, and uploaded it. The inspected archive matched GitHub's SHA-256 `66cf70419ad16c131cea1859288e3325661fdf70b9ba92c2148239b70ac6d466` and contained a 7,410,176-byte module at `Random Chop Sampler.vst3/Contents/x86_64-win/Random Chop Sampler.vst3`. No DAW/host audio test or full format/sample-rate matrix was run.
 
 ## Implemented in code
 
@@ -37,13 +37,15 @@ Evidence: source inspection plus [Windows Release CI run #32](https://github.com
 - A Take stores the stable source UUID in fixed bytes, its exact immutable prepared-data reference, source region/settings, resolved start, NORMAL/FX state, and complete `EventDecision`; it never stores rendered audio or relies on replaying an RNG seed. HISTORY uses incoming MIDI timing, note, and velocity, cycles the selected Take indefinitely, creates no new Takes, and resets to event one when another Take is selected.
 - Previous, Next, dropdown selection, Take count/status, and LIVE controls are functional. Take History is intentionally session-only and is cleared on state restore; source pool, Step Mask, and all core parameters continue to persist.
 - Take arrays and replay cursors belong only to the audio thread. UI selection requests and published browser status use atomics; SampleManager's current/retired ownership roots keep historical prepared versions alive and ensure Take eviction cannot perform final large-buffer destruction on the audio thread.
+- Global Bit Crush provides OFF or 4–24-bit quantization, followed by deterministic stereo sample-and-hold Sample Rate Reduction at 1x/OFF, 2x, 4x, 8x, 16x, 32x, or 64x, then the existing Output Gain. Reduction state is fixed-size and continues across host blocks; factor changes and prepare reset its phase.
+- The master stage replaces non-finite values with silence and bounds pathological finite inputs before quantization/hold. Both new controls are automatable appended APVTS parameters and default to unchanged processing.
 - Global Attack, Release, Final Length, Voice Mode, all six Chance percentages, Repeat Size/Count, Output Gain, deterministic Seed, Target Key, MIDI Pitch, and Root MIDI Note parameters with host state persistence. All Chance percentages default to 0% and consume no RNG state while disabled.
 - Path and source-setting persistence, missing-file representation, immutable pool snapshots, and deferred control-thread reclamation after realtime references drain.
 - Linear source-rate conversion combined with the resolved pitch ratio, mono-to-stereo playback, source-region boundary fade, and a short voice-steal tail crossfade.
-- `RandomChopSamplerTests` CTest coverage for the prior pool, region, pitch, stretch, lifetime, voice, envelope, Chance, and Step Mask behavior plus Take boundaries, length-change reset, silent events, latest-eight eviction, oldest replacement, exact explicit-decision/prepared-version replay, repeated HISTORY cycling, Take selection reset, HISTORY capture suppression, return to LIVE, session clearing, and deferred prepared-data reclamation after Take eviction; the Windows workflow builds and runs the test target.
+- `RandomChopSamplerTests` CTest coverage for the prior pool, region, pitch, stretch, lifetime, voice, envelope, Chance, Step Mask, and Take behavior plus master bypass identity, 4-bit quantization, independent stereo holds, Bit Crush-before-rate-reduction order, phase continuity across host blocks, parameter mappings, deterministic equality, and NaN/Inf/extreme-value containment; the Windows workflow builds and runs the test target.
 
-## Not implemented
+## Remaining verification
 
-- Global Bit Crush and Sample Rate Reduction.
+- The approved V2 feature boundary is implemented. Phase 10 integration/hardening, broader format fixtures, final realtime audit, and host/DAW smoke testing remain before the finished V2 declaration.
 
 See [[TEST_MATRIX]] before changing an item from planned to implemented.

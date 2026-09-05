@@ -22,6 +22,8 @@ constexpr auto reorderChance = "reorderChance";
 constexpr auto bendChance = "bendChance";
 constexpr auto dropChance = "dropChance";
 constexpr auto stepLength = "stepLength";
+constexpr auto bitDepth = "bitDepth";
+constexpr auto rateReduction = "rateReduction";
 }
 
 RandomChopSamplerAudioProcessor::RandomChopSamplerAudioProcessor()
@@ -82,6 +84,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout RandomChopSamplerAudioProces
         IDs::retriggerCount, "Repeat Count", 1, 8, 2));
     layout.add(std::make_unique<juce::AudioParameterChoice>(
         IDs::stepLength, "Step Mask Length", juce::StringArray { "2", "4", "8", "16" }, 2));
+    juce::StringArray bitDepthChoices { "OFF" };
+    for (int bits = 4; bits <= 24; ++bits)
+        bitDepthChoices.add(juce::String(bits) + " bit");
+    layout.add(std::make_unique<juce::AudioParameterChoice>(
+        IDs::bitDepth, "Bit Crush", bitDepthChoices, 0));
+    layout.add(std::make_unique<juce::AudioParameterChoice>(
+        IDs::rateReduction, "Sample Rate Reduction",
+        juce::StringArray { "1x (OFF)", "2x", "4x", "8x", "16x", "32x", "64x" }, 0));
     return layout;
 }
 
@@ -89,6 +99,7 @@ void RandomChopSamplerAudioProcessor::prepareToPlay(double rate, int)
 {
     currentRate = rate;
     voices.prepare(rate);
+    masterDigitalProcessor.reset();
     lastSeed = -1;
 }
 
@@ -220,7 +231,13 @@ void RandomChopSamplerAudioProcessor::processBlock(juce::AudioBuffer<float>& buf
     if (rendered < buffer.getNumSamples())
         voices.render(buffer, rendered, buffer.getNumSamples() - rendered);
 
-    buffer.applyGain(juce::Decibels::decibelsToGain(parameters.getRawParameterValue(IDs::output)->load()));
+    masterDigitalProcessor.process(buffer,
+        randomchop::MasterDigitalProcessor::bitDepthFromChoice(static_cast<int>(
+            parameters.getRawParameterValue(IDs::bitDepth)->load())),
+        randomchop::MasterDigitalProcessor::rateFactorFromChoice(static_cast<int>(
+            parameters.getRawParameterValue(IDs::rateReduction)->load())));
+    buffer.applyGain(juce::Decibels::decibelsToGain(
+        parameters.getRawParameterValue(IDs::output)->load()));
 }
 
 void RandomChopSamplerAudioProcessor::getStateInformation(juce::MemoryBlock& destination)

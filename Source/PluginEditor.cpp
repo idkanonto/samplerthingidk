@@ -222,7 +222,7 @@ public:
 RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(RandomChopSamplerAudioProcessor& p)
     : AudioProcessorEditor(&p), processor(p)
 {
-    setSize(1050, 1090);
+    setSize(1050, 1120);
     title.setText("RANDOM CHOP SAMPLER V2", juce::dontSendNotification);
     title.setFont(juce::Font(24.0f, juce::Font::bold));
     title.setColour(juce::Label::textColourId, juce::Colour(0xfff2f2f5));
@@ -240,6 +240,11 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     for (auto* component : components) addAndMakeVisible(component);
     for (auto& button : stepButtons)
         addAndMakeVisible(button);
+    for (auto* component : { static_cast<juce::Component*>(&bitDepth),
+                             static_cast<juce::Component*>(&rateReduction),
+                             static_cast<juce::Component*>(&bitDepthLabel),
+                             static_cast<juce::Component*>(&rateReductionLabel) })
+        addAndMakeVisible(component);
     list.setColour(juce::ListBox::backgroundColourId, juce::Colour(0xff191b21));
     list.setRowHeight(34);
 
@@ -255,6 +260,11 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     stepLength.addItem("8", 3);
     stepLength.addItem("16", 4);
     takeSelector.setTextWhenNothingSelected("Select Take");
+    bitDepth.addItem("OFF", 1);
+    for (int bits = 4; bits <= 24; ++bits)
+        bitDepth.addItem(juce::String(bits) + " bit", bits - 2);
+    for (const auto& name : juce::StringArray { "1x (OFF)", "2x", "4x", "8x", "16x", "32x", "64x" })
+        rateReduction.addItem(name, rateReduction.getNumItems() + 1);
     sourceTranspose.setRange(-24.0, 24.0, 1.0);
     sourceTranspose.setTextValueSuffix(" st");
     sourceFineTune.setRange(-100.0, 100.0, 1.0);
@@ -279,10 +289,14 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     targetKeyLabel.setText("TARGET KEY", juce::dontSendNotification);
     voiceModeLabel.setText("VOICE MODE", juce::dontSendNotification);
     stepLengthLabel.setText("STEP MASK", juce::dontSendNotification);
+    bitDepthLabel.setText("BIT CRUSH", juce::dontSendNotification);
+    rateReductionLabel.setText("RATE REDUCTION", juce::dontSendNotification);
     voiceModeLabel.setJustificationType(juce::Justification::centredLeft);
     for (auto* label : { &sourceKeyLabel, &sourceTransposeLabel, &sourceFineTuneLabel,
                          &sourceGainLabel, &sourceWeightLabel, &sourceStretchLabel,
                          &targetKeyLabel, &voiceModeLabel, &stepLengthLabel })
+        label->setColour(juce::Label::textColourId, juce::Colour(0xffc8cad1));
+    for (auto* label : { &bitDepthLabel, &rateReductionLabel })
         label->setColour(juce::Label::textColourId, juce::Colour(0xffc8cad1));
     for (int index = 0; index < static_cast<int>(stepButtons.size()); ++index)
     {
@@ -425,6 +439,10 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     voiceModeAttachment = std::make_unique<ComboBoxAttachment>(p.parameters, "voiceMode", voiceMode);
     stepLengthAttachment = std::make_unique<ComboBoxAttachment>(
         p.parameters, "stepLength", stepLength);
+    bitDepthAttachment = std::make_unique<ComboBoxAttachment>(
+        p.parameters, "bitDepth", bitDepth);
+    rateReductionAttachment = std::make_unique<ComboBoxAttachment>(
+        p.parameters, "rateReduction", rateReduction);
     midiPitchAttachment = std::make_unique<ButtonAttachment>(p.parameters, "midiPitch", midiPitch);
     reverseChanceAttachment = std::make_unique<SliderAttachment>(
         p.parameters, "reverseChance", reverseChance);
@@ -522,6 +540,7 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     disableAllButton.setBounds(toolbar.removeFromLeft(105).reduced(2));
 
     auto globalControls = area.removeFromBottom(135);
+    auto masterControls = area.removeFromBottom(40);
     auto chanceControls2 = area.removeFromBottom(58);
     auto chanceControls1 = area.removeFromBottom(58);
     auto takeControls = area.removeFromBottom(38);
@@ -609,6 +628,12 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     liveButton.setBounds(takeControls.removeFromLeft(75).reduced(3));
     nextTakeButton.setBounds(takeControls.removeFromLeft(75).reduced(3));
     takeSelector.setBounds(takeControls.removeFromLeft(200).reduced(3));
+    auto bitDepthCell = masterControls.removeFromLeft(330).reduced(3);
+    bitDepthLabel.setBounds(bitDepthCell.removeFromLeft(110));
+    bitDepth.setBounds(bitDepthCell.reduced(2, 5));
+    auto rateReductionCell = masterControls.removeFromLeft(390).reduced(3);
+    rateReductionLabel.setBounds(rateReductionCell.removeFromLeft(145));
+    rateReduction.setBounds(rateReductionCell.reduced(2, 5));
     waveform.setBounds(waveformArea.reduced(10));
     list.setBounds(area.reduced(10));
 }

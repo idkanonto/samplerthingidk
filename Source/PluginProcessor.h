@@ -6,6 +6,7 @@
 #include "SourceSelection.h"
 #include "StepMask.h"
 #include "TakeHistory.h"
+#include "MasterDigitalProcessor.h"
 
 class RandomChopSamplerAudioProcessor final : public juce::AudioProcessor,
     private juce::AudioProcessorValueTreeState::Listener
@@ -46,6 +47,7 @@ private:
     void startTakeEvent(const randomchop::TakeEvent&, int note, float velocity) noexcept;
     void parameterChanged(const juce::String&, float) override;
     randomchop::VoicePool voices;
+    randomchop::MasterDigitalProcessor masterDigitalProcessor;
     RandomizationEngine random;
     double currentRate = 44100.0;
     uint64_t voiceCounter = 0;
