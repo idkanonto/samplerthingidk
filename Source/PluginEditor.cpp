@@ -222,7 +222,7 @@ public:
 RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(RandomChopSamplerAudioProcessor& p)
     : AudioProcessorEditor(&p), processor(p)
 {
-    setSize(1050, 1020);
+    setSize(1050, 1060);
     title.setText("RANDOM CHOP SAMPLER V2", juce::dontSendNotification);
     title.setFont(juce::Font(24.0f, juce::Font::bold));
     title.setColour(juce::Label::textColourId, juce::Colour(0xfff2f2f5));
@@ -234,8 +234,11 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
         &sourceKeyLabel,
         &sourceTransposeLabel, &sourceFineTuneLabel, &sourceGainLabel, &sourceWeightLabel,
         &sourceStretchLabel, &targetKey, &targetKeyLabel, &midiPitch,
-        &voiceMode, &voiceModeLabel };
+        &voiceMode, &voiceModeLabel, &stepLength, &stepLengthLabel,
+        &allNormalButton, &allFxButton, &randomiseStepsButton };
     for (auto* component : components) addAndMakeVisible(component);
+    for (auto& button : stepButtons)
+        addAndMakeVisible(button);
     list.setColour(juce::ListBox::backgroundColourId, juce::Colour(0xff191b21));
     list.setRowHeight(34);
 
@@ -246,6 +249,10 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     }
     voiceMode.addItem("POLY", 1);
     voiceMode.addItem("MONO", 2);
+    stepLength.addItem("2", 1);
+    stepLength.addItem("4", 2);
+    stepLength.addItem("8", 3);
+    stepLength.addItem("16", 4);
     sourceTranspose.setRange(-24.0, 24.0, 1.0);
     sourceTranspose.setTextValueSuffix(" st");
     sourceFineTune.setRange(-100.0, 100.0, 1.0);
@@ -269,11 +276,38 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     sourceStretchLabel.setText("STRETCH", juce::dontSendNotification);
     targetKeyLabel.setText("TARGET KEY", juce::dontSendNotification);
     voiceModeLabel.setText("VOICE MODE", juce::dontSendNotification);
+    stepLengthLabel.setText("STEP MASK", juce::dontSendNotification);
     voiceModeLabel.setJustificationType(juce::Justification::centredLeft);
     for (auto* label : { &sourceKeyLabel, &sourceTransposeLabel, &sourceFineTuneLabel,
                          &sourceGainLabel, &sourceWeightLabel, &sourceStretchLabel,
-                         &targetKeyLabel, &voiceModeLabel })
+                         &targetKeyLabel, &voiceModeLabel, &stepLengthLabel })
         label->setColour(juce::Label::textColourId, juce::Colour(0xffc8cad1));
+    for (int index = 0; index < static_cast<int>(stepButtons.size()); ++index)
+    {
+        auto& button = stepButtons[static_cast<size_t>(index)];
+        button.onClick = [this, index]
+        {
+            processor.stepMask.setStep(index,
+                stepButtons[static_cast<size_t>(index)].getToggleState());
+            refreshStepMaskControls();
+        };
+    }
+    allNormalButton.onClick = [this]
+    {
+        processor.stepMask.setAll(false);
+        refreshStepMaskControls();
+    };
+    allFxButton.onClick = [this]
+    {
+        processor.stepMask.setAll(true);
+        refreshStepMaskControls();
+    };
+    randomiseStepsButton.onClick = [this]
+    {
+        processor.stepMask.setMask(static_cast<std::uint16_t>(
+            juce::Random::getSystemRandom().nextInt(1 << randomchop::StepMask::maximumSteps)));
+        refreshStepMaskControls();
+    };
     sourceKey.onChange = [this]
     {
         if (selectedSourceId.isNotEmpty()) processor.samples.updateSettings(selectedSourceId,
@@ -364,6 +398,8 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     rootNoteAttachment = std::make_unique<SliderAttachment>(p.parameters, "rootNote", rootNote);
     targetKeyAttachment = std::make_unique<ComboBoxAttachment>(p.parameters, "targetKey", targetKey);
     voiceModeAttachment = std::make_unique<ComboBoxAttachment>(p.parameters, "voiceMode", voiceMode);
+    stepLengthAttachment = std::make_unique<ComboBoxAttachment>(
+        p.parameters, "stepLength", stepLength);
     midiPitchAttachment = std::make_unique<ButtonAttachment>(p.parameters, "midiPitch", midiPitch);
     reverseChanceAttachment = std::make_unique<SliderAttachment>(
         p.parameters, "reverseChance", reverseChance);
@@ -399,6 +435,7 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     clearButton.onClick = [this] { processor.samples.clear(); refresh(); };
     enableAllButton.onClick = [this] { processor.samples.setAllEnabled(true); refresh(); };
     disableAllButton.onClick = [this] { processor.samples.setAllEnabled(false); refresh(); };
+    refreshStepMaskControls();
     refresh();
     startTimerHz(8);
 }
@@ -461,6 +498,7 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     auto globalControls = area.removeFromBottom(135);
     auto chanceControls2 = area.removeFromBottom(58);
     auto chanceControls1 = area.removeFromBottom(58);
+    auto stepControls = area.removeFromBottom(82);
     auto globalPitchControls = area.removeFromBottom(58);
     auto sourcePitchControls = area.removeFromBottom(58);
     auto sourceControls = area.removeFromBottom(58);
@@ -527,6 +565,18 @@ void RandomChopSamplerAudioProcessorEditor::resized()
         chanceLabels2[index]->setBounds(cell2.removeFromTop(20));
         chanceSliders2[index]->setBounds(cell2.reduced(4, 2));
     }
+    auto stepToolbar = stepControls.removeFromTop(32);
+    stepLengthLabel.setBounds(stepToolbar.removeFromLeft(100).reduced(3));
+    stepLength.setBounds(stepToolbar.removeFromLeft(90).reduced(3));
+    allNormalButton.setBounds(stepToolbar.removeFromLeft(115).reduced(3));
+    allFxButton.setBounds(stepToolbar.removeFromLeft(90).reduced(3));
+    randomiseStepsButton.setBounds(stepToolbar.removeFromLeft(105).reduced(3));
+    for (int index = 0; index < static_cast<int>(stepButtons.size()); ++index)
+    {
+        auto cell = stepControls.removeFromLeft(
+            stepControls.getWidth() / (static_cast<int>(stepButtons.size()) - index));
+        stepButtons[static_cast<size_t>(index)].setBounds(cell.reduced(2));
+    }
     waveform.setBounds(waveformArea.reduced(10));
     list.setBounds(area.reduced(10));
 }
@@ -587,6 +637,20 @@ void RandomChopSamplerAudioProcessorEditor::refresh()
     }
     list.repaint();
     repaint();
+}
+
+void RandomChopSamplerAudioProcessorEditor::refreshStepMaskControls()
+{
+    const auto length = randomchop::StepMask::lengthFromChoice(static_cast<int>(
+        processor.parameters.getRawParameterValue("stepLength")->load()));
+    for (int index = 0; index < static_cast<int>(stepButtons.size()); ++index)
+    {
+        auto& button = stepButtons[static_cast<size_t>(index)];
+        const bool isFx = processor.stepMask.isFxStep(index);
+        button.setToggleState(isFx, juce::dontSendNotification);
+        button.setButtonText(juce::String(index + 1) + (isFx ? " FX" : " NORMAL"));
+        button.setVisible(index < length);
+    }
 }
 
 int RandomChopSamplerAudioProcessorEditor::getNumRows()
@@ -668,5 +732,6 @@ void RandomChopSamplerAudioProcessorEditor::timerCallback()
     else if (transientMessage.isNotEmpty())
         message += " — " + transientMessage;
     status.setText(message, juce::dontSendNotification);
+    refreshStepMaskControls();
     list.repaint();
 }
