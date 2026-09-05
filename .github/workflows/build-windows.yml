@@ -29,11 +29,22 @@ jobs:
           -DJUCE_BUILD_EXAMPLES=OFF
           -DJUCE_BUILD_EXTRAS=OFF
 
-      - name: Build VST3 and tests
-        run: cmake --build build --config Release --target RandomChopSampler_VST3 RandomChopSamplerTests --parallel
+      - name: Build VST3, standalone, and tests
+        run: cmake --build build --config Release --target RandomChopSampler_VST3 RandomChopSampler_Standalone RandomChopSamplerTests --parallel
 
       - name: Run tests
-        run: ctest --test-dir build -C Release --output-on-failure
+        shell: pwsh
+        run: |
+          $mp3 = Join-Path $env:RUNNER_TEMP 'random-chop-format-fixture.mp3'
+          ffmpeg -hide_banner -loglevel error -f lavfi `
+            -i 'sine=frequency=440:sample_rate=48000:duration=0.1' `
+            -ac 2 -y $mp3
+          if (-not (Test-Path -LiteralPath $mp3 -PathType Leaf) -or
+              (Get-Item -LiteralPath $mp3).Length -eq 0) {
+            throw "Failed to create the MP3 decoder fixture: $mp3"
+          }
+          $env:RANDOM_CHOP_TEST_MP3 = $mp3
+          ctest --test-dir build -C Release --output-on-failure
 
       - name: Verify artifact
         shell: pwsh
@@ -45,6 +56,11 @@ jobs:
           $module = Get-ChildItem -LiteralPath $plugin -Recurse -Filter '*.vst3' -File
           if ($module.Count -lt 1) {
             throw "The VST3 bundle does not contain a module binary."
+          }
+          $standalone = Join-Path $env:GITHUB_WORKSPACE 'build\RandomChopSampler_artefacts\Release\Standalone\Random Chop Sampler.exe'
+          if (-not (Test-Path -LiteralPath $standalone -PathType Leaf) -or
+              (Get-Item -LiteralPath $standalone).Length -eq 0) {
+            throw "Expected standalone executable was not produced: $standalone"
           }
           $requiredNotices = @(
             'THIRD_PARTY_NOTICES.md',
@@ -60,6 +76,7 @@ jobs:
           }
           Write-Host "Verified $plugin"
           $module | ForEach-Object { Write-Host "Module: $($_.FullName) ($($_.Length) bytes)" }
+          Write-Host "Standalone: $standalone ($((Get-Item -LiteralPath $standalone).Length) bytes)"
 
       - name: Upload VST3
         uses: actions/upload-artifact@v7
