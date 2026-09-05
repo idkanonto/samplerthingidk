@@ -6,7 +6,7 @@ tags:
   - architecture
   - realtime
   - verification
-status: active
+status: verified
 ---
 
 # Realtime Safety Audit
@@ -37,6 +37,6 @@ This audit covers the approved V2 signal path in [[SIGNAL_CHAIN]]. It distinguis
 
 Automated tests exercise deterministic selection and Chance behavior, source removal and prepared-version replacement while voices/Takes retain references, latest-eight Take eviction, cross-block master state, invalid numeric containment, and dense fixed-capacity voice behavior. Phase 10 adds real decode fixtures across the supported writable formats and sample rates, plus a CI-provided MP3 fixture and required Standalone build.
 
-The audit is source- and CI-based. It does not replace an instrumented realtime-thread profiler, allocator hook, or DAW stress session; those external checks remain explicit in [[TEST_MATRIX]].
+The audit is source- and CI-based. The applicable regression and ownership tests passed [Windows Release CI run #39](https://github.com/idkanonto/samplerthingidk/actions/runs/33940234501) at `7265f77b44bf5db53eb2a59ba6abbbfccd9bcfb4`. It does not replace an instrumented realtime-thread profiler, allocator hook, or DAW stress session; those external checks remain explicit in [[TEST_MATRIX]].
 
 See [[DSP_NOTES]] for the governing contract and [[CURRENT_STATE]] for the exact verified build.
