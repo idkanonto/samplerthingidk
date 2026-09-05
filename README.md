@@ -1,6 +1,6 @@
 # Random Chop Sampler
 
-A 16-voice JUCE VST3/standalone sampler instrument. Every MIDI note advances an event-driven Step Mask, then chooses a weighted random source and a random legal start point. The current V2 build includes manual harmonic pitch, pitch-preserving Stretch, Final Length, POLY/MONO modes, and explicit Reverse/Retrigger/Skip/Reorder/Bend/Drop Chance events for WAV, AIFF/AIF, MP3, and FLAC sources.
+A 16-voice JUCE VST3/standalone sampler instrument. In LIVE, every MIDI note advances an event-driven Step Mask, then chooses a weighted random source and a random legal start point. Completed passes become one of the latest eight Takes; HISTORY replays their exact stored source/start/Chance decisions from new incoming MIDI. The current V2 build supports WAV, AIFF/AIF, MP3, and FLAC sources.
 
 ## Build without local development tools (recommended)
 
@@ -35,6 +35,7 @@ Then rescan VST3 plug-ins in the DAW, create an instrument track, insert **Rando
 - `PluginProcessor` owns a fixed 16-voice pool and an allocation-free xorshift64* randomizer. POLY steals the oldest voice; MONO replaces the primary voice through the same short crossfade and releases residual POLY voices.
 - Each Note On resolves Chance once into a fixed-size `EventDecision`; rendering uses only those stored choices, so no render-time RNG or heap allocation is required and the event can later be replayed exactly.
 - The Step Mask owns a fixed audio-thread event cursor and uses atomically published bits/reset generation. NORMAL steps skip Chance resolution; FX steps permit it. The cursor advances only on MIDI Note On, with no tempo or transport dependency.
+- Take History uses fixed audio-thread-owned arrays and stores explicit decisions plus immutable prepared-version references, never rendered audio. HISTORY cycles the selected Take without RNG; browser requests/status cross threads through atomics, and final prepared-data reclamation remains on the control thread.
 - MIDI rendering is sample-accurate within each host block. No disk access, decoding, blocking mutex, logging, or explicit allocation occurs in the audio callback.
 
 ## MVP checklist
@@ -54,6 +55,8 @@ Then rescan VST3 plug-ins in the DAW, create an instrument track, insert **Rando
 - [x] Reverse, Retrigger, Skip, four-piece Reorder, Bend, and smoothed eight-slot Drop Chance effects
 - [x] Fixed-size explicit event decisions suitable for deterministic Take History replay
 - [x] Event-driven 2/4/8/16 Step Mask with NORMAL/FX, bulk/randomize controls, reset behavior, and persistence
+- [x] Latest-eight Take History with complete-pass LIVE capture and indefinite exact-decision HISTORY replay
+- [x] Previous/Next/dropdown/LIVE Take browser and session-only history lifecycle
 - [x] Source-rate conversion via linear interpolation; mono and stereo playback
 - [x] Per-voice attack/release plus 3 ms source-region boundary fade
 - [x] Random Start, Final Length, Voice Mode, Attack, Release, Output, and Seed automation/state
@@ -65,7 +68,8 @@ Then rescan VST3 plug-ins in the DAW, create an instrument track, insert **Rando
 - Samples are decoded fully into RAM; very large libraries are not streamed.
 - Linear interpolation favors low CPU use over premium resampling quality.
 - Restoring sample paths is synchronous because JUCE host state restoration provides no completion callback; it never occurs in `processBlock`, but an unusually large library can briefly delay project loading.
-- Take History and master digital processing remain in later gated V2 phases.
+- Master digital processing remains in a later gated V2 phase.
+- Take History is intentionally session-only and is not serialized with project state.
 - A reproducible Seed gives a deterministic trigger sequence for the same pool/order and parameter/MIDI event sequence; changing the pool changes the results.
 
 ## Practical test pass
