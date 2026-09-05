@@ -11,7 +11,7 @@ verified: 2026-09-04
 
 # Current Implementation State
 
-Evidence: source inspection plus [Windows Release CI run #26](https://github.com/idkanonto/samplerthingidk/actions/runs/33901896198) at commit `239fc777a17044ce0b64c1ac4a5637dcd307ab1a`. The Windows Server 2022 Release workflow built `RandomChopSampler_VST3` and `RandomChopSamplerTests`, passed `ctest --test-dir build -C Release --output-on-failure`, verified the bundle and license resources, and uploaded it. The inspected archive matched GitHub's SHA-256 `022978aefb78f0ae475e751066332c17732015d9b145bc092982f7722134389e` and contained a 7,381,504-byte module at `Random Chop Sampler.vst3/Contents/x86_64-win/Random Chop Sampler.vst3`. No DAW/host audio test or full format/sample-rate matrix was run.
+Evidence: source inspection plus [Windows Release CI run #29](https://github.com/idkanonto/samplerthingidk/actions/runs/33936111067) at commit `78121046420497f7a95e2e6517a6d42dc8e9e6cc`. The Windows Server 2022 Release workflow built `RandomChopSampler_VST3` and `RandomChopSamplerTests`, passed `ctest --test-dir build -C Release --output-on-failure`, verified the bundle and license resources, and uploaded it. The inspected archive matched GitHub's SHA-256 `b8378fde5a016696f1219f75437621c9b8f2b0e0841de317384a6a872752beae` and contained a 7,392,256-byte module at `Random Chop Sampler.vst3/Contents/x86_64-win/Random Chop Sampler.vst3`. No DAW/host audio test or full format/sample-rate matrix was run.
 
 ## Implemented in code
 
@@ -31,14 +31,16 @@ Evidence: source inspection plus [Windows Release CI run #26](https://github.com
 - Final Length defaults to FULL and otherwise constrains an event to 10–5000 ms. Its Release fade is fitted inside the forced boundary, while Attack and Note Off Release continue to shape the final event.
 - Chance resolves once per Note On in the fixed Reverse → Retrigger → Skip → Reorder → Bend → Drop order. A fixed-size `EventDecision` stores all applied flags, repeat values, signed jump, four-piece permutation/span, signed bend depth, and eight-slot drop mask; voices consume no additional randomness.
 - Reverse mirrors the event start and reads backward within Start/End. Retrigger repeats a 10–500 ms segment 1–8 times; Skip applies one bounded signed start jump; Reorder permutes four pieces of a fragment that starts at the resolved event position and is capped at one second; Bend ramps playback rate by up to ±12 semitones; Drop applies a deterministically stored eight-slot mute mask with 1 ms edge smoothing.
+- The event-driven Step Mask supports 2, 4, 8, or 16 steps and defaults to eight FX steps. Every MIDI Note On consumes exactly one step in MIDI-buffer order, including triggers without a playable source; NORMAL bypasses Chance without consuming its RNG calls, while FX permits the fixed Chance chain.
+- Individual NORMAL/FX toggles, All NORMAL, All FX, Randomize, and the automatable length selector are functional. Mask bits persist in a versioned state child, legacy states default to all FX, and every length change atomically resets the audio-thread event cursor without using time, tempo, or transport state.
 - Global Attack, Release, Final Length, Voice Mode, all six Chance percentages, Repeat Size/Count, Output Gain, deterministic Seed, Target Key, MIDI Pitch, and Root MIDI Note parameters with host state persistence. All Chance percentages default to 0% and consume no RNG state while disabled.
 - Path and source-setting persistence, missing-file representation, immutable pool snapshots, and deferred control-thread reclamation after realtime references drain.
 - Linear source-rate conversion combined with the resolved pitch ratio, mono-to-stereo playback, source-region boundary fade, and a short voice-steal tail crossfade.
-- `RandomChopSamplerTests` CTest coverage for the prior pool, region, pitch, stretch, lifetime, voice, and envelope behavior plus 0%-inert and 100%-active Chance resolution, fixed-seed decision equality, legal Skip/Reorder bounds, the one-second Reorder cap, explicit Retrigger/Bend/Drop values, isolated rendering of all six effects, and finite/bounded combined rendering; the Windows workflow builds and runs the test target.
+- `RandomChopSamplerTests` CTest coverage for the prior pool, region, pitch, stretch, lifetime, voice, envelope, and Chance behavior plus all Step Mask lengths, exact cycle boundaries, deterministic chord-order advancement, length/reset generation behavior, NORMAL/FX routing without RNG drift, defaults, editing, and persistence; the Windows workflow builds and runs the test target.
 
 ## Not implemented
 
-- Step Mask, Takes, Take History, LIVE/HISTORY replay.
+- Takes, Take History, LIVE/HISTORY replay.
 - Global Bit Crush and Sample Rate Reduction.
 
 See [[TEST_MATRIX]] before changing an item from planned to implemented.
