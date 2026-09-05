@@ -21,11 +21,26 @@ constexpr auto skipChance = "skipChance";
 constexpr auto reorderChance = "reorderChance";
 constexpr auto bendChance = "bendChance";
 constexpr auto dropChance = "dropChance";
+constexpr auto stepLength = "stepLength";
 }
 
 RandomChopSamplerAudioProcessor::RandomChopSamplerAudioProcessor()
     : AudioProcessor(BusesProperties().withOutput("Output", juce::AudioChannelSet::stereo(), true)),
-      parameters(*this, nullptr, "PARAMETERS", createParameterLayout()) {}
+      parameters(*this, nullptr, "PARAMETERS", createParameterLayout())
+{
+    parameters.addParameterListener(IDs::stepLength, this);
+}
+
+RandomChopSamplerAudioProcessor::~RandomChopSamplerAudioProcessor()
+{
+    parameters.removeParameterListener(IDs::stepLength, this);
+}
+
+void RandomChopSamplerAudioProcessor::parameterChanged(const juce::String& parameterId, float)
+{
+    if (parameterId == IDs::stepLength)
+        stepMask.requestSequenceReset();
+}
 
 juce::AudioProcessorValueTreeState::ParameterLayout RandomChopSamplerAudioProcessor::createParameterLayout()
 {
@@ -65,6 +80,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout RandomChopSamplerAudioProces
         juce::NormalisableRange<float>(10.0f, 500.0f, 1.0f), 100.0f, "ms"));
     layout.add(std::make_unique<juce::AudioParameterInt>(
         IDs::retriggerCount, "Repeat Count", 1, 8, 2));
+    layout.add(std::make_unique<juce::AudioParameterChoice>(
+        IDs::stepLength, "Step Mask Length", juce::StringArray { "2", "4", "8", "16" }, 2));
     return layout;
 }
 
@@ -83,6 +100,9 @@ bool RandomChopSamplerAudioProcessor::isBusesLayoutSupported(const BusesLayout& 
 
 void RandomChopSamplerAudioProcessor::noteOn(int note, float velocity) noexcept
 {
+    // The event-driven mask advances for every Note On, even when no source can play.
+    const auto step = stepMask.consume(randomchop::StepMask::lengthFromChoice(
+        static_cast<int>(parameters.getRawParameterValue(IDs::stepLength)->load())));
     const auto pool = samples.getSnapshot();
     const int selected = randomchop::chooseWeightedSource(*pool, random);
     if (selected < 0) { triggeredWhileEmpty.store(true, std::memory_order_relaxed); return; }
@@ -104,18 +124,22 @@ void RandomChopSamplerAudioProcessor::noteOn(int note, float velocity) noexcept
 
     const auto mode = parameters.getRawParameterValue(IDs::voiceMode)->load() >= 0.5f
         ? randomchop::VoiceMode::mono : randomchop::VoiceMode::poly;
-    const randomchop::ChanceSettings chanceSettings {
-        parameters.getRawParameterValue(IDs::reverseChance)->load(),
-        parameters.getRawParameterValue(IDs::retriggerChance)->load(),
-        parameters.getRawParameterValue(IDs::skipChance)->load(),
-        parameters.getRawParameterValue(IDs::reorderChance)->load(),
-        parameters.getRawParameterValue(IDs::bendChance)->load(),
-        parameters.getRawParameterValue(IDs::dropChance)->load(),
-        parameters.getRawParameterValue(IDs::retriggerSize)->load(),
-        static_cast<int>(parameters.getRawParameterValue(IDs::retriggerCount)->load())
-    };
-    const auto eventDecision = randomchop::resolveChanceEvent(
-        chanceSettings, region, start, prepared->sampleRate, currentRate, random);
+    randomchop::EventDecision eventDecision;
+    if (step.chanceAllowed)
+    {
+        const randomchop::ChanceSettings chanceSettings {
+            parameters.getRawParameterValue(IDs::reverseChance)->load(),
+            parameters.getRawParameterValue(IDs::retriggerChance)->load(),
+            parameters.getRawParameterValue(IDs::skipChance)->load(),
+            parameters.getRawParameterValue(IDs::reorderChance)->load(),
+            parameters.getRawParameterValue(IDs::bendChance)->load(),
+            parameters.getRawParameterValue(IDs::dropChance)->load(),
+            parameters.getRawParameterValue(IDs::retriggerSize)->load(),
+            static_cast<int>(parameters.getRawParameterValue(IDs::retriggerCount)->load())
+        };
+        eventDecision = randomchop::resolveChanceEvent(
+            chanceSettings, region, start, prepared->sampleRate, currentRate, random);
+    }
     auto& voice = voices.acquire(mode);
 
     voice.start(prepared, note, velocity, start, region, pitchRatio, false,
@@ -161,6 +185,7 @@ void RandomChopSamplerAudioProcessor::getStateInformation(juce::MemoryBlock& des
 {
     auto state = parameters.copyState();
     state.appendChild(samples.createState(), nullptr);
+    state.appendChild(stepMask.createState(), nullptr);
     if (auto xml = state.createXml()) copyXmlToBinary(*xml, destination);
 }
 
@@ -172,11 +197,14 @@ void RandomChopSamplerAudioProcessor::setStateInformation(const void* data, int 
         if (state.isValid())
         {
             auto files = state.getChildWithName("SAMPLES");
+            auto mask = state.getChildWithName("STEP_MASK");
             if (files.isValid()) state.removeChild(files, nullptr);
+            if (mask.isValid()) state.removeChild(mask, nullptr);
             parameters.replaceState(state);
             // An absent SAMPLES node represents a parameter-only state and
             // must replace, rather than silently retain, the current pool.
             samples.restoreState(files);
+            stepMask.restoreState(mask);
         }
     }
 }

@@ -4,12 +4,14 @@
 #include "VoicePool.h"
 #include "RandomizationEngine.h"
 #include "SourceSelection.h"
+#include "StepMask.h"
 
-class RandomChopSamplerAudioProcessor final : public juce::AudioProcessor
+class RandomChopSamplerAudioProcessor final : public juce::AudioProcessor,
+    private juce::AudioProcessorValueTreeState::Listener
 {
 public:
     RandomChopSamplerAudioProcessor();
-    ~RandomChopSamplerAudioProcessor() override = default;
+    ~RandomChopSamplerAudioProcessor() override;
     void prepareToPlay(double, int) override;
     void releaseResources() override {}
     bool isBusesLayoutSupported(const BusesLayout&) const override;
@@ -32,12 +34,14 @@ public:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     juce::AudioProcessorValueTreeState parameters;
     SampleManager samples;
+    randomchop::StepMask stepMask;
     std::atomic<uint64_t> lastTriggeredRuntimeId { 0 };
     std::atomic<bool> triggeredWhileEmpty { false };
 
 private:
     void noteOn(int note, float velocity) noexcept;
     void noteOff(int note) noexcept;
+    void parameterChanged(const juce::String&, float) override;
     randomchop::VoicePool voices;
     RandomizationEngine random;
     double currentRate = 44100.0;

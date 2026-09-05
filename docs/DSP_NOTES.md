@@ -23,6 +23,7 @@ status: active
 - Each voice has Attack/Release, optional sample-counted Final Length, a 3 ms source-region boundary fade, and a 3 ms tail crossfade on stealing.
 - Sixteen voices are preallocated. POLY steals the oldest active voice; MONO reuses the primary voice with that same crossfade and releases residual POLY voices.
 - Chance randomness is resolved once during Note On into a fixed-size value. Voice rendering uses only stored values, bounded four-piece Reorder work, a precomputed Bend multiplier, and a smoothed eight-slot Drop gain; it performs no RNG calls or allocation.
+- Step Mask bits and reset generation are atomically published from control/state paths. Its fixed cursor belongs to the audio thread, advances once per Note On in MIDI-buffer order, and bypasses Chance resolution entirely on NORMAL steps.
 - A xorshift64* generator supplies allocation-free seeded random decisions.
 
 ## Stretch teardown

@@ -2,6 +2,7 @@
 
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
+#include <array>
 #include <functional>
 
 class SourceWaveformComponent final : public juce::Component
@@ -47,6 +48,7 @@ private:
     void addFiles(const juce::StringArray&);
     void configureKnob(juce::Slider&, juce::Label&, const juce::String&);
     void configureLinearControl(juce::Slider&, juce::Label&, const juce::String&);
+    void refreshStepMaskControls();
 
     RandomChopSamplerAudioProcessor& processor;
     juce::Label title, status;
@@ -59,7 +61,11 @@ private:
     juce::Label sourceKeyLabel, sourceTransposeLabel, sourceFineTuneLabel,
         sourceGainLabel, sourceWeightLabel, sourceStretchLabel;
     juce::ComboBox targetKey, voiceMode;
+    juce::ComboBox stepLength;
     juce::ToggleButton midiPitch { "MIDI Pitch" };
+    std::array<juce::ToggleButton, randomchop::StepMask::maximumSteps> stepButtons;
+    juce::TextButton allNormalButton { "All NORMAL" }, allFxButton { "All FX" },
+        randomiseStepsButton { "Randomize" };
     juce::Slider rootNote, randomStart, finalLength, attack, release, output, seed;
     juce::Slider reverseChance, retriggerChance, retriggerSize, retriggerCount,
         skipChance, reorderChance, bendChance, dropChance;
@@ -68,6 +74,7 @@ private:
     juce::Label reverseChanceLabel, retriggerChanceLabel, retriggerSizeLabel,
         retriggerCountLabel, skipChanceLabel, reorderChanceLabel, bendChanceLabel,
         dropChanceLabel;
+    juce::Label stepLengthLabel;
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ComboBoxAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
@@ -76,7 +83,8 @@ private:
     std::unique_ptr<SliderAttachment> reverseChanceAttachment, retriggerChanceAttachment,
         retriggerSizeAttachment, retriggerCountAttachment, skipChanceAttachment,
         reorderChanceAttachment, bendChanceAttachment, dropChanceAttachment;
-    std::unique_ptr<ComboBoxAttachment> targetKeyAttachment, voiceModeAttachment;
+    std::unique_ptr<ComboBoxAttachment> targetKeyAttachment, voiceModeAttachment,
+        stepLengthAttachment;
     std::unique_ptr<ButtonAttachment> midiPitchAttachment;
     std::shared_ptr<const SampleManager::Pool> displayPool;
     juce::String selectedSourceId;

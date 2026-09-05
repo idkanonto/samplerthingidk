@@ -3,6 +3,7 @@
 #include "RandomSamplerVoice.h"
 #include "SampleManager.h"
 #include "SourceSelection.h"
+#include "StepMask.h"
 #include "VoicePool.h"
 #include <atomic>
 #include <iostream>
@@ -112,6 +113,99 @@ void testWeightedSelection()
     pool[1] = makeSource(1.0f, false);
     check(randomchop::chooseWeightedSource(pool, random) == -1,
           "an unplayable pool should return no source");
+}
+
+void testStepMaskSequencingAndState()
+{
+    for (const auto length : randomchop::StepMask::allowedLengths)
+    {
+        randomchop::StepMask mask;
+        mask.setMask(0xaaaa);
+        for (int event = 0; event < length; ++event)
+        {
+            const auto step = mask.consume(length);
+            check(step.index == event && step.length == length,
+                  "Step Mask did not advance exactly once per Note On");
+            check(step.chanceAllowed == ((event & 1) != 0),
+                  "Step Mask NORMAL/FX decision did not match its stored bit");
+            check(step.cycleCompleted == (event == length - 1),
+                  "Step Mask cycle boundary was reported on the wrong event");
+        }
+        check(mask.consume(length).index == 0,
+              "Step Mask did not restart at the beginning of a completed cycle");
+    }
+
+    randomchop::StepMask chordMask;
+    const auto chordFirst = chordMask.consume(8);
+    const auto chordSecond = chordMask.consume(8);
+    const auto chordThird = chordMask.consume(8);
+    check(chordFirst.index == 0 && chordSecond.index == 1 && chordThird.index == 2,
+          "simultaneous Note On events did not consume deterministic consecutive steps");
+
+    chordMask.consume(8);
+    const auto changedLength = chordMask.consume(4);
+    check(changedLength.index == 0 && changedLength.sequenceReset,
+          "changing Step Mask length did not reset the event cursor");
+    chordMask.consume(4);
+    chordMask.requestSequenceReset();
+    const auto explicitlyReset = chordMask.consume(4);
+    check(explicitlyReset.index == 0 && explicitlyReset.sequenceReset,
+          "a Step Mask length edit returning to the same value did not reset the cursor");
+    check(randomchop::StepMask::lengthFromChoice(0) == 2
+              && randomchop::StepMask::lengthFromChoice(1) == 4
+              && randomchop::StepMask::lengthFromChoice(2) == 8
+              && randomchop::StepMask::lengthFromChoice(3) == 16
+              && randomchop::StepMask::lengthFromChoice(99) == 8,
+          "Step Mask length choices or default length changed");
+
+    randomchop::StepMask editable;
+    check(editable.getMask() == 0xffff,
+          "Step Mask did not default every step to FX");
+    editable.setAll(false);
+    editable.setStep(3, true);
+    check(editable.getMask() == 0x0008 && editable.isFxStep(3)
+              && !editable.isFxStep(2),
+          "Step Mask individual or All NORMAL controls were incorrect");
+    editable.setAll(true);
+    check(editable.getMask() == 0xffff,
+          "Step Mask All FX control did not enable every step");
+
+    editable.setMask(0x5aa5);
+    const auto saved = editable.createState();
+    randomchop::StepMask restored;
+    restored.setAll(false);
+    restored.restoreState(saved);
+    check(restored.getMask() == 0x5aa5,
+          "Step Mask bits were not persisted and restored exactly");
+    restored.restoreState({});
+    check(restored.getMask() == 0xffff,
+          "a legacy state without Step Mask data did not use the all-FX default");
+
+    randomchop::StepMask normalMask;
+    normalMask.setAll(false);
+    RandomizationEngine normalRandom;
+    RandomizationEngine untouchedRandom;
+    normalRandom.setSeed(7301);
+    untouchedRandom.setSeed(7301);
+    randomchop::ChanceSettings certainChance;
+    certainChance.reverseChance = 100.0f;
+    randomchop::EventDecision normalDecision;
+    const auto normalStep = normalMask.consume(8);
+    if (normalStep.chanceAllowed)
+        normalDecision = randomchop::resolveChanceEvent(
+            certainChance, { 0, 999 }, 200.0, 1000.0, 1000.0, normalRandom);
+    check(normalDecision == randomchop::EventDecision {}
+              && normalRandom.next() == untouchedRandom.next(),
+          "a NORMAL step did not bypass Chance and preserve the random sequence");
+
+    normalMask.setStep(1, true);
+    const auto fxStep = normalMask.consume(8);
+    const auto fxDecision = fxStep.chanceAllowed
+        ? randomchop::resolveChanceEvent(
+            certainChance, { 0, 999 }, 200.0, 1000.0, 1000.0, normalRandom)
+        : randomchop::EventDecision {};
+    check(fxStep.index == 1 && fxDecision.reverseEnabled,
+          "an FX step did not allow Chance processing");
 }
 
 void testPoolLimitAndPersistentSettings()
@@ -987,6 +1081,7 @@ void testAsynchronousStretchPublication()
 int main()
 {
     testWeightedSelection();
+    testStepMaskSequencingAndState();
     testPoolLimitAndPersistentSettings();
     testParameterOnlyStateClearsSamples();
     testRegionClampingAndRestore();

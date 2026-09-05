@@ -60,6 +60,7 @@ target_sources(RandomChopSampler PRIVATE
     Source/RandomSamplerVoice.h
     Source/VoicePool.h
     Source/ChanceEvents.h
+    Source/StepMask.h
     Source/RandomizationEngine.h
     Source/HarmonicPitch.h
     Source/PlaybackRegion.h
@@ -106,6 +107,7 @@ if (BUILD_TESTING)
         Source/RandomSamplerVoice.h
         Source/VoicePool.h
         Source/ChanceEvents.h
+        Source/StepMask.h
         Source/RandomizationEngine.h
         Source/HarmonicPitch.h
         Source/PlaybackRegion.h
