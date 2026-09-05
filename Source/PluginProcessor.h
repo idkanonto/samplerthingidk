@@ -5,6 +5,7 @@
 #include "RandomizationEngine.h"
 #include "SourceSelection.h"
 #include "StepMask.h"
+#include "TakeHistory.h"
 
 class RandomChopSamplerAudioProcessor final : public juce::AudioProcessor,
     private juce::AudioProcessorValueTreeState::Listener
@@ -35,12 +36,14 @@ public:
     juce::AudioProcessorValueTreeState parameters;
     SampleManager samples;
     randomchop::StepMask stepMask;
+    randomchop::TakeHistory takeHistory;
     std::atomic<uint64_t> lastTriggeredRuntimeId { 0 };
     std::atomic<bool> triggeredWhileEmpty { false };
 
 private:
     void noteOn(int note, float velocity) noexcept;
     void noteOff(int note) noexcept;
+    void startTakeEvent(const randomchop::TakeEvent&, int note, float velocity) noexcept;
     void parameterChanged(const juce::String&, float) override;
     randomchop::VoicePool voices;
     RandomizationEngine random;

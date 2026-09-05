@@ -222,7 +222,7 @@ public:
 RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(RandomChopSamplerAudioProcessor& p)
     : AudioProcessorEditor(&p), processor(p)
 {
-    setSize(1050, 1060);
+    setSize(1050, 1090);
     title.setText("RANDOM CHOP SAMPLER V2", juce::dontSendNotification);
     title.setFont(juce::Font(24.0f, juce::Font::bold));
     title.setColour(juce::Label::textColourId, juce::Colour(0xfff2f2f5));
@@ -235,7 +235,8 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
         &sourceTransposeLabel, &sourceFineTuneLabel, &sourceGainLabel, &sourceWeightLabel,
         &sourceStretchLabel, &targetKey, &targetKeyLabel, &midiPitch,
         &voiceMode, &voiceModeLabel, &stepLength, &stepLengthLabel,
-        &allNormalButton, &allFxButton, &randomiseStepsButton };
+        &allNormalButton, &allFxButton, &randomiseStepsButton, &takeStatus,
+        &previousTakeButton, &liveButton, &nextTakeButton, &takeSelector };
     for (auto* component : components) addAndMakeVisible(component);
     for (auto& button : stepButtons)
         addAndMakeVisible(button);
@@ -253,6 +254,7 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     stepLength.addItem("4", 2);
     stepLength.addItem("8", 3);
     stepLength.addItem("16", 4);
+    takeSelector.setTextWhenNothingSelected("Select Take");
     sourceTranspose.setRange(-24.0, 24.0, 1.0);
     sourceTranspose.setTextValueSuffix(" st");
     sourceFineTune.setRange(-100.0, 100.0, 1.0);
@@ -307,6 +309,29 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
         processor.stepMask.setMask(static_cast<std::uint16_t>(
             juce::Random::getSystemRandom().nextInt(1 << randomchop::StepMask::maximumSteps)));
         refreshStepMaskControls();
+    };
+    previousTakeButton.onClick = [this]
+    {
+        const auto count = processor.takeHistory.getTakeCount();
+        if (count <= 0)
+            return;
+        const auto selected = processor.takeHistory.getSelectedTake();
+        processor.takeHistory.requestHistory(selected < 0 ? count - 1
+                                                          : (selected + count - 1) % count);
+    };
+    nextTakeButton.onClick = [this]
+    {
+        const auto count = processor.takeHistory.getTakeCount();
+        if (count <= 0)
+            return;
+        const auto selected = processor.takeHistory.getSelectedTake();
+        processor.takeHistory.requestHistory(selected < 0 ? 0 : (selected + 1) % count);
+    };
+    liveButton.onClick = [this] { processor.takeHistory.requestLive(); };
+    takeSelector.onChange = [this]
+    {
+        if (takeSelector.getSelectedItemIndex() >= 0)
+            processor.takeHistory.requestHistory(takeSelector.getSelectedItemIndex());
     };
     sourceKey.onChange = [this]
     {
@@ -436,6 +461,7 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     enableAllButton.onClick = [this] { processor.samples.setAllEnabled(true); refresh(); };
     disableAllButton.onClick = [this] { processor.samples.setAllEnabled(false); refresh(); };
     refreshStepMaskControls();
+    refreshTakeControls();
     refresh();
     startTimerHz(8);
 }
@@ -498,6 +524,7 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     auto globalControls = area.removeFromBottom(135);
     auto chanceControls2 = area.removeFromBottom(58);
     auto chanceControls1 = area.removeFromBottom(58);
+    auto takeControls = area.removeFromBottom(38);
     auto stepControls = area.removeFromBottom(82);
     auto globalPitchControls = area.removeFromBottom(58);
     auto sourcePitchControls = area.removeFromBottom(58);
@@ -577,6 +604,11 @@ void RandomChopSamplerAudioProcessorEditor::resized()
             stepControls.getWidth() / (static_cast<int>(stepButtons.size()) - index));
         stepButtons[static_cast<size_t>(index)].setBounds(cell.reduced(2));
     }
+    takeStatus.setBounds(takeControls.removeFromLeft(210).reduced(3));
+    previousTakeButton.setBounds(takeControls.removeFromLeft(95).reduced(3));
+    liveButton.setBounds(takeControls.removeFromLeft(75).reduced(3));
+    nextTakeButton.setBounds(takeControls.removeFromLeft(75).reduced(3));
+    takeSelector.setBounds(takeControls.removeFromLeft(200).reduced(3));
     waveform.setBounds(waveformArea.reduced(10));
     list.setBounds(area.reduced(10));
 }
@@ -651,6 +683,38 @@ void RandomChopSamplerAudioProcessorEditor::refreshStepMaskControls()
         button.setButtonText(juce::String(index + 1) + (isFx ? " FX" : " NORMAL"));
         button.setVisible(index < length);
     }
+}
+
+void RandomChopSamplerAudioProcessorEditor::refreshTakeControls()
+{
+    const auto count = processor.takeHistory.getTakeCount();
+    const auto selected = processor.takeHistory.getSelectedTake();
+    if (count != displayedTakeCount)
+    {
+        displayedTakeCount = count;
+        takeSelector.clear(juce::dontSendNotification);
+        for (int index = 0; index < count; ++index)
+            takeSelector.addItem("Take " + juce::String(index + 1), index + 1);
+    }
+
+    const bool hasTakes = count > 0;
+    previousTakeButton.setEnabled(hasTakes);
+    nextTakeButton.setEnabled(hasTakes);
+    takeSelector.setEnabled(hasTakes);
+    liveButton.setEnabled(selected >= 0);
+    if (selected >= 0 && selected < count)
+    {
+        takeSelector.setSelectedItemIndex(selected, juce::dontSendNotification);
+        takeStatus.setText("HISTORY — Take " + juce::String(selected + 1) + " / 8",
+                           juce::dontSendNotification);
+    }
+    else
+    {
+        takeSelector.setSelectedId(0, juce::dontSendNotification);
+        takeStatus.setText("LIVE — " + juce::String(count) + " / 8 Takes",
+                           juce::dontSendNotification);
+    }
+    takeStatus.setColour(juce::Label::textColourId, juce::Colour(0xffc8cad1));
 }
 
 int RandomChopSamplerAudioProcessorEditor::getNumRows()
@@ -733,5 +797,6 @@ void RandomChopSamplerAudioProcessorEditor::timerCallback()
         message += " — " + transientMessage;
     status.setText(message, juce::dontSendNotification);
     refreshStepMaskControls();
+    refreshTakeControls();
     list.repaint();
 }
