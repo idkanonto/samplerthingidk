@@ -27,4 +27,4 @@ status: approved
 
 ## Current code path
 
-The current Gate B branch implements steps 1–9, temporary standalone Rate Reduction, and Output. Removed Take/Step/per-event processing and Bit Crush are not in the path. Later gates must insert effects only at their assigned location and keep bypass states transparent.
+The current Gate C branch implements steps 1–10 and 12–14. FRACTURE, SMEAR, and CODEC are in their final relative order; the Gate D SPECTRAL DRAW stage will be inserted only at step 11. Rate Reduction is now part of CODEC rather than a standalone module. Removed Take/Step/per-event processing and Bit Crush are not in the path, and every new creative stage defaults transparent.

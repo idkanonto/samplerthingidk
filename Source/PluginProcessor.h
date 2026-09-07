@@ -1,8 +1,8 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include "CreativeEffects.h"
 #include "HostGrid.h"
-#include "MasterDigitalProcessor.h"
 #include "RandomizationEngine.h"
 #include "SourceSelection.h"
 #include "StateMigration.h"
@@ -34,6 +34,7 @@ public:
     void setStateInformation(const void*, int) override;
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    void applyFracturePreset(int index);
     juce::AudioProcessorValueTreeState parameters;
     SampleManager samples;
     std::atomic<uint64_t> lastTriggeredRuntimeId { 0 };
@@ -45,7 +46,9 @@ private:
     randomchop::HostTiming readHostTiming() const noexcept;
 
     randomchop::VoicePool voices;
-    randomchop::MasterDigitalProcessor masterDigitalProcessor;
+    randomchop::FractureProcessor fractureProcessor;
+    randomchop::SmearProcessor smearProcessor;
+    randomchop::CodecProcessor codecProcessor;
     randomchop::HostGrid hostGrid;
     randomchop::GridBoundaries lastGridBoundaries;
     randomchop::FreezeProcessor freezeProcessor;

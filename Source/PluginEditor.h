@@ -47,6 +47,7 @@ private:
     void addFiles(const juce::StringArray&);
     void configureKnob(juce::Slider&, juce::Label&, const juce::String&);
     void configureLinearControl(juce::Slider&, juce::Label&, const juce::String&);
+    void selectFracturePreset(int index);
 
     RandomChopSamplerAudioProcessor& processor;
     juce::Label title, status;
@@ -58,16 +59,23 @@ private:
     juce::Slider sourceTranspose, sourceFineTune, sourceGain, sourceWeight, sourceStretch;
     juce::Label sourceKeyLabel, sourceTransposeLabel, sourceFineTuneLabel,
         sourceGainLabel, sourceWeightLabel, sourceStretchLabel;
-    juce::ComboBox targetKey, voiceMode, globalGrid, rateReduction;
+    juce::ComboBox targetKey, voiceMode, globalGrid, rateReduction, codecQuality;
     juce::ComboBox freezeSize, freezeHold;
+    juce::ComboBox fracturePreset;
+    juce::TextButton previousFracturePreset { "<" }, nextFracturePreset { ">" };
     juce::ToggleButton midiPitch { "MIDI Pitch" };
     juce::Slider rootNote, randomStart, finalLength, attack, release, output, seed;
     juce::Slider freezeChance, freezeOctaveChance, scrambleChance, scrambleAmount;
+    juce::Slider fractureDrive, fractureCharacter, fractureFilterMorph, fractureFrequency,
+        fractureResonance, fractureMix, smearAmount, codecAmount;
     juce::Label targetKeyLabel, rootNoteLabel, voiceModeLabel, globalGridLabel,
         rateReductionLabel, randomStartLabel, finalLengthLabel, attackLabel,
         releaseLabel, outputLabel, seedLabel, freezeChanceLabel, freezeSizeLabel,
         freezeHoldLabel, freezeOctaveChanceLabel, scrambleChanceLabel,
-        scrambleAmountLabel;
+        scrambleAmountLabel, fracturePresetLabel, fractureDriveLabel,
+        fractureCharacterLabel, fractureFilterMorphLabel, fractureFrequencyLabel,
+        fractureResonanceLabel, fractureMixLabel, smearAmountLabel, codecAmountLabel,
+        codecQualityLabel;
 
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ComboBoxAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
@@ -75,14 +83,18 @@ private:
     std::unique_ptr<SliderAttachment> randomStartAttachment, finalLengthAttachment,
         attackAttachment, releaseAttachment, outputAttachment, seedAttachment, rootNoteAttachment,
         freezeChanceAttachment, freezeOctaveChanceAttachment, scrambleChanceAttachment,
-        scrambleAmountAttachment;
+        scrambleAmountAttachment, fractureDriveAttachment, fractureCharacterAttachment,
+        fractureFilterMorphAttachment, fractureFrequencyAttachment,
+        fractureResonanceAttachment, fractureMixAttachment, smearAmountAttachment,
+        codecAmountAttachment;
     std::unique_ptr<ComboBoxAttachment> targetKeyAttachment, voiceModeAttachment,
         globalGridAttachment, rateReductionAttachment, freezeSizeAttachment,
-        freezeHoldAttachment;
+        freezeHoldAttachment, codecQualityAttachment;
     std::unique_ptr<ButtonAttachment> midiPitchAttachment;
     std::shared_ptr<const SampleManager::Pool> displayPool;
     juce::String selectedSourceId;
     std::unique_ptr<juce::FileChooser> chooser;
     juce::String transientMessage;
+    int selectedFracturePreset = -1;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(RandomChopSamplerAudioProcessorEditor)
 };

@@ -1,7 +1,7 @@
 #include <JuceHeader.h>
+#include "CreativeEffects.h"
 #include "HarmonicPitch.h"
 #include "HostGrid.h"
-#include "MasterDigitalProcessor.h"
 #include "RandomSamplerVoice.h"
 #include "SampleManager.h"
 #include "SourceSelection.h"
@@ -254,22 +254,23 @@ void testRegionsAndVoices()
           "16-voice pool or oldest-voice selection changed");
 }
 
-void testRateReduction()
+void testCodecRateReduction()
 {
-    randomchop::MasterDigitalProcessor processor;
+    randomchop::CodecProcessor processor;
+    processor.prepare(48000.0);
     juce::AudioBuffer<float> buffer(2, 10);
     for (int frame = 0; frame < 10; ++frame)
     {
         buffer.setSample(0, frame, static_cast<float>(frame + 1) * 0.1f);
         buffer.setSample(1, frame, -static_cast<float>(frame + 1) * 0.1f);
     }
-    processor.process(buffer, 4);
+    processor.process(buffer, { 0.0f, 0, 4 });
     check(buffer.getSample(0, 0) == buffer.getSample(0, 3)
               && buffer.getSample(0, 4) == buffer.getSample(0, 7)
               && buffer.getSample(1, 0) == buffer.getSample(1, 3),
           "rate reducer did not preserve stereo sample-and-hold behavior");
-    check(randomchop::MasterDigitalProcessor::rateFactorFromChoice(0) == 1
-              && randomchop::MasterDigitalProcessor::rateFactorFromChoice(6) == 64,
+    check(randomchop::CodecProcessor::rateFactorFromChoice(0) == 1
+              && randomchop::CodecProcessor::rateFactorFromChoice(6) == 64,
           "rate-reduction choice mapping changed");
 
     processor.reset();
@@ -279,7 +280,7 @@ void testRateReduction()
     unsafe.setSample(0, 2, 1.0e30f);
     unsafe.setSample(0, 3, -1.0e30f);
     unsafe.copyFrom(1, 0, unsafe, 0, 0, 4);
-    processor.process(unsafe, 1);
+    processor.process(unsafe, { 100.0f, 3, 1 });
     bool safe = true;
     for (int channel = 0; channel < 2; ++channel)
         for (int frame = 0; frame < 4; ++frame)
@@ -391,6 +392,117 @@ bool bufferFiniteAndBounded(const juce::AudioBuffer<float>& buffer) noexcept
                 || std::abs(buffer.getSample(channel, frame)) > 64.0f)
                 return false;
     return true;
+}
+
+void testFractureProcessorAndPresets()
+{
+    check(randomchop::fracturePresets.size() == 30,
+          "Fracture factory preset bank does not contain 30 real presets");
+    for (std::size_t index = 0; index < randomchop::fracturePresets.size(); ++index)
+    {
+        const auto& preset = randomchop::getFracturePreset(static_cast<int>(index));
+        const auto& settings = preset.settings;
+        check(juce::String(preset.name).isNotEmpty()
+                  && settings.driveDb >= 0.0f && settings.driveDb <= 36.0f
+                  && settings.character >= 0.0f && settings.character <= 100.0f
+                  && settings.filterMorph >= 0.0f && settings.filterMorph <= 100.0f
+                  && settings.frequencyHz >= 80.0f && settings.frequencyHz <= 12000.0f
+                  && settings.resonance >= 0.0f && settings.resonance <= 100.0f
+                  && settings.mix >= 0.0f && settings.mix <= 100.0f,
+              "Fracture factory preset contains an invalid name or parameter value");
+        randomchop::FractureProcessor presetProcessor;
+        presetProcessor.prepare(48000.0);
+        auto audio = makeTemporalInput(1024, static_cast<int>(index) * 17);
+        presetProcessor.process(audio, settings);
+        check(bufferFiniteAndBounded(audio),
+              "Fracture factory preset produced invalid or unbounded audio");
+    }
+    check(juce::String(randomchop::getFracturePreset(-1).name) == "Glass Teeth"
+              && juce::String(randomchop::getFracturePreset(999).name) == "Cold Wire",
+          "Fracture preset index bounds changed");
+
+    randomchop::FractureProcessor bypass;
+    bypass.prepare(48000.0);
+    auto dry = makeTemporalInput(512);
+    auto output = copyBuffer(dry);
+    bypass.process(output, { 36.0f, 100.0f, 100.0f, 12000.0f, 100.0f, 0.0f });
+    check(buffersEqual(dry, output), "Fracture Mix 0 was not sample-identical bypass");
+
+    randomchop::FractureProcessor extreme;
+    extreme.prepare(192000.0);
+    juce::AudioBuffer<float> unsafe(2, 2048);
+    for (int frame = 0; frame < unsafe.getNumSamples(); ++frame)
+    {
+        const auto value = frame % 4 == 0 ? std::numeric_limits<float>::quiet_NaN()
+            : (frame % 4 == 1 ? std::numeric_limits<float>::infinity()
+                              : (frame % 4 == 2 ? 1.0e30f : -1.0e30f));
+        unsafe.setSample(0, frame, value);
+        unsafe.setSample(1, frame, value);
+    }
+    extreme.process(unsafe, { 36.0f, 100.0f, 100.0f, 12000.0f, 100.0f, 100.0f });
+    check(bufferFiniteAndBounded(unsafe),
+          "Fracture extreme Drive/Resonance propagated NaN, Inf, or runaway gain");
+}
+
+void testSmearProcessor()
+{
+    randomchop::SmearProcessor bypass;
+    bypass.prepare(48000.0);
+    auto dry = makeTemporalInput(512);
+    auto output = copyBuffer(dry);
+    bypass.process(output, { 0.0f });
+    check(buffersEqual(dry, output), "Smear Amount 0 was not sample-identical bypass");
+
+    randomchop::SmearProcessor continuous;
+    continuous.prepare(48000.0);
+    auto first = makeTemporalInput(12000);
+    continuous.process(first, { 100.0f });
+    auto carried = makeTemporalInput(512, 12000);
+    continuous.process(carried, { 100.0f });
+    randomchop::SmearProcessor cold;
+    cold.prepare(48000.0);
+    auto coldOutput = makeTemporalInput(512, 12000);
+    cold.process(coldOutput, { 100.0f });
+    check(!buffersEqual(carried, coldOutput) && bufferFiniteAndBounded(carried),
+          "Smear did not retain bounded cross-block grain history");
+
+    juce::AudioBuffer<float> unsafe(2, 256);
+    unsafe.clear();
+    unsafe.setSample(0, 0, std::numeric_limits<float>::quiet_NaN());
+    unsafe.setSample(1, 0, std::numeric_limits<float>::infinity());
+    continuous.process(unsafe, { 1000.0f });
+    check(bufferFiniteAndBounded(unsafe),
+          "Smear extreme Amount propagated invalid or unbounded output");
+}
+
+void testCodecProcessor()
+{
+    randomchop::CodecProcessor bypass;
+    bypass.prepare(48000.0);
+    auto dry = makeTemporalInput(512);
+    auto output = copyBuffer(dry);
+    bypass.process(output, { 0.0f, 0, 1 });
+    check(buffersEqual(dry, output), "Codec neutral state was not sample-identical bypass");
+
+    randomchop::CodecProcessor first;
+    randomchop::CodecProcessor second;
+    first.prepare(44100.0);
+    second.prepare(44100.0);
+    auto firstOutput = makeTemporalInput(2048);
+    auto secondOutput = copyBuffer(firstOutput);
+    first.process(firstOutput, { 88.0f, 3, 16 });
+    second.process(secondOutput, { 88.0f, 3, 16 });
+    check(buffersEqual(firstOutput, secondOutput) && bufferFiniteAndBounded(firstOutput),
+          "Codec damaged-digital processing was non-deterministic or unbounded");
+
+    juce::AudioBuffer<float> silence(2, 2048);
+    silence.clear();
+    randomchop::CodecProcessor silentCodec;
+    silentCodec.prepare(96000.0);
+    silentCodec.process(silence, { 100.0f, 99, 64 });
+    check(bufferFiniteAndBounded(silence)
+              && silence.getMagnitude(0, silence.getNumSamples()) == 0.0f,
+          "Codec created a white-noise explosion from silence");
 }
 
 void testFreezeProcessor()
@@ -664,10 +776,13 @@ int main()
     testSupportedFormatsAndPoolState();
     testWeightedSelectionAndPitch();
     testRegionsAndVoices();
-    testRateReduction();
+    testCodecRateReduction();
     testHostGrid();
     testFreezeProcessor();
     testScrambleProcessor();
+    testFractureProcessorAndPresets();
+    testSmearProcessor();
+    testCodecProcessor();
     testStateMigration();
     testStretchSemanticsAndPublication();
     if (failures == 0)

@@ -222,7 +222,7 @@ public:
 RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(RandomChopSamplerAudioProcessor& p)
     : AudioProcessorEditor(&p), processor(p)
 {
-    setSize(1050, 970);
+    setSize(1050, 1190);
     title.setText("recompiler.dll", juce::dontSendNotification);
     title.setFont(juce::Font(24.0f, juce::Font::bold));
     title.setColour(juce::Label::textColourId, juce::Colour(0xfff2f2f5));
@@ -236,7 +236,8 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
         &sourceStretchLabel, &targetKey, &targetKeyLabel, &midiPitch,
         &voiceMode, &voiceModeLabel, &globalGrid, &globalGridLabel,
         &rateReduction, &rateReductionLabel, &freezeSize, &freezeHold,
-        &freezeSizeLabel, &freezeHoldLabel };
+        &freezeSizeLabel, &freezeHoldLabel, &fracturePresetLabel, &fracturePreset,
+        &previousFracturePreset, &nextFracturePreset, &codecQuality, &codecQualityLabel };
     for (auto* component : components) addAndMakeVisible(component);
     list.setColour(juce::ListBox::backgroundColourId, juce::Colour(0xff191b21));
     list.setRowHeight(34);
@@ -257,6 +258,12 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
         freezeHold.addItem(name, freezeHold.getNumItems() + 1);
     for (const auto& name : juce::StringArray { "1x (OFF)", "2x", "4x", "8x", "16x", "32x", "64x" })
         rateReduction.addItem(name, rateReduction.getNumItems() + 1);
+    for (const auto& name : juce::StringArray { "HIGH", "MEDIUM", "LOW", "SHREDDED" })
+        codecQuality.addItem(name, codecQuality.getNumItems() + 1);
+    fracturePreset.addItem("SELECT FRACTURE PRESET", 1);
+    for (const auto& preset : randomchop::fracturePresets)
+        fracturePreset.addItem(preset.name, fracturePreset.getNumItems() + 1);
+    fracturePreset.setSelectedItemIndex(0, juce::dontSendNotification);
     sourceTranspose.setRange(-24.0, 24.0, 1.0);
     sourceTranspose.setTextValueSuffix(" st");
     sourceFineTune.setRange(-100.0, 100.0, 1.0);
@@ -290,13 +297,34 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     globalGridLabel.setText("GLOBAL GRID", juce::dontSendNotification);
     freezeSizeLabel.setText("FREEZE SIZE", juce::dontSendNotification);
     freezeHoldLabel.setText("FREEZE HOLD", juce::dontSendNotification);
-    rateReductionLabel.setText("RATE REDUCTION", juce::dontSendNotification);
+    fracturePresetLabel.setText("FRACTURE PRESET", juce::dontSendNotification);
+    codecQualityLabel.setText("CODEC QUALITY", juce::dontSendNotification);
+    rateReductionLabel.setText("CODEC RATE", juce::dontSendNotification);
     voiceModeLabel.setJustificationType(juce::Justification::centredLeft);
     for (auto* label : { &sourceKeyLabel, &sourceTransposeLabel, &sourceFineTuneLabel,
                          &sourceGainLabel, &sourceWeightLabel, &sourceStretchLabel,
                          &targetKeyLabel, &voiceModeLabel, &globalGridLabel,
-                         &rateReductionLabel, &freezeSizeLabel, &freezeHoldLabel })
+                         &rateReductionLabel, &freezeSizeLabel, &freezeHoldLabel,
+                         &fracturePresetLabel, &codecQualityLabel })
         label->setColour(juce::Label::textColourId, juce::Colour(0xffc8cad1));
+    fracturePreset.onChange = [this]
+    {
+        const auto index = fracturePreset.getSelectedItemIndex() - 1;
+        if (index >= 0)
+            selectFracturePreset(index);
+    };
+    previousFracturePreset.onClick = [this]
+    {
+        const auto count = static_cast<int>(randomchop::fracturePresets.size());
+        selectFracturePreset(selectedFracturePreset < 0
+            ? count - 1 : (selectedFracturePreset + count - 1) % count);
+    };
+    nextFracturePreset.onClick = [this]
+    {
+        const auto count = static_cast<int>(randomchop::fracturePresets.size());
+        selectFracturePreset(selectedFracturePreset < 0
+            ? 0 : (selectedFracturePreset + 1) % count);
+    };
     sourceKey.onChange = [this]
     {
         if (selectedSourceId.isNotEmpty()) processor.samples.updateSettings(selectedSourceId,
@@ -361,6 +389,14 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     configureLinearControl(freezeOctaveChance, freezeOctaveChanceLabel, "OCTAVE CHANCE");
     configureLinearControl(scrambleChance, scrambleChanceLabel, "SCRAMBLE CHANCE");
     configureLinearControl(scrambleAmount, scrambleAmountLabel, "SCRAMBLE AMOUNT");
+    configureKnob(fractureDrive, fractureDriveLabel, "DRIVE");
+    configureKnob(fractureCharacter, fractureCharacterLabel, "CHARACTER");
+    configureKnob(fractureFilterMorph, fractureFilterMorphLabel, "FILTER MORPH");
+    configureKnob(fractureFrequency, fractureFrequencyLabel, "FREQUENCY");
+    configureKnob(fractureResonance, fractureResonanceLabel, "RESONANCE");
+    configureKnob(fractureMix, fractureMixLabel, "MIX");
+    configureLinearControl(smearAmount, smearAmountLabel, "SMEAR AMOUNT");
+    configureLinearControl(codecAmount, codecAmountLabel, "CODEC AMOUNT");
     finalLength.setNumDecimalPlacesToDisplay(0);
     finalLength.textFromValueFunction = [](double value)
     {
@@ -390,6 +426,8 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
         p.parameters, "freezeHold", freezeHold);
     rateReductionAttachment = std::make_unique<ComboBoxAttachment>(
         p.parameters, "rateReduction", rateReduction);
+    codecQualityAttachment = std::make_unique<ComboBoxAttachment>(
+        p.parameters, "codecQuality", codecQuality);
     midiPitchAttachment = std::make_unique<ButtonAttachment>(p.parameters, "midiPitch", midiPitch);
     freezeChanceAttachment = std::make_unique<SliderAttachment>(
         p.parameters, "freezeChance", freezeChance);
@@ -399,6 +437,22 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
         p.parameters, "scrambleChance", scrambleChance);
     scrambleAmountAttachment = std::make_unique<SliderAttachment>(
         p.parameters, "scrambleAmount", scrambleAmount);
+    fractureDriveAttachment = std::make_unique<SliderAttachment>(
+        p.parameters, "fractureDrive", fractureDrive);
+    fractureCharacterAttachment = std::make_unique<SliderAttachment>(
+        p.parameters, "fractureCharacter", fractureCharacter);
+    fractureFilterMorphAttachment = std::make_unique<SliderAttachment>(
+        p.parameters, "fractureFilterMorph", fractureFilterMorph);
+    fractureFrequencyAttachment = std::make_unique<SliderAttachment>(
+        p.parameters, "fractureFrequency", fractureFrequency);
+    fractureResonanceAttachment = std::make_unique<SliderAttachment>(
+        p.parameters, "fractureResonance", fractureResonance);
+    fractureMixAttachment = std::make_unique<SliderAttachment>(
+        p.parameters, "fractureMix", fractureMix);
+    smearAmountAttachment = std::make_unique<SliderAttachment>(
+        p.parameters, "smearAmount", smearAmount);
+    codecAmountAttachment = std::make_unique<SliderAttachment>(
+        p.parameters, "codecAmount", codecAmount);
 
     addButton.onClick = [this]
     {
@@ -419,6 +473,15 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     disableAllButton.onClick = [this] { processor.samples.setAllEnabled(false); refresh(); };
     refresh();
     startTimerHz(8);
+}
+
+void RandomChopSamplerAudioProcessorEditor::selectFracturePreset(int index)
+{
+    const auto count = static_cast<int>(randomchop::fracturePresets.size());
+    selectedFracturePreset = juce::jlimit(0, count - 1, index);
+    fracturePreset.setSelectedItemIndex(selectedFracturePreset + 1,
+                                        juce::dontSendNotification);
+    processor.applyFracturePreset(selectedFracturePreset);
 }
 
 void RandomChopSamplerAudioProcessorEditor::configureKnob(juce::Slider& slider, juce::Label& label,
@@ -477,6 +540,9 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     disableAllButton.setBounds(toolbar.removeFromLeft(105).reduced(2));
 
     auto globalControls = area.removeFromBottom(135);
+    auto smearCodecControls = area.removeFromBottom(58);
+    auto fractureControls = area.removeFromBottom(118);
+    auto fracturePresetControls = area.removeFromBottom(42);
     auto scrambleControls = area.removeFromBottom(58);
     auto freezeControls = area.removeFromBottom(58);
     auto timingControls = area.removeFromBottom(42);
@@ -518,10 +584,6 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     auto gridCell = timingControls.removeFromLeft(330).reduced(3);
     globalGridLabel.setBounds(gridCell.removeFromLeft(115));
     globalGrid.setBounds(gridCell.reduced(2, 5));
-    auto rateCell = timingControls.removeFromLeft(400).reduced(3);
-    rateReductionLabel.setBounds(rateCell.removeFromLeft(145));
-    rateReduction.setBounds(rateCell.reduced(2, 5));
-
     auto freezeChanceCell = freezeControls.removeFromLeft(260).reduced(3);
     freezeChanceLabel.setBounds(freezeChanceCell.removeFromTop(20));
     freezeChance.setBounds(freezeChanceCell);
@@ -542,6 +604,38 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     auto scrambleAmountCell = scrambleControls.reduced(3);
     scrambleAmountLabel.setBounds(scrambleAmountCell.removeFromTop(20));
     scrambleAmount.setBounds(scrambleAmountCell);
+
+    auto presetLabelCell = fracturePresetControls.removeFromLeft(150).reduced(3);
+    fracturePresetLabel.setBounds(presetLabelCell);
+    previousFracturePreset.setBounds(fracturePresetControls.removeFromLeft(42).reduced(3));
+    fracturePreset.setBounds(fracturePresetControls.removeFromLeft(420).reduced(3, 6));
+    nextFracturePreset.setBounds(fracturePresetControls.removeFromLeft(42).reduced(3));
+
+    const int fractureWidth = fractureControls.getWidth() / 6;
+    juce::Slider* fractureSliders[] = { &fractureDrive, &fractureCharacter,
+        &fractureFilterMorph, &fractureFrequency, &fractureResonance, &fractureMix };
+    juce::Label* fractureLabels[] = { &fractureDriveLabel, &fractureCharacterLabel,
+        &fractureFilterMorphLabel, &fractureFrequencyLabel, &fractureResonanceLabel,
+        &fractureMixLabel };
+    for (int index = 0; index < 6; ++index)
+    {
+        auto cell = fractureControls.removeFromLeft(fractureWidth);
+        fractureLabels[index]->setBounds(cell.removeFromTop(20));
+        fractureSliders[index]->setBounds(cell.reduced(3));
+    }
+
+    auto smearCell = smearCodecControls.removeFromLeft(260).reduced(3);
+    smearAmountLabel.setBounds(smearCell.removeFromTop(20));
+    smearAmount.setBounds(smearCell);
+    auto codecAmountCell = smearCodecControls.removeFromLeft(260).reduced(3);
+    codecAmountLabel.setBounds(codecAmountCell.removeFromTop(20));
+    codecAmount.setBounds(codecAmountCell);
+    auto qualityCell = smearCodecControls.removeFromLeft(250).reduced(3);
+    codecQualityLabel.setBounds(qualityCell.removeFromLeft(115));
+    codecQuality.setBounds(qualityCell.reduced(2, 8));
+    auto rateCell = smearCodecControls.reduced(3);
+    rateReductionLabel.setBounds(rateCell.removeFromLeft(95));
+    rateReduction.setBounds(rateCell.reduced(2, 8));
 
     const int knobWidth = globalControls.getWidth() / 6;
     juce::Slider* sliders[] = { &randomStart, &finalLength, &attack, &release, &output, &seed };

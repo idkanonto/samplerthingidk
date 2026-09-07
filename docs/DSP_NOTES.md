@@ -39,6 +39,14 @@ status: active
 - Separate salted RNG streams preserve sampler random-selection stability. Chance 0 and Amount 0 avoid activation; bypassed finite samples remain identical.
 - A discontinuity drops event and logical-history state in constant time. Large buffers are not cleared from the audio callback.
 
+## Creative character effects
+
+- FRACTURE computes stable state-variable filter coefficients once per block and runs parallel structures rather than interpolating incompatible coefficients. A prepared fractional comb supplies hollow/metallic paths; feedback, integrators, DC rejection, and output are explicitly bounded.
+- FRACTURE presets are a fixed compile-time bank. UI selection writes the six real automatable parameters on the message thread; the callback never parses, allocates, or accesses preset names.
+- SMEAR allocates half a second of stereo delay storage in `prepareToPlay`. Two complementary-window read heads move through bounded short grains, with scalar cross-block phase and blur state. Amount 0 writes history but leaves finite input samples untouched.
+- CODEC approximates bandwidth loss and packet damage with fixed per-channel predictor, residual, blur, and hold state. The existing deterministic sample-and-hold reducer is its final internal operation and retains the `rateReduction` parameter ID.
+- All three stages clamp hostile settings and active-path non-finite samples. FRACTURE Mix 0, SMEAR Amount 0, and CODEC Amount 0 with 1x Rate are exact finite-sample bypasses.
+
 ## Removed DSP
 
 The old Take/Step/per-event effect path and Bit Crush are absent. They must not be reintroduced as implementation shortcuts for the global chain in [[SIGNAL_CHAIN]].

@@ -27,7 +27,8 @@ The target name remains `RandomChopSampler` to preserve build continuity; the ho
 - Target Key, optional MIDI pitch/root, Random Start, Final Length, Attack, Release, POLY/MONO, Seed, and Output.
 - Host-derived 1/8, 1/16, or 1/32 global grid with a safe 120 BPM fallback.
 - Global FREEZE with grid-sized capture/hold and deterministic optional exact-octave flipping; global SCRAMBLE with bounded chunk rearrangement and Amount.
+- Global FRACTURE with six controls and 30 real factory presets, plus bounded SMEAR and damaged-digital CODEC stages.
+- The preserved 1x–64x Rate Reduction now lives inside CODEC; all three Gate C stages load neutral.
 - The former Take History, Step Mask, per-event Reverse/Retrigger/Skip/Reorder/Bend/Drop, and Bit Crush systems are removed. Old state entries are ignored safely.
-- Rate Reduction remains temporarily functional and will become part of the global CODEC stage.
 
 The approved global creative chain is `FREEZE → SCRAMBLE → FRACTURE → SPECTRAL DRAW → SMEAR → CODEC → OUTPUT`. See the project brain in [`docs/INDEX.md`](docs/INDEX.md) for gate status and realtime constraints. The current gate is functional engineering only; final visual design is intentionally deferred.
