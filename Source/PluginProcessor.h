@@ -6,6 +6,7 @@
 #include "RandomizationEngine.h"
 #include "SourceSelection.h"
 #include "StateMigration.h"
+#include "SpectralDraw.h"
 #include "TemporalEffects.h"
 #include "VoicePool.h"
 
@@ -35,6 +36,11 @@ public:
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     void applyFracturePreset(int index);
+    randomchop::SpectralMaskStore::Canvas getSpectralCanvas() const;
+    void setSpectralCanvas(const randomchop::SpectralMaskStore::Canvas& canvas);
+    void clearSpectralCanvas();
+    uint64_t getSpectralCanvasGeneration() const noexcept;
+    float getSpectralScanPosition() const noexcept;
     juce::AudioProcessorValueTreeState parameters;
     SampleManager samples;
     std::atomic<uint64_t> lastTriggeredRuntimeId { 0 };
@@ -47,6 +53,8 @@ private:
 
     randomchop::VoicePool voices;
     randomchop::FractureProcessor fractureProcessor;
+    randomchop::SpectralMaskStore spectralMaskStore;
+    randomchop::SpectralDrawProcessor spectralDrawProcessor;
     randomchop::SmearProcessor smearProcessor;
     randomchop::CodecProcessor codecProcessor;
     randomchop::HostGrid hostGrid;

@@ -26,6 +26,32 @@ private:
     DragMarker dragMarker = DragMarker::none;
 };
 
+class SpectralCanvasComponent final : public juce::Component
+{
+public:
+    using Canvas = randomchop::SpectralMaskStore::Canvas;
+
+    void setCanvas(const Canvas& newCanvas);
+    void clearCanvas();
+    void setEraseMode(bool shouldErase) noexcept { eraseMode = shouldErase; }
+    void setScanPosition(float position);
+    void paint(juce::Graphics&) override;
+    void mouseDown(const juce::MouseEvent&) override;
+    void mouseDrag(const juce::MouseEvent&) override;
+
+    std::function<void(const Canvas&)> onCanvasChanged;
+
+private:
+    juce::Point<int> eventToCell(const juce::MouseEvent&) const noexcept;
+    void applyLine(juce::Point<int> from, juce::Point<int> to);
+    void applyBrush(juce::Point<int> cell) noexcept;
+
+    Canvas canvas {};
+    juce::Point<int> lastCell { -1, -1 };
+    float scanPosition = 0.0f;
+    bool eraseMode = false;
+};
+
 class RandomChopSamplerAudioProcessorEditor final : public juce::AudioProcessorEditor,
     public juce::FileDragAndDropTarget, private juce::ListBoxModel, private juce::Timer
 {
@@ -63,19 +89,23 @@ private:
     juce::ComboBox freezeSize, freezeHold;
     juce::ComboBox fracturePreset;
     juce::TextButton previousFracturePreset { "<" }, nextFracturePreset { ">" };
+    juce::TextButton spectralDrawButton { "Draw" }, spectralEraseButton { "Erase" },
+        spectralClearButton { "Clear" };
+    juce::ComboBox spectralScanRate;
+    SpectralCanvasComponent spectralCanvas;
     juce::ToggleButton midiPitch { "MIDI Pitch" };
     juce::Slider rootNote, randomStart, finalLength, attack, release, output, seed;
     juce::Slider freezeChance, freezeOctaveChance, scrambleChance, scrambleAmount;
     juce::Slider fractureDrive, fractureCharacter, fractureFilterMorph, fractureFrequency,
-        fractureResonance, fractureMix, smearAmount, codecAmount;
+        fractureResonance, fractureMix, spectralDepth, smearAmount, codecAmount;
     juce::Label targetKeyLabel, rootNoteLabel, voiceModeLabel, globalGridLabel,
         rateReductionLabel, randomStartLabel, finalLengthLabel, attackLabel,
         releaseLabel, outputLabel, seedLabel, freezeChanceLabel, freezeSizeLabel,
         freezeHoldLabel, freezeOctaveChanceLabel, scrambleChanceLabel,
         scrambleAmountLabel, fracturePresetLabel, fractureDriveLabel,
         fractureCharacterLabel, fractureFilterMorphLabel, fractureFrequencyLabel,
-        fractureResonanceLabel, fractureMixLabel, smearAmountLabel, codecAmountLabel,
-        codecQualityLabel;
+        fractureResonanceLabel, fractureMixLabel, spectralDrawLabel, spectralScanRateLabel,
+        spectralDepthLabel, smearAmountLabel, codecAmountLabel, codecQualityLabel;
 
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ComboBoxAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
@@ -85,16 +115,17 @@ private:
         freezeChanceAttachment, freezeOctaveChanceAttachment, scrambleChanceAttachment,
         scrambleAmountAttachment, fractureDriveAttachment, fractureCharacterAttachment,
         fractureFilterMorphAttachment, fractureFrequencyAttachment,
-        fractureResonanceAttachment, fractureMixAttachment, smearAmountAttachment,
-        codecAmountAttachment;
+        fractureResonanceAttachment, fractureMixAttachment, spectralDepthAttachment,
+        smearAmountAttachment, codecAmountAttachment;
     std::unique_ptr<ComboBoxAttachment> targetKeyAttachment, voiceModeAttachment,
         globalGridAttachment, rateReductionAttachment, freezeSizeAttachment,
-        freezeHoldAttachment, codecQualityAttachment;
+        freezeHoldAttachment, codecQualityAttachment, spectralScanRateAttachment;
     std::unique_ptr<ButtonAttachment> midiPitchAttachment;
     std::shared_ptr<const SampleManager::Pool> displayPool;
     juce::String selectedSourceId;
     std::unique_ptr<juce::FileChooser> chooser;
     juce::String transientMessage;
     int selectedFracturePreset = -1;
+    uint64_t lastSpectralCanvasGeneration = 0;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(RandomChopSamplerAudioProcessorEditor)
 };
