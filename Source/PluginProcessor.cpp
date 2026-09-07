@@ -21,6 +21,15 @@ constexpr auto freezeHold = "freezeHold";
 constexpr auto freezeOctaveChance = "freezeOctaveChance";
 constexpr auto scrambleChance = "scrambleChance";
 constexpr auto scrambleAmount = "scrambleAmount";
+constexpr auto fractureDrive = "fractureDrive";
+constexpr auto fractureCharacter = "fractureCharacter";
+constexpr auto fractureFilterMorph = "fractureFilterMorph";
+constexpr auto fractureFrequency = "fractureFrequency";
+constexpr auto fractureResonance = "fractureResonance";
+constexpr auto fractureMix = "fractureMix";
+constexpr auto smearAmount = "smearAmount";
+constexpr auto codecAmount = "codecAmount";
+constexpr auto codecQuality = "codecQuality";
 constexpr auto rateReduction = "rateReduction";
 }
 
@@ -72,8 +81,30 @@ RandomChopSamplerAudioProcessor::createParameterLayout()
     layout.add(std::make_unique<juce::AudioParameterFloat>(
         IDs::scrambleAmount, "Scramble Amount",
         juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 50.0f, "%"));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::fractureDrive, "Fracture Drive",
+        juce::NormalisableRange<float>(0.0f, 36.0f, 0.1f), 0.0f, "dB"));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        IDs::fractureCharacter, "Fracture Character",
+        juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, "%"));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        IDs::fractureFilterMorph, "Fracture Filter Morph",
+        juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, "%"));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        IDs::fractureFrequency, "Fracture Frequency",
+        juce::NormalisableRange<float>(80.0f, 12000.0f, 1.0f, 0.35f), 1000.0f, "Hz"));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        IDs::fractureResonance, "Fracture Resonance",
+        juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, "%"));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::fractureMix, "Fracture Mix",
+        juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, "%"));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::smearAmount, "Smear Amount",
+        juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, "%"));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::codecAmount, "Codec Amount",
+        juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, "%"));
+    layout.add(std::make_unique<juce::AudioParameterChoice>(IDs::codecQuality, "Codec Quality",
+        juce::StringArray { "HIGH", "MEDIUM", "LOW", "SHREDDED" }, 0));
     layout.add(std::make_unique<juce::AudioParameterChoice>(
-        IDs::rateReduction, "Rate Reduction",
+        IDs::rateReduction, "Codec Rate Reduction",
         juce::StringArray { "1x (OFF)", "2x", "4x", "8x", "16x", "32x", "64x" }, 0));
     return layout;
 }
@@ -82,10 +113,12 @@ void RandomChopSamplerAudioProcessor::prepareToPlay(double rate, int)
 {
     currentRate = std::clamp(randomchop::finiteOr(rate, 44100.0), 1.0, 768000.0);
     voices.prepare(currentRate);
-    masterDigitalProcessor.reset();
     hostGrid.reset();
     freezeProcessor.prepare(currentRate);
     scrambleProcessor.prepare(currentRate);
+    fractureProcessor.prepare(currentRate);
+    smearProcessor.prepare(currentRate);
+    codecProcessor.prepare(currentRate);
     lastGridBoundaries = {};
     lastSeed = -1;
 }
@@ -205,9 +238,20 @@ void RandomChopSamplerAudioProcessor::processBlock(
     scrambleProcessor.process(buffer, lastGridBoundaries, gridChoice,
         { parameters.getRawParameterValue(IDs::scrambleChance)->load(),
           parameters.getRawParameterValue(IDs::scrambleAmount)->load() });
-    masterDigitalProcessor.process(buffer,
-        randomchop::MasterDigitalProcessor::rateFactorFromChoice(static_cast<int>(
-            parameters.getRawParameterValue(IDs::rateReduction)->load())));
+    fractureProcessor.process(buffer,
+        { parameters.getRawParameterValue(IDs::fractureDrive)->load(),
+          parameters.getRawParameterValue(IDs::fractureCharacter)->load(),
+          parameters.getRawParameterValue(IDs::fractureFilterMorph)->load(),
+          parameters.getRawParameterValue(IDs::fractureFrequency)->load(),
+          parameters.getRawParameterValue(IDs::fractureResonance)->load(),
+          parameters.getRawParameterValue(IDs::fractureMix)->load() });
+    smearProcessor.process(buffer,
+        { parameters.getRawParameterValue(IDs::smearAmount)->load() });
+    codecProcessor.process(buffer,
+        { parameters.getRawParameterValue(IDs::codecAmount)->load(),
+          static_cast<int>(parameters.getRawParameterValue(IDs::codecQuality)->load()),
+          randomchop::CodecProcessor::rateFactorFromChoice(static_cast<int>(
+              parameters.getRawParameterValue(IDs::rateReduction)->load())) });
     buffer.applyGain(juce::Decibels::decibelsToGain(
         parameters.getRawParameterValue(IDs::output)->load()));
 }
@@ -244,9 +288,38 @@ void RandomChopSamplerAudioProcessor::setStateInformation(const void* data, int 
         ensureParameter(IDs::freezeOctaveChance, 0.0f);
         ensureParameter(IDs::scrambleChance, 0.0f);
         ensureParameter(IDs::scrambleAmount, 50.0f);
+        ensureParameter(IDs::fractureDrive, 0.0f);
+        ensureParameter(IDs::fractureCharacter, 0.0f);
+        ensureParameter(IDs::fractureFilterMorph, 0.0f);
+        ensureParameter(IDs::fractureFrequency, 1000.0f);
+        ensureParameter(IDs::fractureResonance, 0.0f);
+        ensureParameter(IDs::fractureMix, 0.0f);
+        ensureParameter(IDs::smearAmount, 0.0f);
+        ensureParameter(IDs::codecAmount, 0.0f);
+        ensureParameter(IDs::codecQuality, 0.0f);
         parameters.replaceState(state);
         samples.restoreState(files);
     }
+}
+
+void RandomChopSamplerAudioProcessor::applyFracturePreset(int index)
+{
+    const auto& settings = randomchop::getFracturePreset(index).settings;
+    const auto setParameter = [this](const char* id, float value)
+    {
+        if (auto* parameter = parameters.getParameter(id))
+        {
+            parameter->beginChangeGesture();
+            parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
+            parameter->endChangeGesture();
+        }
+    };
+    setParameter(IDs::fractureDrive, settings.driveDb);
+    setParameter(IDs::fractureCharacter, settings.character);
+    setParameter(IDs::fractureFilterMorph, settings.filterMorph);
+    setParameter(IDs::fractureFrequency, settings.frequencyHz);
+    setParameter(IDs::fractureResonance, settings.resonance);
+    setParameter(IDs::fractureMix, settings.mix);
 }
 
 juce::AudioProcessorEditor* RandomChopSamplerAudioProcessor::createEditor()

@@ -63,7 +63,8 @@ target_sources(RandomChopSampler PRIVATE
     Source/StateMigration.h
     Source/TemporalEffects.cpp
     Source/TemporalEffects.h
-    Source/MasterDigitalProcessor.h
+    Source/CreativeEffects.cpp
+    Source/CreativeEffects.h
     Source/RandomizationEngine.h
     Source/HarmonicPitch.h
     Source/PlaybackRegion.h
@@ -113,7 +114,8 @@ if (BUILD_TESTING)
         Source/StateMigration.h
         Source/TemporalEffects.cpp
         Source/TemporalEffects.h
-        Source/MasterDigitalProcessor.h
+        Source/CreativeEffects.cpp
+        Source/CreativeEffects.h
         Source/RandomizationEngine.h
         Source/HarmonicPitch.h
         Source/PlaybackRegion.h
