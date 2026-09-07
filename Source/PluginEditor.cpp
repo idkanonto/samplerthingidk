@@ -222,7 +222,7 @@ public:
 RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(RandomChopSamplerAudioProcessor& p)
     : AudioProcessorEditor(&p), processor(p)
 {
-    setSize(1050, 850);
+    setSize(1050, 970);
     title.setText("recompiler.dll", juce::dontSendNotification);
     title.setFont(juce::Font(24.0f, juce::Font::bold));
     title.setColour(juce::Label::textColourId, juce::Colour(0xfff2f2f5));
@@ -235,7 +235,8 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
         &sourceTransposeLabel, &sourceFineTuneLabel, &sourceGainLabel, &sourceWeightLabel,
         &sourceStretchLabel, &targetKey, &targetKeyLabel, &midiPitch,
         &voiceMode, &voiceModeLabel, &globalGrid, &globalGridLabel,
-        &rateReduction, &rateReductionLabel };
+        &rateReduction, &rateReductionLabel, &freezeSize, &freezeHold,
+        &freezeSizeLabel, &freezeHoldLabel };
     for (auto* component : components) addAndMakeVisible(component);
     list.setColour(juce::ListBox::backgroundColourId, juce::Colour(0xff191b21));
     list.setRowHeight(34);
@@ -250,6 +251,10 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     globalGrid.addItem("1/8", 1);
     globalGrid.addItem("1/16", 2);
     globalGrid.addItem("1/32", 3);
+    for (const auto& name : juce::StringArray { "1/4 grid", "1/2 grid", "1 grid" })
+        freezeSize.addItem(name, freezeSize.getNumItems() + 1);
+    for (const auto& name : juce::StringArray { "1 grid", "2 grids", "4 grids", "8 grids" })
+        freezeHold.addItem(name, freezeHold.getNumItems() + 1);
     for (const auto& name : juce::StringArray { "1x (OFF)", "2x", "4x", "8x", "16x", "32x", "64x" })
         rateReduction.addItem(name, rateReduction.getNumItems() + 1);
     sourceTranspose.setRange(-24.0, 24.0, 1.0);
@@ -283,12 +288,14 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     targetKeyLabel.setText("TARGET KEY", juce::dontSendNotification);
     voiceModeLabel.setText("VOICE MODE", juce::dontSendNotification);
     globalGridLabel.setText("GLOBAL GRID", juce::dontSendNotification);
+    freezeSizeLabel.setText("FREEZE SIZE", juce::dontSendNotification);
+    freezeHoldLabel.setText("FREEZE HOLD", juce::dontSendNotification);
     rateReductionLabel.setText("RATE REDUCTION", juce::dontSendNotification);
     voiceModeLabel.setJustificationType(juce::Justification::centredLeft);
     for (auto* label : { &sourceKeyLabel, &sourceTransposeLabel, &sourceFineTuneLabel,
                          &sourceGainLabel, &sourceWeightLabel, &sourceStretchLabel,
                          &targetKeyLabel, &voiceModeLabel, &globalGridLabel,
-                         &rateReductionLabel })
+                         &rateReductionLabel, &freezeSizeLabel, &freezeHoldLabel })
         label->setColour(juce::Label::textColourId, juce::Colour(0xffc8cad1));
     sourceKey.onChange = [this]
     {
@@ -350,6 +357,10 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     configureKnob(output, outputLabel, "OUTPUT");
     configureKnob(seed, seedLabel, "SEED");
     configureKnob(rootNote, rootNoteLabel, "ROOT MIDI NOTE");
+    configureLinearControl(freezeChance, freezeChanceLabel, "FREEZE CHANCE");
+    configureLinearControl(freezeOctaveChance, freezeOctaveChanceLabel, "OCTAVE CHANCE");
+    configureLinearControl(scrambleChance, scrambleChanceLabel, "SCRAMBLE CHANCE");
+    configureLinearControl(scrambleAmount, scrambleAmountLabel, "SCRAMBLE AMOUNT");
     finalLength.setNumDecimalPlacesToDisplay(0);
     finalLength.textFromValueFunction = [](double value)
     {
@@ -373,9 +384,21 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     voiceModeAttachment = std::make_unique<ComboBoxAttachment>(p.parameters, "voiceMode", voiceMode);
     globalGridAttachment = std::make_unique<ComboBoxAttachment>(
         p.parameters, "globalGrid", globalGrid);
+    freezeSizeAttachment = std::make_unique<ComboBoxAttachment>(
+        p.parameters, "freezeSize", freezeSize);
+    freezeHoldAttachment = std::make_unique<ComboBoxAttachment>(
+        p.parameters, "freezeHold", freezeHold);
     rateReductionAttachment = std::make_unique<ComboBoxAttachment>(
         p.parameters, "rateReduction", rateReduction);
     midiPitchAttachment = std::make_unique<ButtonAttachment>(p.parameters, "midiPitch", midiPitch);
+    freezeChanceAttachment = std::make_unique<SliderAttachment>(
+        p.parameters, "freezeChance", freezeChance);
+    freezeOctaveChanceAttachment = std::make_unique<SliderAttachment>(
+        p.parameters, "freezeOctaveChance", freezeOctaveChance);
+    scrambleChanceAttachment = std::make_unique<SliderAttachment>(
+        p.parameters, "scrambleChance", scrambleChance);
+    scrambleAmountAttachment = std::make_unique<SliderAttachment>(
+        p.parameters, "scrambleAmount", scrambleAmount);
 
     addButton.onClick = [this]
     {
@@ -404,6 +427,19 @@ void RandomChopSamplerAudioProcessorEditor::configureKnob(juce::Slider& slider, 
     slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 82, 20);
     slider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff8b5cf6));
+    label.setText(text, juce::dontSendNotification);
+    label.setJustificationType(juce::Justification::centred);
+    label.setColour(juce::Label::textColourId, juce::Colour(0xffc8cad1));
+    addAndMakeVisible(slider);
+    addAndMakeVisible(label);
+}
+
+void RandomChopSamplerAudioProcessorEditor::configureLinearControl(
+    juce::Slider& slider, juce::Label& label, const juce::String& text)
+{
+    slider.setSliderStyle(juce::Slider::LinearHorizontal);
+    slider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 72, 20);
+    slider.setColour(juce::Slider::trackColourId, juce::Colour(0xff8b5cf6));
     label.setText(text, juce::dontSendNotification);
     label.setJustificationType(juce::Justification::centred);
     label.setColour(juce::Label::textColourId, juce::Colour(0xffc8cad1));
@@ -441,6 +477,8 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     disableAllButton.setBounds(toolbar.removeFromLeft(105).reduced(2));
 
     auto globalControls = area.removeFromBottom(135);
+    auto scrambleControls = area.removeFromBottom(58);
+    auto freezeControls = area.removeFromBottom(58);
     auto timingControls = area.removeFromBottom(42);
     auto globalPitchControls = area.removeFromBottom(58);
     auto sourcePitchControls = area.removeFromBottom(58);
@@ -483,6 +521,27 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     auto rateCell = timingControls.removeFromLeft(400).reduced(3);
     rateReductionLabel.setBounds(rateCell.removeFromLeft(145));
     rateReduction.setBounds(rateCell.reduced(2, 5));
+
+    auto freezeChanceCell = freezeControls.removeFromLeft(260).reduced(3);
+    freezeChanceLabel.setBounds(freezeChanceCell.removeFromTop(20));
+    freezeChance.setBounds(freezeChanceCell);
+    auto freezeSizeCell = freezeControls.removeFromLeft(240).reduced(3);
+    freezeSizeLabel.setBounds(freezeSizeCell.removeFromLeft(100));
+    freezeSize.setBounds(freezeSizeCell.reduced(2, 8));
+    auto freezeHoldCell = freezeControls.removeFromLeft(240).reduced(3);
+    freezeHoldLabel.setBounds(freezeHoldCell.removeFromLeft(100));
+    freezeHold.setBounds(freezeHoldCell.reduced(2, 8));
+    auto octaveCell = freezeControls.reduced(3);
+    freezeOctaveChanceLabel.setBounds(octaveCell.removeFromTop(20));
+    freezeOctaveChance.setBounds(octaveCell);
+
+    auto scrambleChanceCell = scrambleControls.removeFromLeft(
+        scrambleControls.getWidth() / 2).reduced(3);
+    scrambleChanceLabel.setBounds(scrambleChanceCell.removeFromTop(20));
+    scrambleChance.setBounds(scrambleChanceCell);
+    auto scrambleAmountCell = scrambleControls.reduced(3);
+    scrambleAmountLabel.setBounds(scrambleAmountCell.removeFromTop(20));
+    scrambleAmount.setBounds(scrambleAmountCell);
 
     const int knobWidth = globalControls.getWidth() / 6;
     juce::Slider* sliders[] = { &randomStart, &finalLength, &attack, &release, &output, &seed };

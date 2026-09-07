@@ -6,6 +6,7 @@
 #include "SampleManager.h"
 #include "SourceSelection.h"
 #include "StateMigration.h"
+#include "TemporalEffects.h"
 #include "VoicePool.h"
 #include <iostream>
 #include <limits>
@@ -309,10 +310,32 @@ void testHostGrid()
     boundaries = grid.process(1000.0, 500, 1, host);
     check(!boundaries.transportDiscontinuity && boundaries.count == 4,
           "continuous host blocks were mistaken for a seek");
+    host.ppq = 2.0;
+    host.bpm = 90.0;
+    boundaries = grid.process(1000.0, 500, 1, host);
+    check(!boundaries.transportDiscontinuity && boundaries.count == 3
+              && boundaries.sampleOffsets[1] == 167,
+          "continuous tempo change broke grid phase");
     host.ppq = 0.25;
     boundaries = grid.process(1000.0, 64, 1, host);
     check(boundaries.transportDiscontinuity,
           "host seek/loop discontinuity was not detected");
+
+    grid.reset();
+    host = { 120.0, 0.1, true, true, true };
+    boundaries = grid.process(1000.0, 100, 1, host);
+    check(boundaries.count == 1 && boundaries.sampleOffsets[0] == 75,
+          "non-zero PPQ offset did not resolve the next boundary");
+    grid.reset();
+    host.ppq = 0.0;
+    boundaries = grid.process(1000.0, 500, 0, host);
+    check(boundaries.count == 2 && boundaries.sampleOffsets[1] == 250,
+          "1/8 host boundary spacing changed");
+    host.isPlaying = false;
+    auto stopped = grid.process(1000.0, 64, 0, host);
+    check(!stopped.usedHostClock && stopped.transportDiscontinuity
+              && stopped.count == 1 && stopped.sampleOffsets[0] == 0,
+          "stopped transport did not enter the safe fallback clock");
 
     grid.reset();
     randomchop::HostTiming missing;
@@ -328,6 +351,214 @@ void testHostGrid()
     check(fastest.count == 8 && fastest.sampleOffsets[1] == 63
               && fastest.sampleOffsets[7] == 438,
           "1/32 grid rounding changed");
+}
+
+juce::AudioBuffer<float> makeTemporalInput(int frames, int offset = 0)
+{
+    juce::AudioBuffer<float> buffer(2, frames);
+    for (int channel = 0; channel < 2; ++channel)
+        for (int frame = 0; frame < frames; ++frame)
+            buffer.setSample(channel, frame,
+                0.7f * std::sin(static_cast<float>(frame + offset + channel * 7) * 0.11f));
+    return buffer;
+}
+
+juce::AudioBuffer<float> copyBuffer(const juce::AudioBuffer<float>& source)
+{
+    juce::AudioBuffer<float> copy;
+    copy.makeCopyOf(source);
+    return copy;
+}
+
+bool buffersEqual(const juce::AudioBuffer<float>& a,
+                  const juce::AudioBuffer<float>& b) noexcept
+{
+    if (a.getNumChannels() != b.getNumChannels()
+        || a.getNumSamples() != b.getNumSamples())
+        return false;
+    for (int channel = 0; channel < a.getNumChannels(); ++channel)
+        for (int frame = 0; frame < a.getNumSamples(); ++frame)
+            if (a.getSample(channel, frame) != b.getSample(channel, frame))
+                return false;
+    return true;
+}
+
+bool bufferFiniteAndBounded(const juce::AudioBuffer<float>& buffer) noexcept
+{
+    for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+        for (int frame = 0; frame < buffer.getNumSamples(); ++frame)
+            if (!std::isfinite(buffer.getSample(channel, frame))
+                || std::abs(buffer.getSample(channel, frame)) > 64.0f)
+                return false;
+    return true;
+}
+
+void testFreezeProcessor()
+{
+    randomchop::GridBoundaries noBoundary;
+    noBoundary.bpm = 120.0;
+    randomchop::GridBoundaries trigger;
+    trigger.bpm = 120.0;
+    trigger.count = 1;
+    trigger.sampleOffsets[0] = 0;
+
+    randomchop::FreezeProcessor bypass;
+    bypass.prepare(1000.0);
+    bypass.setSeed(7);
+    auto dry = makeTemporalInput(256);
+    auto bypassed = copyBuffer(dry);
+    bypass.process(bypassed, trigger, 1, { 0.0f, 1, 1, 100.0f });
+    check(buffersEqual(dry, bypassed) && bypass.getActivationCount() == 0,
+          "Freeze Chance 0 was not sample-identical bypass");
+
+    randomchop::FreezeProcessor first;
+    randomchop::FreezeProcessor second;
+    first.prepare(1000.0);
+    second.prepare(1000.0);
+    first.setSeed(1234);
+    second.setSeed(1234);
+    auto historyA = makeTemporalInput(256);
+    auto historyB = copyBuffer(historyA);
+    first.process(historyA, noBoundary, 1, {});
+    second.process(historyB, noBoundary, 1, {});
+    auto eventDry = makeTemporalInput(200, 256);
+    auto eventA = copyBuffer(eventDry);
+    auto eventB = copyBuffer(eventDry);
+    const randomchop::FreezeSettings certain { 100.0f, 1, 0, 100.0f };
+    first.process(eventA, trigger, 1, certain);
+    second.process(eventB, trigger, 1, certain);
+    check(first.getActivationCount() == 1 && first.getLastCaptureFrames() == 63,
+          "Freeze did not begin on the eligible grid boundary with bounded capture");
+    check((first.getLastOctaveSemitones() == -12
+              || first.getLastOctaveSemitones() == 12)
+              && first.getLastOctaveSemitones() == second.getLastOctaveSemitones(),
+          "Freeze octave decision was not deterministic and exactly +/-12");
+    check(buffersEqual(eventA, eventB) && bufferFiniteAndBounded(eventA),
+          "Freeze output was non-deterministic or invalid");
+    check(eventA.getSample(0, 0) == eventDry.getSample(0, 0)
+              && std::abs(eventA.getSample(0, 1) - eventDry.getSample(0, 1)) < 1.0f,
+          "Freeze activation was not click-safe");
+
+    auto refill = makeTemporalInput(160, 456);
+    first.process(refill, noBoundary, 1, {});
+    auto secondEvent = makeTemporalInput(32, 616);
+    first.process(secondEvent, trigger, 1, certain);
+    check(first.getActivationCount() == 2 && first.isActive(),
+          "Freeze did not support a later repeated activation");
+    randomchop::GridBoundaries discontinuity;
+    discontinuity.bpm = 120.0;
+    discontinuity.transportDiscontinuity = true;
+    auto afterSeek = makeTemporalInput(32, 648);
+    const auto seekDry = copyBuffer(afterSeek);
+    first.process(afterSeek, discontinuity, 1, certain);
+    check(!first.isActive() && buffersEqual(afterSeek, seekDry),
+          "Freeze retained stale captured audio across a transport discontinuity");
+
+    bool sawDown = false;
+    bool sawUp = false;
+    for (uint64_t seed = 1; seed <= 32; ++seed)
+    {
+        randomchop::FreezeProcessor octave;
+        octave.prepare(1000.0);
+        octave.setSeed(seed);
+        auto fill = makeTemporalInput(128);
+        octave.process(fill, noBoundary, 1, {});
+        auto event = makeTemporalInput(8, 128);
+        octave.process(event, trigger, 1, { 100.0f, 0, 0, 100.0f });
+        sawDown = sawDown || octave.getLastOctaveSemitones() == -12;
+        sawUp = sawUp || octave.getLastOctaveSemitones() == 12;
+    }
+    check(sawDown && sawUp, "Freeze octave 50/50 branch did not expose both exact octaves");
+}
+
+void testScrambleProcessor()
+{
+    randomchop::GridBoundaries noBoundary;
+    noBoundary.bpm = 120.0;
+    randomchop::GridBoundaries trigger;
+    trigger.bpm = 120.0;
+    trigger.count = 1;
+    trigger.sampleOffsets[0] = 64;
+
+    randomchop::ScrambleProcessor zeroChance;
+    zeroChance.prepare(1000.0);
+    zeroChance.setSeed(88);
+    auto dry = makeTemporalInput(256);
+    auto bypassed = copyBuffer(dry);
+    zeroChance.process(bypassed, trigger, 1, { 0.0f, 100.0f });
+    check(buffersEqual(dry, bypassed) && zeroChance.getActivationCount() == 0,
+          "Scramble Chance 0 was not sample-identical bypass");
+
+    randomchop::ScrambleProcessor zeroAmount;
+    zeroAmount.prepare(1000.0);
+    auto amountDry = makeTemporalInput(256);
+    auto amountOutput = copyBuffer(amountDry);
+    zeroAmount.process(amountOutput, trigger, 1, { 100.0f, 0.0f });
+    check(buffersEqual(amountDry, amountOutput) && zeroAmount.getActivationCount() == 0,
+          "Scramble Amount 0 was not transparent");
+
+    randomchop::ScrambleProcessor first;
+    randomchop::ScrambleProcessor second;
+    first.prepare(1000.0);
+    second.prepare(1000.0);
+    first.setSeed(999);
+    second.setSeed(999);
+    auto fillA = makeTemporalInput(256);
+    auto fillB = copyBuffer(fillA);
+    first.process(fillA, noBoundary, 1, {});
+    second.process(fillB, noBoundary, 1, {});
+    auto eventDry = makeTemporalInput(256, 256);
+    auto eventA = copyBuffer(eventDry);
+    auto eventB = copyBuffer(eventDry);
+    first.process(eventA, trigger, 1, { 100.0f, 100.0f });
+    second.process(eventB, trigger, 1, { 100.0f, 100.0f });
+    check(first.getActivationCount() == 1 && first.getLastCaptureFrames() == 125,
+          "Scramble did not begin at the grid boundary with bounded chunk capture");
+    check(buffersEqual(eventA, eventB) && bufferFiniteAndBounded(eventA),
+          "Scramble fixed-seed output was non-deterministic or invalid");
+    bool unchangedBeforeBoundary = true;
+    bool changedAfterBoundary = false;
+    for (int frame = 0; frame < eventA.getNumSamples(); ++frame)
+    {
+        const auto different = eventA.getSample(0, frame) != eventDry.getSample(0, frame);
+        if (frame < 64)
+            unchangedBeforeBoundary = unchangedBeforeBoundary && !different;
+        else
+            changedAfterBoundary = changedAfterBoundary || different;
+    }
+    check(unchangedBeforeBoundary && changedAfterBoundary,
+          "Scramble changed audio before its grid start or never rearranged a chunk");
+
+    randomchop::ScrambleProcessor low;
+    low.prepare(1000.0);
+    low.setSeed(999);
+    auto lowFill = makeTemporalInput(256);
+    low.process(lowFill, noBoundary, 1, {});
+    auto lowOutput = copyBuffer(eventDry);
+    low.process(lowOutput, trigger, 1, { 100.0f, 10.0f });
+    check(low.getActivationCount() == 1 && bufferFiniteAndBounded(lowOutput)
+              && !buffersEqual(lowOutput, eventDry),
+          "low Scramble Amount did not produce a bounded understandable rearrangement");
+
+    auto refill = makeTemporalInput(100, 512);
+    first.process(refill, noBoundary, 1, {});
+    randomchop::GridBoundaries immediateTrigger;
+    immediateTrigger.bpm = 120.0;
+    immediateTrigger.count = 1;
+    immediateTrigger.sampleOffsets[0] = 0;
+    auto repeated = makeTemporalInput(32, 612);
+    first.process(repeated, immediateTrigger, 1, { 100.0f, 100.0f });
+    check(first.getActivationCount() == 2 && first.isActive(),
+          "Scramble did not support a later repeated activation");
+
+    randomchop::GridBoundaries discontinuity;
+    discontinuity.bpm = 120.0;
+    discontinuity.transportDiscontinuity = true;
+    auto seekOutput = makeTemporalInput(32, 512);
+    const auto seekDry = copyBuffer(seekOutput);
+    first.process(seekOutput, discontinuity, 1, { 100.0f, 100.0f });
+    check(!first.isActive() && buffersEqual(seekOutput, seekDry),
+          "Scramble retained stale chunks across a transport discontinuity");
 }
 
 void testStateMigration()
@@ -435,6 +666,8 @@ int main()
     testRegionsAndVoices();
     testRateReduction();
     testHostGrid();
+    testFreezeProcessor();
+    testScrambleProcessor();
     testStateMigration();
     testStretchSemanticsAndPublication();
     if (failures == 0)

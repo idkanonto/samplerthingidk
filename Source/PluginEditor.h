@@ -46,6 +46,7 @@ private:
     void refresh();
     void addFiles(const juce::StringArray&);
     void configureKnob(juce::Slider&, juce::Label&, const juce::String&);
+    void configureLinearControl(juce::Slider&, juce::Label&, const juce::String&);
 
     RandomChopSamplerAudioProcessor& processor;
     juce::Label title, status;
@@ -58,19 +59,26 @@ private:
     juce::Label sourceKeyLabel, sourceTransposeLabel, sourceFineTuneLabel,
         sourceGainLabel, sourceWeightLabel, sourceStretchLabel;
     juce::ComboBox targetKey, voiceMode, globalGrid, rateReduction;
+    juce::ComboBox freezeSize, freezeHold;
     juce::ToggleButton midiPitch { "MIDI Pitch" };
     juce::Slider rootNote, randomStart, finalLength, attack, release, output, seed;
+    juce::Slider freezeChance, freezeOctaveChance, scrambleChance, scrambleAmount;
     juce::Label targetKeyLabel, rootNoteLabel, voiceModeLabel, globalGridLabel,
         rateReductionLabel, randomStartLabel, finalLengthLabel, attackLabel,
-        releaseLabel, outputLabel, seedLabel;
+        releaseLabel, outputLabel, seedLabel, freezeChanceLabel, freezeSizeLabel,
+        freezeHoldLabel, freezeOctaveChanceLabel, scrambleChanceLabel,
+        scrambleAmountLabel;
 
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ComboBoxAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
     std::unique_ptr<SliderAttachment> randomStartAttachment, finalLengthAttachment,
-        attackAttachment, releaseAttachment, outputAttachment, seedAttachment, rootNoteAttachment;
+        attackAttachment, releaseAttachment, outputAttachment, seedAttachment, rootNoteAttachment,
+        freezeChanceAttachment, freezeOctaveChanceAttachment, scrambleChanceAttachment,
+        scrambleAmountAttachment;
     std::unique_ptr<ComboBoxAttachment> targetKeyAttachment, voiceModeAttachment,
-        globalGridAttachment, rateReductionAttachment;
+        globalGridAttachment, rateReductionAttachment, freezeSizeAttachment,
+        freezeHoldAttachment;
     std::unique_ptr<ButtonAttachment> midiPitchAttachment;
     std::shared_ptr<const SampleManager::Pool> displayPool;
     juce::String selectedSourceId;

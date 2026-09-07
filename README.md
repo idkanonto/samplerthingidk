@@ -26,6 +26,7 @@ The target name remains `RandomChopSampler` to preserve build continuity; the ho
 - Weighted source selection; editable Start/End, Source Key, Transpose, Fine Tune, Gain, Weight, and 0/OFF or 1x–4x Stretch.
 - Target Key, optional MIDI pitch/root, Random Start, Final Length, Attack, Release, POLY/MONO, Seed, and Output.
 - Host-derived 1/8, 1/16, or 1/32 global grid with a safe 120 BPM fallback.
+- Global FREEZE with grid-sized capture/hold and deterministic optional exact-octave flipping; global SCRAMBLE with bounded chunk rearrangement and Amount.
 - The former Take History, Step Mask, per-event Reverse/Retrigger/Skip/Reorder/Bend/Drop, and Bit Crush systems are removed. Old state entries are ignored safely.
 - Rate Reduction remains temporarily functional and will become part of the global CODEC stage.
 

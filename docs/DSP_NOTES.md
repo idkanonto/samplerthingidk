@@ -30,6 +30,15 @@ status: active
 - Expected PPQ continuity is computed from the previous block's rate and BPM. A seek, loop, incompatible transport jump, grid edit, or clock-source transition marks a discontinuity.
 - Missing or stopped host transport uses a continuous sample countdown at the latest valid BPM, initially 120. Grid output is a fixed array and cannot allocate.
 
+## Temporal global effects
+
+- FREEZE and SCRAMBLE each allocate a two-second stereo ring only in `prepare`. During rendering they write the incoming global mix while idle and freeze the ring while an event references its captured logical range.
+- Activation records ring indices and fixed scalar/array decisions; it does not copy captured audio. When an event ends, logical validity resets and the old memory is overwritten incrementally.
+- FREEZE derives capture and hold frames from the current grid BPM. Its optional octave direction is fixed for the event and reads the captured ring with wrapped linear interpolation.
+- SCRAMBLE uses no more than eight chunks. Its source index and reverse flag arrays are resolved once at activation; render-time addresses are clamped to the captured logical range.
+- Separate salted RNG streams preserve sampler random-selection stability. Chance 0 and Amount 0 avoid activation; bypassed finite samples remain identical.
+- A discontinuity drops event and logical-history state in constant time. Large buffers are not cleared from the audio callback.
+
 ## Removed DSP
 
 The old Take/Step/per-event effect path and Bit Crush are absent. They must not be reintroduced as implementation shortcuts for the global chain in [[SIGNAL_CHAIN]].
