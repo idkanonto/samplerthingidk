@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include <algorithm>
 #include <cmath>
 
 void SourceWaveformComponent::setSource(SampleManager::SamplePtr newSource)

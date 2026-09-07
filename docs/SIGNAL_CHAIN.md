@@ -27,4 +27,4 @@ status: approved
 
 ## Current code path
 
-The current Gate D branch implements all 14 steps in this order. SPECTRAL DRAW is a real global STFT stage after FRACTURE and before SMEAR. Rate Reduction is part of CODEC rather than a standalone module. Removed Take/Step/per-event processing and Bit Crush are not in the path, and every new creative stage defaults transparent. Gate D Windows runtime verification is still pending; see [[TEST_MATRIX]].
+Verified `main` implements all 14 steps in this order. SPECTRAL DRAW is a real global STFT stage after FRACTURE and before SMEAR. Rate Reduction is part of CODEC rather than a standalone module. Removed Take/Step/per-event processing and Bit Crush are not in the path, and every new creative stage defaults transparent. See [[TEST_MATRIX]] for the exact Windows evidence.

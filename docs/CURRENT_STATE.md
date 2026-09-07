@@ -11,7 +11,7 @@ verified: 2026-09-07
 
 # Current Implementation State
 
-The verified remote baseline is `main` at `a5e1f09df740bb4ef6de17547d0f0e1874194617`; [post-merge Windows Release CI run #47](https://github.com/idkanonto/samplerthingidk/actions/runs/34144904944) passed. Gate C PR #13 passed [PR run #46](https://github.com/idkanonto/samplerthingidk/actions/runs/34140666576) at `08b4ffc638926610c45835bdf1a1187e4b61185f`. Its `recompiler-dll-Windows-VST3` artifact (`10025978696`) had GitHub SHA-256 `f6655154f4d40b91c4ab26e0460f25068fa86f6fa493a843c592b90c6aa9239e` and contained the workflow-verified 7,433,216-byte Windows module at `recompiler.dll.vst3/Contents/x86_64-win/recompiler.dll.vst3`.
+The verified remote baseline is `main` at `37e1963d14d4f8889b81b56fcd89a78a2f6a2c7e`; [post-merge Windows Release CI run #49](https://github.com/idkanonto/samplerthingidk/actions/runs/34151063471) passed. Gate D PR #14 passed [PR run #48](https://github.com/idkanonto/samplerthingidk/actions/runs/34147146261) at `af45dd9906704279084c48267d813f45fe52b6a8`. Its `recompiler-dll-Windows-VST3` artifact (`10028206942`) had GitHub SHA-256 `8e3b2c91493b571ece1f0966b31614234cf0b00059803c5b5dc7a98143577bca` and contained the workflow-verified 7,462,400-byte Windows module at `recompiler.dll.vst3/Contents/x86_64-win/recompiler.dll.vst3`.
 
 ## Verified Gate A implementation
 
@@ -46,13 +46,13 @@ The verified remote baseline is `main` at `a5e1f09df740bb4ef6de17547d0f0e1874194
 - CODEC combines deterministic bandwidth loss, held predictive residuals, and watery/metallic reconstruction with the preserved 1x–64x sample-and-hold Rate Reduction. The old `rateReduction` parameter ID remains stable but is presented and processed only inside CODEC.
 - Gate C adds neutral migration defaults and state version 5. Its focused CTest suite and complete build/package workflow passed on both the PR head and squash-merged `main`.
 
-## Gate D branch implementation
+## Verified Gate D implementation
 
 - SPECTRAL DRAW is inserted globally between FRACTURE and SMEAR. It uses a real 1024-point STFT, 256-sample hop, square-root Hann overlap-add, and reports 1024 samples of plug-in latency.
 - A 128×64 attenuation-only canvas provides Draw, Erase, and Clear. Bilinear lookup smooths scanner/time and square-root frequency coordinates; Depth defaults to 0% for an exact latency-matched bypass.
 - Scan Rate offers 2 beats, 1 bar, 2 bars, and 4 bars. The scanner aligns to finite host PPQ and BPM when available, otherwise continues from the safe tempo fallback.
 - Canvas state is clamped, base64-encoded into state version 6, and transferred to the callback through fixed immutable snapshot slots. Audio rendering takes only an atomic read handle; it neither locks nor copies the canvas.
-- Gate D tests cover publication immutability, hostile values, persistence, exact bypass latency, empty/full masks, STFT reconstruction, arbitrary block sizes, 44.1/48/96 kHz preparation, scanner wrap/alignment, discontinuity, and live canvas replacement. This branch remains unverified until its Windows CI and post-merge `main` gate pass.
+- Gate D tests cover publication immutability, hostile values, persistence, exact bypass latency, empty/full masks, STFT reconstruction, arbitrary block sizes, 44.1/48/96 kHz preparation, scanner wrap/alignment, discontinuity, and live canvas replacement. They passed on both the PR head and squash-merged `main`.
 
 ## Not yet implemented
 

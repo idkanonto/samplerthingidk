@@ -11,6 +11,16 @@ constexpr auto sampleType = "SAMPLE";
 constexpr uint64_t maximumDecodedBytesPerSource = 256ULL * 1024ULL * 1024ULL;
 std::atomic<uint64_t> nextRuntimeId { 1 };
 
+float clampGainDb(float value) noexcept
+{
+    return std::isfinite(value) ? std::clamp(value, -60.0f, 12.0f) : 0.0f;
+}
+
+float clampSelectionWeight(float value) noexcept
+{
+    return std::isfinite(value) ? std::clamp(value, 0.01f, 10.0f) : 1.0f;
+}
+
 std::shared_ptr<const SampleData::WaveformPeaks>
 buildWaveformPeaks(const juce::AudioBuffer<float>& audio)
 {
@@ -55,14 +65,15 @@ SampleSettings readSettings(const juce::ValueTree& node)
     s.startNormalised = region.start;
     s.endNormalised = region.end;
     s.sourceKey = randomchop::clampTonic(static_cast<int>(node.getProperty("sourceKey", 0)));
-    s.gainDb = juce::jlimit(-60.0f, 12.0f, static_cast<float>(node.getProperty("gain", 0.0f)));
+    s.gainDb = clampGainDb(static_cast<float>(node.getProperty("gain", 0.0f)));
     s.transposeSemitones = randomchop::clampTranspose(
         static_cast<int>(node.getProperty("transpose", 0)));
     s.fineTuneCents = randomchop::clampFineTune(
         static_cast<float>(node.getProperty("fineTune", 0.0f)));
     s.stretchRatio = randomchop::clampStretchRatio(
         static_cast<float>(node.getProperty("stretch", 0.0f)));
-    s.selectionWeight = juce::jlimit(0.01f, 10.0f, static_cast<float>(node.getProperty("weight", 1.0f)));
+    s.selectionWeight = clampSelectionWeight(
+        static_cast<float>(node.getProperty("weight", 1.0f)));
     return s;
 }
 }
@@ -402,10 +413,11 @@ void SampleManager::updateSettings(const juce::String& id,
         copy->settings.transposeSemitones = randomchop::clampTranspose(
             copy->settings.transposeSemitones);
         copy->settings.fineTuneCents = randomchop::clampFineTune(copy->settings.fineTuneCents);
+        copy->settings.gainDb = clampGainDb(copy->settings.gainDb);
         copy->settings.stretchRatio = randomchop::clampStretchRatio(
             copy->settings.stretchRatio);
-        copy->settings.selectionWeight = juce::jlimit(0.01f, 10.0f,
-                                                      copy->settings.selectionWeight);
+        copy->settings.selectionWeight = clampSelectionWeight(
+            copy->settings.selectionWeight);
 
         const auto effectiveStretchRatio = randomchop::stretchDurationMultiplier(
             copy->settings.stretchRatio);
