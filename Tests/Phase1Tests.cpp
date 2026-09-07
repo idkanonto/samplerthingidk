@@ -294,7 +294,7 @@ void testRegionsAndVoices()
           "16-voice pool or oldest-voice selection changed");
 
     auto hostileAudio = std::make_shared<juce::AudioBuffer<float>>(1, 16);
-    hostileAudio->fill(0.5f);
+    std::fill_n(hostileAudio->getWritePointer(0), hostileAudio->getNumSamples(), 0.5f);
     hostileAudio->setSample(0, 0, std::numeric_limits<float>::quiet_NaN());
     hostileAudio->setSample(0, 1, std::numeric_limits<float>::infinity());
     hostileAudio->setSample(0, 2, 1.0e30f);
