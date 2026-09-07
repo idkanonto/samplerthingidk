@@ -15,6 +15,12 @@ constexpr auto rootNote = "rootNote";
 constexpr auto finalLength = "finalLength";
 constexpr auto voiceMode = "voiceMode";
 constexpr auto globalGrid = "globalGrid";
+constexpr auto freezeChance = "freezeChance";
+constexpr auto freezeSize = "freezeSize";
+constexpr auto freezeHold = "freezeHold";
+constexpr auto freezeOctaveChance = "freezeOctaveChance";
+constexpr auto scrambleChance = "scrambleChance";
+constexpr auto scrambleAmount = "scrambleAmount";
 constexpr auto rateReduction = "rateReduction";
 }
 
@@ -51,6 +57,21 @@ RandomChopSamplerAudioProcessor::createParameterLayout()
         IDs::voiceMode, "Voice Mode", juce::StringArray { "POLY", "MONO" }, 0));
     layout.add(std::make_unique<juce::AudioParameterChoice>(
         IDs::globalGrid, "Global Grid", juce::StringArray { "1/8", "1/16", "1/32" }, 1));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::freezeChance, "Freeze Chance",
+        juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, "%"));
+    layout.add(std::make_unique<juce::AudioParameterChoice>(IDs::freezeSize, "Freeze Size",
+        juce::StringArray { "1/4 grid", "1/2 grid", "1 grid" }, 1));
+    layout.add(std::make_unique<juce::AudioParameterChoice>(IDs::freezeHold, "Freeze Hold",
+        juce::StringArray { "1 grid", "2 grids", "4 grids", "8 grids" }, 1));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        IDs::freezeOctaveChance, "Freeze Octave Chance",
+        juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, "%"));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        IDs::scrambleChance, "Scramble Chance",
+        juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, "%"));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        IDs::scrambleAmount, "Scramble Amount",
+        juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 50.0f, "%"));
     layout.add(std::make_unique<juce::AudioParameterChoice>(
         IDs::rateReduction, "Rate Reduction",
         juce::StringArray { "1x (OFF)", "2x", "4x", "8x", "16x", "32x", "64x" }, 0));
@@ -63,6 +84,8 @@ void RandomChopSamplerAudioProcessor::prepareToPlay(double rate, int)
     voices.prepare(currentRate);
     masterDigitalProcessor.reset();
     hostGrid.reset();
+    freezeProcessor.prepare(currentRate);
+    scrambleProcessor.prepare(currentRate);
     lastGridBoundaries = {};
     lastSeed = -1;
 }
@@ -147,6 +170,8 @@ void RandomChopSamplerAudioProcessor::processBlock(
     if (seed != lastSeed)
     {
         random.setSeed(static_cast<uint64_t>(seed));
+        freezeProcessor.setSeed(static_cast<uint64_t>(seed));
+        scrambleProcessor.setSeed(static_cast<uint64_t>(seed));
         lastSeed = seed;
     }
 
@@ -172,6 +197,14 @@ void RandomChopSamplerAudioProcessor::processBlock(
     if (rendered < buffer.getNumSamples())
         voices.render(buffer, rendered, buffer.getNumSamples() - rendered);
 
+    freezeProcessor.process(buffer, lastGridBoundaries, gridChoice,
+        { parameters.getRawParameterValue(IDs::freezeChance)->load(),
+          static_cast<int>(parameters.getRawParameterValue(IDs::freezeSize)->load()),
+          static_cast<int>(parameters.getRawParameterValue(IDs::freezeHold)->load()),
+          parameters.getRawParameterValue(IDs::freezeOctaveChance)->load() });
+    scrambleProcessor.process(buffer, lastGridBoundaries, gridChoice,
+        { parameters.getRawParameterValue(IDs::scrambleChance)->load(),
+          parameters.getRawParameterValue(IDs::scrambleAmount)->load() });
     masterDigitalProcessor.process(buffer,
         randomchop::MasterDigitalProcessor::rateFactorFromChoice(static_cast<int>(
             parameters.getRawParameterValue(IDs::rateReduction)->load())));
@@ -199,8 +232,18 @@ void RandomChopSamplerAudioProcessor::setStateInformation(const void* data, int 
         if (files.isValid())
             state.removeChild(files, nullptr);
         randomchop::removeLegacyState(state);
-        if (!state.hasProperty(IDs::globalGrid))
-            state.setProperty(IDs::globalGrid, 1, nullptr);
+        const auto ensureParameter = [&state](const char* id, float value)
+        {
+            if (!state.hasProperty(id))
+                state.setProperty(id, value, nullptr);
+        };
+        ensureParameter(IDs::globalGrid, 1.0f);
+        ensureParameter(IDs::freezeChance, 0.0f);
+        ensureParameter(IDs::freezeSize, 1.0f);
+        ensureParameter(IDs::freezeHold, 1.0f);
+        ensureParameter(IDs::freezeOctaveChance, 0.0f);
+        ensureParameter(IDs::scrambleChance, 0.0f);
+        ensureParameter(IDs::scrambleAmount, 50.0f);
         parameters.replaceState(state);
         samples.restoreState(files);
     }

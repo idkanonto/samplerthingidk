@@ -6,6 +6,7 @@
 #include "RandomizationEngine.h"
 #include "SourceSelection.h"
 #include "StateMigration.h"
+#include "TemporalEffects.h"
 #include "VoicePool.h"
 
 class RandomChopSamplerAudioProcessor final : public juce::AudioProcessor
@@ -47,6 +48,8 @@ private:
     randomchop::MasterDigitalProcessor masterDigitalProcessor;
     randomchop::HostGrid hostGrid;
     randomchop::GridBoundaries lastGridBoundaries;
+    randomchop::FreezeProcessor freezeProcessor;
+    randomchop::ScrambleProcessor scrambleProcessor;
     RandomizationEngine random;
     double currentRate = 44100.0;
     uint64_t voiceCounter = 0;

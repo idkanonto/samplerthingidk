@@ -11,7 +11,7 @@ status: in-progress
 
 # Realtime Safety Audit
 
-This audit covers the Gate A branch against [[DSP_NOTES]]. Runtime verification is pending Windows CI and does not replace an allocator hook, realtime profiler, or DAW stress pass.
+This audit covers the Gate B branch against [[DSP_NOTES]]. Gate A passed PR run #42 and post-merge run #43; Gate B runtime verification is pending. Source/CI review does not replace an allocator hook, realtime profiler, or DAW stress pass.
 
 ## Audio-thread paths
 
@@ -21,6 +21,8 @@ This audit covers the Gate A branch against [[DSP_NOTES]]. Runtime verification 
 | Note On | Scans at most 20 immutable sources twice, resolves one region/start/pitch value, scans/acquires at most 16 voices | The atomically published pool and prepared version are shared immutable references; manager retirement roots prevent final callback reclamation. |
 | Voice render | Linear interpolation and scalar envelope/length/fade/steal state bounded by the supplied span | No RNG, collection, lock, or mutable source access. The removed per-event FX state is absent. |
 | Host grid | Constant scalar math plus a fixed 64-entry output array | No playhead access outside the single block-start read; no heap or UI access. |
+| FREEZE | One bounded sample loop, wrapped interpolation, and scalar fades. Activation stores only ring indices/scalars. | Two-second stereo history is allocated in `prepare`; captured audio is referenced in place and never copied or reclaimed in the callback. |
+| SCRAMBLE | One bounded sample loop and at most eight fixed chunk decisions per activation. Every logical read is clamped. | Preallocated stereo history plus fixed mapping/reverse arrays; no vector, lock, parser, or mutable UI state. |
 | Rate Reduction | Two held floats and one bounded phase counter | No quantizer/Bit Crush, RNG, lock, or allocation; non-finite/pathological values are contained. |
 
 ## Non-realtime paths

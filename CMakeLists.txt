@@ -61,6 +61,8 @@ target_sources(RandomChopSampler PRIVATE
     Source/VoicePool.h
     Source/HostGrid.h
     Source/StateMigration.h
+    Source/TemporalEffects.cpp
+    Source/TemporalEffects.h
     Source/MasterDigitalProcessor.h
     Source/RandomizationEngine.h
     Source/HarmonicPitch.h
@@ -109,6 +111,8 @@ if (BUILD_TESTING)
         Source/VoicePool.h
         Source/HostGrid.h
         Source/StateMigration.h
+        Source/TemporalEffects.cpp
+        Source/TemporalEffects.h
         Source/MasterDigitalProcessor.h
         Source/RandomizationEngine.h
         Source/HarmonicPitch.h

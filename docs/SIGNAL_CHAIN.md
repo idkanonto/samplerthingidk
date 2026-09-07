@@ -25,6 +25,6 @@ status: approved
 13. CODEC, including Rate Reduction.
 14. Output Gain.
 
-## Gate A code path
+## Current code path
 
-The current foundation implements steps 1–7, temporary standalone Rate Reduction, and Output. It also computes the shared host-grid boundaries needed by later effects. Removed Take/Step/per-event processing and Bit Crush are not in the path. Later gates must insert effects only at their assigned location and keep bypass states transparent.
+The current Gate B branch implements steps 1–9, temporary standalone Rate Reduction, and Output. Removed Take/Step/per-event processing and Bit Crush are not in the path. Later gates must insert effects only at their assigned location and keep bypass states transparent.
