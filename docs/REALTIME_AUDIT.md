@@ -11,7 +11,7 @@ status: in-progress
 
 # Realtime Safety Audit
 
-This audit covers the Gate C branch against [[DSP_NOTES]]. Gate B passed PR run #44 and post-merge run #45; Gate C runtime verification is pending. Source/CI review does not replace an allocator hook, realtime profiler, or DAW stress pass.
+This audit covers the Gate D branch against [[DSP_NOTES]]. Gate C passed PR run #46 and post-merge run #47; Gate D runtime verification is pending. Source/CI review does not replace an allocator hook, realtime profiler, or DAW stress pass.
 
 ## Audio-thread paths
 
@@ -24,6 +24,7 @@ This audit covers the Gate C branch against [[DSP_NOTES]]. Gate B passed PR run 
 | FREEZE | One bounded sample loop, wrapped interpolation, and scalar fades. Activation stores only ring indices/scalars. | Two-second stereo history is allocated in `prepare`; captured audio is referenced in place and never copied or reclaimed in the callback. |
 | SCRAMBLE | One bounded sample loop and at most eight fixed chunk decisions per activation. Every logical read is clamped. | Preallocated stereo history plus fixed mapping/reverse arrays; no vector, lock, parser, or mutable UI state. |
 | FRACTURE | Fixed waveshaper/filter math per sample; six parallel stable structures and fractional comb reads | The 60 ms stereo comb is allocated in `prepare`; state is scalar/fixed-array and feedback/output are bounded. |
+| SPECTRAL DRAW | One 1024-point transform per channel every 256 samples, fixed ring scans, bounded bin/mask lookup, and fixed-array reset on transport discontinuity | Signalsmith FFT work storage is resized only in `prepare`; four inline immutable mask slots use atomic state transitions. The callback takes no canvas mutex, copy, allocation, or final reclamation. |
 | SMEAR | Two bounded fractional reads per channel and scalar window/blur math per sample | The half-second stereo delay is allocated in `prepare`; read heads wrap within capacity and no grains are objects. |
 | CODEC | Fixed predictor/reconstruction math plus two bounded counters and sample-and-hold | Per-channel state is fixed arrays. No real encoder, quantizer/Bit Crush, RNG, lock, parsing, or allocation. |
 
@@ -33,8 +34,9 @@ This audit covers the Gate C branch against [[DSP_NOTES]]. Gate B passed PR run 
 - Signalsmith work runs on the dedicated worker. Source identity and revision reject stale publication.
 - Source edits use `mutationMutex`; the stretch queue uses its own mutex and condition variable. Neither is reached by the callback.
 - Editor selection is a stable source ID. Trigger highlighting is a separate atomic runtime ID and cannot retarget edits.
+- Canvas drawing, clamping, encoding, restore, and canonical mutation occur on UI/state paths. Publication writes a free slot completely before its release-store; the callback reads only a held immutable slot.
 - State migration allocates/mutates only during host state restore, never during audio rendering.
 
 ## Required later audit
 
-Gate D must additionally document STFT latency, overlap-add storage, mask publication, scanner state, and teardown ownership. Gate E repeats the full-chain audit and records external checks still not run.
+Gate E repeats the full-chain audit, adds compatibility/lifecycle stress evidence, and records external checks still not run. In particular, no allocator hook, realtime profiler, or DAW host stress pass is available in CI.

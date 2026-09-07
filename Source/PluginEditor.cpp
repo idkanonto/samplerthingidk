@@ -196,6 +196,119 @@ void SourceWaveformComponent::mouseUp(const juce::MouseEvent&)
     dragMarker = DragMarker::none;
 }
 
+void SpectralCanvasComponent::setCanvas(const Canvas& newCanvas)
+{
+    canvas = newCanvas;
+    repaint();
+}
+
+void SpectralCanvasComponent::clearCanvas()
+{
+    canvas.fill(0.0f);
+    if (onCanvasChanged)
+        onCanvasChanged(canvas);
+    repaint();
+}
+
+void SpectralCanvasComponent::setScanPosition(float position)
+{
+    const auto next = std::clamp(std::isfinite(position) ? position : 0.0f, 0.0f, 1.0f);
+    if (std::abs(next - scanPosition) > 0.0001f)
+    {
+        scanPosition = next;
+        repaint();
+    }
+}
+
+juce::Point<int> SpectralCanvasComponent::eventToCell(
+    const juce::MouseEvent& event) const noexcept
+{
+    const auto bounds = getLocalBounds().reduced(2);
+    if (bounds.isEmpty())
+        return {};
+    const auto x = juce::jlimit(0, randomchop::SpectralMaskStore::canvasWidth - 1,
+        static_cast<int>((event.position.x - static_cast<float>(bounds.getX()))
+            * randomchop::SpectralMaskStore::canvasWidth
+            / static_cast<float>(bounds.getWidth())));
+    const auto y = juce::jlimit(0, randomchop::SpectralMaskStore::canvasHeight - 1,
+        static_cast<int>((event.position.y - static_cast<float>(bounds.getY()))
+            * randomchop::SpectralMaskStore::canvasHeight
+            / static_cast<float>(bounds.getHeight())));
+    return { x, y };
+}
+
+void SpectralCanvasComponent::applyBrush(juce::Point<int> cell) noexcept
+{
+    for (int row = std::max(0, cell.y - 1);
+         row <= std::min(randomchop::SpectralMaskStore::canvasHeight - 1, cell.y + 1); ++row)
+        for (int column = std::max(0, cell.x - 1);
+             column <= std::min(randomchop::SpectralMaskStore::canvasWidth - 1, cell.x + 1);
+             ++column)
+            canvas[static_cast<std::size_t>(
+                row * randomchop::SpectralMaskStore::canvasWidth + column)]
+                = eraseMode ? 0.0f : 1.0f;
+}
+
+void SpectralCanvasComponent::applyLine(juce::Point<int> from, juce::Point<int> to)
+{
+    const auto steps = std::max(std::abs(to.x - from.x), std::abs(to.y - from.y));
+    for (int step = 0; step <= steps; ++step)
+    {
+        const auto amount = steps > 0
+            ? static_cast<float>(step) / static_cast<float>(steps) : 0.0f;
+        applyBrush({ juce::roundToInt(static_cast<float>(from.x)
+                                      + static_cast<float>(to.x - from.x) * amount),
+                     juce::roundToInt(static_cast<float>(from.y)
+                                      + static_cast<float>(to.y - from.y) * amount) });
+    }
+    if (onCanvasChanged)
+        onCanvasChanged(canvas);
+    repaint();
+}
+
+void SpectralCanvasComponent::mouseDown(const juce::MouseEvent& event)
+{
+    lastCell = eventToCell(event);
+    applyLine(lastCell, lastCell);
+}
+
+void SpectralCanvasComponent::mouseDrag(const juce::MouseEvent& event)
+{
+    const auto next = eventToCell(event);
+    applyLine(lastCell, next);
+    lastCell = next;
+}
+
+void SpectralCanvasComponent::paint(juce::Graphics& g)
+{
+    const auto bounds = getLocalBounds().reduced(2);
+    g.fillAll(juce::Colour(0xff111218));
+    g.setColour(juce::Colour(0xff343846));
+    g.fillRect(bounds);
+    const auto cellWidth = static_cast<float>(bounds.getWidth())
+        / randomchop::SpectralMaskStore::canvasWidth;
+    const auto cellHeight = static_cast<float>(bounds.getHeight())
+        / randomchop::SpectralMaskStore::canvasHeight;
+    g.setColour(juce::Colour(0xff9a7cff));
+    for (int row = 0; row < randomchop::SpectralMaskStore::canvasHeight; ++row)
+        for (int column = 0; column < randomchop::SpectralMaskStore::canvasWidth; ++column)
+        {
+            const auto value = canvas[static_cast<std::size_t>(
+                row * randomchop::SpectralMaskStore::canvasWidth + column)];
+            if (value > 0.0001f)
+                g.fillRect(static_cast<float>(bounds.getX()) + column * cellWidth,
+                           static_cast<float>(bounds.getY()) + row * cellHeight,
+                           cellWidth + 0.5f, cellHeight + 0.5f);
+        }
+    g.setColour(juce::Colour(0xffffcf5a));
+    const auto scannerX = static_cast<float>(bounds.getX())
+        + scanPosition * static_cast<float>(bounds.getWidth());
+    g.drawVerticalLine(juce::roundToInt(scannerX), static_cast<float>(bounds.getY()),
+                       static_cast<float>(bounds.getBottom()));
+    g.setColour(juce::Colour(0xff696d7c));
+    g.drawRect(bounds, 1);
+}
+
 namespace
 {
 class SourceRowControls final : public juce::Component
@@ -237,7 +350,9 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
         &voiceMode, &voiceModeLabel, &globalGrid, &globalGridLabel,
         &rateReduction, &rateReductionLabel, &freezeSize, &freezeHold,
         &freezeSizeLabel, &freezeHoldLabel, &fracturePresetLabel, &fracturePreset,
-        &previousFracturePreset, &nextFracturePreset, &codecQuality, &codecQualityLabel };
+        &previousFracturePreset, &nextFracturePreset, &codecQuality, &codecQualityLabel,
+        &spectralDrawLabel, &spectralDrawButton, &spectralEraseButton,
+        &spectralClearButton, &spectralScanRateLabel, &spectralScanRate, &spectralCanvas };
     for (auto* component : components) addAndMakeVisible(component);
     list.setColour(juce::ListBox::backgroundColourId, juce::Colour(0xff191b21));
     list.setRowHeight(34);
@@ -264,6 +379,8 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     for (const auto& preset : randomchop::fracturePresets)
         fracturePreset.addItem(preset.name, fracturePreset.getNumItems() + 1);
     fracturePreset.setSelectedItemIndex(0, juce::dontSendNotification);
+    for (const auto& name : juce::StringArray { "2 beats", "1 bar", "2 bars", "4 bars" })
+        spectralScanRate.addItem(name, spectralScanRate.getNumItems() + 1);
     sourceTranspose.setRange(-24.0, 24.0, 1.0);
     sourceTranspose.setTextValueSuffix(" st");
     sourceFineTune.setRange(-100.0, 100.0, 1.0);
@@ -298,6 +415,8 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     freezeSizeLabel.setText("FREEZE SIZE", juce::dontSendNotification);
     freezeHoldLabel.setText("FREEZE HOLD", juce::dontSendNotification);
     fracturePresetLabel.setText("FRACTURE PRESET", juce::dontSendNotification);
+    spectralDrawLabel.setText("SPECTRAL DRAW", juce::dontSendNotification);
+    spectralScanRateLabel.setText("SCAN RATE", juce::dontSendNotification);
     codecQualityLabel.setText("CODEC QUALITY", juce::dontSendNotification);
     rateReductionLabel.setText("CODEC RATE", juce::dontSendNotification);
     voiceModeLabel.setJustificationType(juce::Justification::centredLeft);
@@ -305,8 +424,24 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
                          &sourceGainLabel, &sourceWeightLabel, &sourceStretchLabel,
                          &targetKeyLabel, &voiceModeLabel, &globalGridLabel,
                          &rateReductionLabel, &freezeSizeLabel, &freezeHoldLabel,
-                         &fracturePresetLabel, &codecQualityLabel })
+                         &fracturePresetLabel, &codecQualityLabel, &spectralDrawLabel,
+                         &spectralScanRateLabel })
         label->setColour(juce::Label::textColourId, juce::Colour(0xffc8cad1));
+    spectralDrawButton.setClickingTogglesState(true);
+    spectralEraseButton.setClickingTogglesState(true);
+    spectralDrawButton.setRadioGroupId(3001);
+    spectralEraseButton.setRadioGroupId(3001);
+    spectralDrawButton.setToggleState(true, juce::dontSendNotification);
+    spectralDrawButton.onClick = [this] { spectralCanvas.setEraseMode(false); };
+    spectralEraseButton.onClick = [this] { spectralCanvas.setEraseMode(true); };
+    spectralClearButton.onClick = [this] { spectralCanvas.clearCanvas(); };
+    spectralCanvas.setCanvas(processor.getSpectralCanvas());
+    lastSpectralCanvasGeneration = processor.getSpectralCanvasGeneration();
+    spectralCanvas.onCanvasChanged = [this](const SpectralCanvasComponent::Canvas& canvas)
+    {
+        processor.setSpectralCanvas(canvas);
+        lastSpectralCanvasGeneration = processor.getSpectralCanvasGeneration();
+    };
     fracturePreset.onChange = [this]
     {
         const auto index = fracturePreset.getSelectedItemIndex() - 1;
@@ -395,6 +530,7 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     configureKnob(fractureFrequency, fractureFrequencyLabel, "FREQUENCY");
     configureKnob(fractureResonance, fractureResonanceLabel, "RESONANCE");
     configureKnob(fractureMix, fractureMixLabel, "MIX");
+    configureLinearControl(spectralDepth, spectralDepthLabel, "SPECTRAL DEPTH");
     configureLinearControl(smearAmount, smearAmountLabel, "SMEAR AMOUNT");
     configureLinearControl(codecAmount, codecAmountLabel, "CODEC AMOUNT");
     finalLength.setNumDecimalPlacesToDisplay(0);
@@ -428,6 +564,8 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
         p.parameters, "rateReduction", rateReduction);
     codecQualityAttachment = std::make_unique<ComboBoxAttachment>(
         p.parameters, "codecQuality", codecQuality);
+    spectralScanRateAttachment = std::make_unique<ComboBoxAttachment>(
+        p.parameters, "spectralScanRate", spectralScanRate);
     midiPitchAttachment = std::make_unique<ButtonAttachment>(p.parameters, "midiPitch", midiPitch);
     freezeChanceAttachment = std::make_unique<SliderAttachment>(
         p.parameters, "freezeChance", freezeChance);
@@ -449,6 +587,8 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
         p.parameters, "fractureResonance", fractureResonance);
     fractureMixAttachment = std::make_unique<SliderAttachment>(
         p.parameters, "fractureMix", fractureMix);
+    spectralDepthAttachment = std::make_unique<SliderAttachment>(
+        p.parameters, "spectralDepth", spectralDepth);
     smearAmountAttachment = std::make_unique<SliderAttachment>(
         p.parameters, "smearAmount", smearAmount);
     codecAmountAttachment = std::make_unique<SliderAttachment>(
@@ -648,7 +788,21 @@ void RandomChopSamplerAudioProcessorEditor::resized()
         sliders[i]->setBounds(cell.reduced(4));
     }
     waveform.setBounds(waveformArea.reduced(10));
-    list.setBounds(area.reduced(10));
+    auto listAndSpectral = area.reduced(10);
+    auto listArea = listAndSpectral.removeFromLeft(listAndSpectral.getWidth() / 2).reduced(2);
+    list.setBounds(listArea);
+    auto spectralArea = listAndSpectral.reduced(2);
+    auto spectralTools = spectralArea.removeFromTop(34);
+    spectralDrawLabel.setBounds(spectralTools.removeFromLeft(115));
+    spectralDrawButton.setBounds(spectralTools.removeFromLeft(55).reduced(2));
+    spectralEraseButton.setBounds(spectralTools.removeFromLeft(55).reduced(2));
+    spectralClearButton.setBounds(spectralTools.removeFromLeft(55).reduced(2));
+    spectralScanRateLabel.setBounds(spectralTools.removeFromLeft(75));
+    spectralScanRate.setBounds(spectralTools.reduced(2, 4));
+    auto depthArea = spectralArea.removeFromTop(38).reduced(2);
+    spectralDepthLabel.setBounds(depthArea.removeFromLeft(125));
+    spectralDepth.setBounds(depthArea);
+    spectralCanvas.setBounds(spectralArea.reduced(2));
 }
 
 bool RandomChopSamplerAudioProcessorEditor::isInterestedInFileDrag(const juce::StringArray& files)
@@ -788,5 +942,12 @@ void RandomChopSamplerAudioProcessorEditor::timerCallback()
     else if (transientMessage.isNotEmpty())
         message += " — " + transientMessage;
     status.setText(message, juce::dontSendNotification);
+    const auto canvasGeneration = processor.getSpectralCanvasGeneration();
+    if (canvasGeneration != lastSpectralCanvasGeneration)
+    {
+        spectralCanvas.setCanvas(processor.getSpectralCanvas());
+        lastSpectralCanvasGeneration = canvasGeneration;
+    }
+    spectralCanvas.setScanPosition(processor.getSpectralScanPosition());
     list.repaint();
 }

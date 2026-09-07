@@ -27,4 +27,4 @@ status: approved
 
 ## Current code path
 
-The current Gate C branch implements steps 1–10 and 12–14. FRACTURE, SMEAR, and CODEC are in their final relative order; the Gate D SPECTRAL DRAW stage will be inserted only at step 11. Rate Reduction is now part of CODEC rather than a standalone module. Removed Take/Step/per-event processing and Bit Crush are not in the path, and every new creative stage defaults transparent.
+The current Gate D branch implements all 14 steps in this order. SPECTRAL DRAW is a real global STFT stage after FRACTURE and before SMEAR. Rate Reduction is part of CODEC rather than a standalone module. Removed Take/Step/per-event processing and Bit Crush are not in the path, and every new creative stage defaults transparent. Gate D Windows runtime verification is still pending; see [[TEST_MATRIX]].

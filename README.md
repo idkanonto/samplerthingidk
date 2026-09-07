@@ -28,6 +28,7 @@ The target name remains `RandomChopSampler` to preserve build continuity; the ho
 - Host-derived 1/8, 1/16, or 1/32 global grid with a safe 120 BPM fallback.
 - Global FREEZE with grid-sized capture/hold and deterministic optional exact-octave flipping; global SCRAMBLE with bounded chunk rearrangement and Amount.
 - Global FRACTURE with six controls and 30 real factory presets, plus bounded SMEAR and damaged-digital CODEC stages.
+- Real global SPECTRAL DRAW with a persistent 128×64 attenuation canvas, Draw/Erase/Clear tools, four tempo-derived scan rates, Depth, and reported 1024-sample latency.
 - The preserved 1x–64x Rate Reduction now lives inside CODEC; all three Gate C stages load neutral.
 - The former Take History, Step Mask, per-event Reverse/Retrigger/Skip/Reorder/Bend/Drop, and Bit Crush systems are removed. Old state entries are ignored safely.
 

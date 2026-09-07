@@ -6,8 +6,10 @@
 #include "SampleManager.h"
 #include "SourceSelection.h"
 #include "StateMigration.h"
+#include "SpectralDraw.h"
 #include "TemporalEffects.h"
 #include "VoicePool.h"
+#include <algorithm>
 #include <iostream>
 #include <limits>
 
@@ -505,6 +507,172 @@ void testCodecProcessor()
           "Codec created a white-noise explosion from silence");
 }
 
+void testSpectralMaskPublicationAndState()
+{
+    randomchop::SpectralMaskStore store;
+    randomchop::SpectralMaskStore::Canvas canvas {};
+    canvas[0] = -1.0f;
+    canvas[1] = 0.5f;
+    canvas[2] = 2.0f;
+    canvas[3] = std::numeric_limits<float>::quiet_NaN();
+    check(store.setCanvas(canvas), "Spectral canvas could not publish into a free slot");
+    const auto generation = store.getPublishedGeneration();
+    const auto cleaned = store.copyCanvas();
+    check(generation > 0 && cleaned[0] == 0.0f && cleaned[1] == 0.5f
+              && cleaned[2] == 1.0f && cleaned[3] == 0.0f,
+          "Spectral canvas publication did not clamp hostile mask values");
+
+    const auto held = store.acquire();
+    check(held.snapshot != nullptr && held.snapshot->generation == generation,
+          "audio-side Spectral canvas snapshot could not be acquired");
+    auto replacement = cleaned;
+    replacement[1] = 0.25f;
+    check(store.setCanvas(replacement)
+              && held.snapshot != nullptr && held.snapshot->values[1] == 0.5f,
+          "Spectral canvas publication mutated a snapshot held by the audio side");
+    store.release(held);
+    const auto latest = store.acquire();
+    check(latest.snapshot != nullptr && latest.snapshot->values[1] == 0.25f
+              && latest.snapshot->generation > generation,
+          "Spectral canvas did not advance to the latest immutable snapshot");
+    store.release(latest);
+
+    const auto encoded = store.encodeCanvas();
+    randomchop::SpectralMaskStore restored;
+    check(encoded.isNotEmpty() && restored.restoreEncodedCanvas(encoded)
+              && restored.copyCanvas() == replacement,
+          "Spectral canvas state did not round-trip through its bounded encoding");
+    check(!restored.restoreEncodedCanvas("not-valid-canvas-state"),
+          "invalid Spectral canvas state was accepted");
+    restored.clear();
+    const auto cleared = restored.copyCanvas();
+    check(std::all_of(cleared.begin(), cleared.end(),
+                      [](float value) { return value == 0.0f; }),
+          "Spectral Clear did not publish an empty mask");
+}
+
+void testSpectralDrawProcessor()
+{
+    check(randomchop::SpectralDrawProcessor::latencySamples == 1024
+              && randomchop::SpectralDrawProcessor::cycleQuarterNotes(0) == 2.0
+              && randomchop::SpectralDrawProcessor::cycleQuarterNotes(3) == 16.0
+              && randomchop::SpectralDrawProcessor::cycleQuarterNotes(99) == 4.0,
+          "Spectral latency or scan-rate mapping changed");
+
+    randomchop::SpectralMaskStore emptyMask;
+    randomchop::SpectralDrawProcessor bypass;
+    bypass.prepare(48000.0);
+    juce::AudioBuffer<float> impulse(2, 2048);
+    impulse.clear();
+    impulse.setSample(0, 0, 1.0f);
+    impulse.setSample(1, 0, -1.0f);
+    bypass.process(impulse, emptyMask, { 0.0f, 1, 120.0, 0.0, false, false });
+    check(impulse.getSample(0, 1023) == 0.0f
+              && impulse.getSample(0, 1024) == 1.0f
+              && impulse.getSample(1, 1024) == -1.0f,
+          "Spectral Depth 0 did not provide exact reported-latency bypass");
+
+    randomchop::SpectralDrawProcessor reconstruction;
+    reconstruction.prepare(48000.0);
+    auto source = makeTemporalInput(8192);
+    auto reconstructed = copyBuffer(source);
+    reconstruction.process(reconstructed, emptyMask,
+        { 100.0f, 1, 120.0, 0.0, false, false });
+    float maximumError = 0.0f;
+    for (int channel = 0; channel < 2; ++channel)
+        for (int frame = randomchop::SpectralDrawProcessor::latencySamples;
+             frame < reconstructed.getNumSamples(); ++frame)
+            maximumError = std::max(maximumError, std::abs(
+                reconstructed.getSample(channel, frame)
+                - source.getSample(channel,
+                    frame - randomchop::SpectralDrawProcessor::latencySamples)));
+    check(maximumError < 0.0002f && bufferFiniteAndBounded(reconstructed),
+          "empty Spectral canvas did not reconstruct through STFT overlap-add");
+
+    randomchop::SpectralMaskStore fullMask;
+    randomchop::SpectralMaskStore::Canvas fullCanvas;
+    fullCanvas.fill(1.0f);
+    check(fullMask.setCanvas(fullCanvas), "full Spectral canvas did not publish");
+    randomchop::SpectralDrawProcessor muted;
+    muted.prepare(44100.0);
+    auto fullyDrawn = makeTemporalInput(8192);
+    muted.process(fullyDrawn, fullMask,
+        { 100.0f, 1, 120.0, 0.0, false, false });
+    check(fullyDrawn.getMagnitude(randomchop::SpectralDrawProcessor::latencySamples,
+                                  fullyDrawn.getNumSamples()
+                                      - randomchop::SpectralDrawProcessor::latencySamples)
+              < 0.00001f,
+          "full Spectral canvas at maximum Depth did not attenuate all bins");
+
+    randomchop::SpectralMaskStore partialMask;
+    randomchop::SpectralMaskStore::Canvas partialCanvas {};
+    for (int row = 8; row < 44; ++row)
+        for (int column = 0; column < randomchop::SpectralMaskStore::canvasWidth; column += 3)
+            partialCanvas[static_cast<std::size_t>(
+                row * randomchop::SpectralMaskStore::canvasWidth + column)] = 0.8f;
+    partialMask.setCanvas(partialCanvas);
+    auto blockSource = makeTemporalInput(5000);
+    auto singleBlock = copyBuffer(blockSource);
+    randomchop::SpectralDrawProcessor whole;
+    whole.prepare(96000.0);
+    whole.process(singleBlock, partialMask,
+        { 73.0f, 2, 137.0, 0.0, false, false });
+
+    randomchop::SpectralDrawProcessor chunked;
+    chunked.prepare(96000.0);
+    juce::AudioBuffer<float> chunkedOutput(2, blockSource.getNumSamples());
+    int offset = 0;
+    constexpr std::array<int, 7> blockSizes { 17, 511, 64, 1000, 3, 257, 89 };
+    int blockIndex = 0;
+    while (offset < blockSource.getNumSamples())
+    {
+        const auto count = std::min(blockSizes[static_cast<std::size_t>(
+                                        blockIndex % static_cast<int>(blockSizes.size()))],
+                                    blockSource.getNumSamples() - offset);
+        juce::AudioBuffer<float> block(2, count);
+        for (int channel = 0; channel < 2; ++channel)
+            block.copyFrom(channel, 0, blockSource, channel, offset, count);
+        chunked.process(block, partialMask,
+            { 73.0f, 2, 137.0, 0.0, false, false });
+        for (int channel = 0; channel < 2; ++channel)
+            chunkedOutput.copyFrom(channel, offset, block, channel, 0, count);
+        offset += count;
+        ++blockIndex;
+    }
+    check(buffersEqual(singleBlock, chunkedOutput) && bufferFiniteAndBounded(chunkedOutput),
+          "Spectral STFT changed across arbitrary process block sizes");
+
+    randomchop::SpectralDrawProcessor scanner;
+    scanner.prepare(1000.0);
+    juce::AudioBuffer<float> scannerAudio(2, 1250);
+    scannerAudio.clear();
+    scanner.process(scannerAudio, emptyMask,
+        { 0.0f, 0, 120.0, 0.0, false, false });
+    check(std::abs(scanner.getScanPosition() - 0.25f) < 0.0001f,
+          "Spectral scanner did not wrap on its tempo-derived cycle");
+    juce::AudioBuffer<float> hostAligned(2, 100);
+    hostAligned.clear();
+    scanner.process(hostAligned, emptyMask,
+        { 0.0f, 1, 120.0, 3.0, true, true });
+    check(std::abs(scanner.getScanPosition() - 0.80f) < 0.0001f,
+          "Spectral scanner did not align to host PPQ after a discontinuity");
+
+    randomchop::SpectralDrawProcessor changing;
+    changing.prepare(48000.0);
+    bool safe = true;
+    for (int iteration = 0; iteration < 24; ++iteration)
+    {
+        partialCanvas[static_cast<std::size_t>(iteration)]
+            = static_cast<float>(iteration) / 23.0f;
+        safe = safe && partialMask.setCanvas(partialCanvas);
+        auto block = makeTemporalInput(37, iteration * 37);
+        changing.process(block, partialMask,
+            { 1000.0f, -1, 120.0, 0.0, false, iteration == 12 });
+        safe = safe && bufferFiniteAndBounded(block);
+    }
+    check(safe, "Spectral canvas changes during playback lost publication or produced invalid audio");
+}
+
 void testFreezeProcessor()
 {
     randomchop::GridBoundaries noBoundary;
@@ -783,6 +951,8 @@ int main()
     testFractureProcessorAndPresets();
     testSmearProcessor();
     testCodecProcessor();
+    testSpectralMaskPublicationAndState();
+    testSpectralDrawProcessor();
     testStateMigration();
     testStretchSemanticsAndPublication();
     if (failures == 0)

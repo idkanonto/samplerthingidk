@@ -65,6 +65,8 @@ target_sources(RandomChopSampler PRIVATE
     Source/TemporalEffects.h
     Source/CreativeEffects.cpp
     Source/CreativeEffects.h
+    Source/SpectralDraw.cpp
+    Source/SpectralDraw.h
     Source/RandomizationEngine.h
     Source/HarmonicPitch.h
     Source/PlaybackRegion.h
@@ -116,6 +118,8 @@ if (BUILD_TESTING)
         Source/TemporalEffects.h
         Source/CreativeEffects.cpp
         Source/CreativeEffects.h
+        Source/SpectralDraw.cpp
+        Source/SpectralDraw.h
         Source/RandomizationEngine.h
         Source/HarmonicPitch.h
         Source/PlaybackRegion.h

@@ -5,7 +5,7 @@
 
 namespace randomchop
 {
-inline constexpr int currentStateVersion = 5;
+inline constexpr int currentStateVersion = 6;
 
 inline bool isRemovedParameterId(const juce::String& id) noexcept
 {

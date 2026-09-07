@@ -47,6 +47,14 @@ status: active
 - CODEC approximates bandwidth loss and packet damage with fixed per-channel predictor, residual, blur, and hold state. The existing deterministic sample-and-hold reducer is its final internal operation and retains the `rateReduction` parameter ID.
 - All three stages clamp hostile settings and active-path non-finite samples. FRACTURE Mix 0, SMEAR Amount 0, and CODEC Amount 0 with 1x Rate are exact finite-sample bypasses.
 
+## Spectral Draw
+
+- SPECTRAL DRAW uses a 1024-point complex Signalsmith FFT with a 256-sample hop and square-root Hann analysis/synthesis windows. Four-way overlap-add is normalized in place; all FFT, ring, window, and work storage is fixed or prepared before playback.
+- The stage always feeds its STFT history. Depth 0 selects an exact 1024-sample delayed dry path, matching the latency reported to the host, so automation can enter the spectral path without unprimed storage.
+- The 128×64 canvas is attenuation-only. Scanner/time and square-root-mapped frequency coordinates use bilinear interpolation; a full mask at maximum Depth reaches zero gain without positive or unbounded spectral gain.
+- A fixed four-slot publication store keeps canonical canvas mutation/encoding behind a message/state-thread mutex. The callback atomically acquires one immutable published slot for the block and never takes that mutex or copies the canvas.
+- Host PPQ aligns scanner phase for 2/4/8/16-quarter-note cycles. Finite fallback BPM advances phase when host PPQ is unavailable. Discontinuity clears only fixed processor arrays and scalar indices; no storage is allocated or reclaimed.
+
 ## Removed DSP
 
 The old Take/Step/per-event effect path and Bit Crush are absent. They must not be reintroduced as implementation shortcuts for the global chain in [[SIGNAL_CHAIN]].
