@@ -10,6 +10,7 @@
 #include "TemporalEffects.h"
 #include "VoicePool.h"
 #include <algorithm>
+#include <atomic>
 #include <iostream>
 #include <limits>
 
@@ -69,6 +70,8 @@ PreparedSamplePtr makeVoiceSample(float value, int frames = 1024)
         audio->setSample(0, frame, value);
     return randomchop::prepareStretch(audio, 1000.0, 0.0f, 0);
 }
+
+bool bufferFiniteAndBounded(const juce::AudioBuffer<float>& buffer) noexcept;
 
 void testSupportedFormatsAndPoolState()
 {
@@ -157,6 +160,16 @@ void testSupportedFormatsAndPoolState()
                   && changed->settings.stretchRatio == 1.0f,
               "source controls were not preserved in the snapshot");
 
+        manager.updateSettings(id, [](SampleSettings& settings)
+        {
+            settings.gainDb = std::numeric_limits<float>::quiet_NaN();
+            settings.selectionWeight = std::numeric_limits<float>::infinity();
+        });
+        const auto sanitised = manager.getSnapshot()->front();
+        check(sanitised->settings.gainDb == 0.0f
+                  && sanitised->settings.selectionWeight == 1.0f,
+              "hostile per-source Gain or Weight escaped finite state bounds");
+
         const auto state = manager.createState();
         SampleManager restored;
         const auto restoreErrors = restored.restoreState(state);
@@ -164,6 +177,20 @@ void testSupportedFormatsAndPoolState()
               "sample pool state did not restore");
         check(restored.getSnapshot()->front()->settings.id == id,
               "stable source ID was not persisted");
+        juce::ValueTree hostileState("SAMPLES");
+        juce::ValueTree hostileSource("SAMPLE");
+        hostileSource.setProperty("id", "hostile-source", nullptr);
+        hostileSource.setProperty("path", file.getFullPathName(), nullptr);
+        hostileSource.setProperty("gain", std::numeric_limits<float>::quiet_NaN(), nullptr);
+        hostileSource.setProperty("weight", std::numeric_limits<float>::infinity(), nullptr);
+        hostileState.appendChild(hostileSource, nullptr);
+        SampleManager hostileRestore;
+        const auto hostileErrors = hostileRestore.restoreState(hostileState);
+        const auto hostileSnapshot = hostileRestore.getSnapshot();
+        check(hostileErrors.empty() && !hostileSnapshot->empty()
+                  && hostileSnapshot->front()->settings.gainDb == 0.0f
+                  && hostileSnapshot->front()->settings.selectionWeight == 1.0f,
+              "hostile persisted Gain or Weight escaped finite restore bounds");
         restored.setAllEnabled(true);
         restored.clear();
         check(restored.size() == 0, "enable-all or clear changed pool semantics");
@@ -192,6 +219,17 @@ void testWeightedSelectionAndPitch()
     SampleManager::Pool empty { makeSource(1.0f, false) };
     check(randomchop::chooseWeightedSource(empty, random) == -1,
           "empty playable pool did not return the silent sentinel");
+    SampleManager::Pool hostileWeights {
+        makeSource(std::numeric_limits<float>::quiet_NaN()),
+        makeSource(std::numeric_limits<float>::infinity())
+    };
+    bool hostileWeightsSafe = true;
+    for (int iteration = 0; iteration < 128; ++iteration)
+    {
+        const auto selected = randomchop::chooseWeightedSource(hostileWeights, random);
+        hostileWeightsSafe = hostileWeightsSafe && (selected == 0 || selected == 1);
+    }
+    check(hostileWeightsSafe, "non-finite Weight poisoned realtime source selection");
 
     check(randomchop::shortestTonicCorrection(1, 12) == -1,
           "tonic correction no longer uses shortest direction");
@@ -254,6 +292,26 @@ void testRegionsAndVoices()
     }
     check(pool.activeCount() == 16 && pool.acquire(randomchop::VoiceMode::poly).getNote() == 40,
           "16-voice pool or oldest-voice selection changed");
+
+    auto hostileAudio = std::make_shared<juce::AudioBuffer<float>>(1, 16);
+    std::fill_n(hostileAudio->getWritePointer(0), hostileAudio->getNumSamples(), 0.5f);
+    hostileAudio->setSample(0, 0, std::numeric_limits<float>::quiet_NaN());
+    hostileAudio->setSample(0, 1, std::numeric_limits<float>::infinity());
+    hostileAudio->setSample(0, 2, 1.0e30f);
+    auto hostilePrepared = std::make_shared<PreparedSampleData>();
+    hostilePrepared->audio = hostileAudio;
+    hostilePrepared->sampleRate = 1000.0;
+    RandomSamplerVoice hostileVoice;
+    hostileVoice.prepare(1000.0);
+    hostileVoice.start(hostilePrepared, 60, 1.0f, 0.0, { 0, 15 }, 1.0,
+                       1.0f, 0.0f, std::numeric_limits<float>::quiet_NaN(), 100);
+    juce::AudioBuffer<float> hostileOutput(2, 16);
+    hostileOutput.clear();
+    hostileVoice.render(hostileOutput, 0, 4);
+    hostileVoice.release(std::numeric_limits<float>::quiet_NaN());
+    hostileVoice.render(hostileOutput, 4, 12);
+    check(bufferFiniteAndBounded(hostileOutput) && !hostileVoice.isActive(),
+          "voice rendering propagated hostile audio/envelope state or failed to release");
 }
 
 void testCodecRateReduction()
@@ -394,6 +452,74 @@ bool bufferFiniteAndBounded(const juce::AudioBuffer<float>& buffer) noexcept
                 || std::abs(buffer.getSample(channel, frame)) > 64.0f)
                 return false;
     return true;
+}
+
+void testFullCreativeChainSafety()
+{
+    constexpr double sampleRate = 48000.0;
+    randomchop::FreezeProcessor freeze;
+    randomchop::ScrambleProcessor scramble;
+    randomchop::FractureProcessor fracture;
+    randomchop::SpectralDrawProcessor spectral;
+    randomchop::SmearProcessor smear;
+    randomchop::CodecProcessor codec;
+    freeze.prepare(sampleRate);
+    scramble.prepare(sampleRate);
+    fracture.prepare(sampleRate);
+    spectral.prepare(sampleRate);
+    smear.prepare(sampleRate);
+    codec.prepare(sampleRate);
+    freeze.setSeed(0x1234);
+    scramble.setSeed(0x5678);
+
+    randomchop::SpectralMaskStore mask;
+    randomchop::SpectralMaskStore::Canvas canvas {};
+    for (int row = 12; row < 52; ++row)
+        for (int column = 0; column < randomchop::SpectralMaskStore::canvasWidth; ++column)
+            if ((row + column) % 3 == 0)
+                canvas[static_cast<std::size_t>(
+                    row * randomchop::SpectralMaskStore::canvasWidth + column)] = 0.75f;
+    check(mask.setCanvas(canvas), "full-chain Spectral mask did not publish");
+
+    constexpr std::array<int, 8> sizes { 1, 17, 63, 128, 255, 511, 7, 89 };
+    bool safe = true;
+    bool sawSignal = false;
+    int sourceOffset = 0;
+    for (int iteration = 0; iteration < 48; ++iteration)
+    {
+        const auto frames = sizes[static_cast<std::size_t>(
+            iteration % static_cast<int>(sizes.size()))];
+        auto block = makeTemporalInput(frames, sourceOffset);
+        sourceOffset += frames;
+        if (iteration == 5)
+        {
+            block.setSample(0, 0, std::numeric_limits<float>::quiet_NaN());
+            block.setSample(1, 0, std::numeric_limits<float>::infinity());
+        }
+
+        randomchop::GridBoundaries boundaries;
+        boundaries.bpm = iteration % 2 == 0 ? 90.0 : 173.0;
+        boundaries.transportDiscontinuity = iteration == 24;
+        if (iteration % 7 == 1)
+        {
+            boundaries.count = 1;
+            boundaries.sampleOffsets[0] = frames / 2;
+        }
+        freeze.process(block, boundaries, 2, { 100.0f, 2, 0, 100.0f });
+        scramble.process(block, boundaries, 2, { 100.0f, 100.0f });
+        fracture.process(block, { 36.0f, 100.0f, 100.0f, 12000.0f, 100.0f, 100.0f });
+        spectral.process(block, mask,
+            { 100.0f, 3, boundaries.bpm, 0.0, false,
+              boundaries.transportDiscontinuity });
+        smear.process(block, { 100.0f });
+        codec.process(block, { 100.0f, 3, 64 });
+        block.applyGain(0.5f);
+        safe = safe && bufferFiniteAndBounded(block);
+        if (iteration > 10)
+            sawSignal = sawSignal || block.getMagnitude(0, block.getNumSamples()) > 0.000001f;
+    }
+    check(safe && sawSignal,
+          "the complete global chain became invalid, unbounded, or permanently silent");
 }
 
 void testFractureProcessorAndPresets()
@@ -937,6 +1063,103 @@ void testStretchSemanticsAndPublication()
     }
     check(file.deleteFile(), "could not remove stretch publication fixture");
 }
+
+void testStretchStaleJobsAndRemoval()
+{
+    juce::WavAudioFormat wav;
+    const auto file = makeAudioFixture(wav, ".wav");
+    check(file.existsAsFile(), "could not create stale-stretch fixture");
+    if (!file.existsAsFile())
+        return;
+
+    std::atomic<int> callCount { 0 };
+    std::atomic<int> blockedCall { 1 };
+    std::atomic<bool> allowBlockedCall { false };
+    const auto waitUntil = [](const auto& predicate)
+    {
+        for (int attempt = 0; attempt < 400; ++attempt)
+        {
+            if (predicate())
+                return true;
+            juce::Thread::sleep(5);
+        }
+        return predicate();
+    };
+
+    {
+        SampleManager manager([&](const auto& decoded, double sampleRate,
+                                  float ratio, uint64_t revision)
+        {
+            const auto call = callCount.fetch_add(1) + 1;
+            while (call == blockedCall.load() && !allowBlockedCall.load())
+                juce::Thread::sleep(1);
+            auto result = std::make_shared<PreparedSampleData>();
+            result->sampleRate = sampleRate;
+            result->revision = revision;
+            result->stretchRatio = ratio;
+            const auto frames = std::max(2, static_cast<int>(std::llround(
+                static_cast<double>(decoded->getNumSamples()) * ratio)));
+            auto output = std::make_shared<juce::AudioBuffer<float>>(
+                decoded->getNumChannels(), frames);
+            output->clear();
+            result->audio = std::move(output);
+            return PreparedSamplePtr(result);
+        });
+        const juce::StringArray paths { file.getFullPathName() };
+        const auto errors = manager.addFiles(paths);
+        check(errors.empty() && manager.size() == 1,
+              "stale-stretch fixture did not load");
+        if (manager.size() == 1)
+        {
+            const auto id = manager.getSnapshot()->front()->settings.id;
+            manager.updateSettings(id, [](SampleSettings& settings)
+            {
+                settings.stretchRatio = 2.0f;
+            });
+            const auto firstStarted = waitUntil([&] { return callCount.load() >= 1; });
+            check(firstStarted, "first stretch revision did not start");
+            manager.updateSettings(id, [](SampleSettings& settings)
+            {
+                settings.stretchRatio = 3.0f;
+            });
+            allowBlockedCall.store(true);
+            const auto newestPublished = waitUntil([&]
+            {
+                const auto snapshot = manager.getSnapshot();
+                return !snapshot->empty() && !snapshot->front()->stretchPending
+                    && snapshot->front()->prepared != nullptr
+                    && snapshot->front()->prepared->revision == 2
+                    && snapshot->front()->prepared->stretchRatio == 3.0f;
+            });
+            check(newestPublished,
+                  "a stale stretch result replaced or blocked the newest revision");
+
+            const auto activeOldVersion = manager.getSnapshot()->front()->prepared;
+            allowBlockedCall.store(false);
+            const auto removalCall = callCount.load() + 1;
+            blockedCall.store(removalCall);
+            manager.updateSettings(id, [](SampleSettings& settings)
+            {
+                settings.stretchRatio = 4.0f;
+            });
+            const auto removalJobStarted = waitUntil(
+                [&] { return callCount.load() >= removalCall; });
+            check(removalJobStarted, "removal-race stretch revision did not start");
+            manager.remove(id);
+            manager.collectGarbage();
+            check(manager.size() == 0 && activeOldVersion != nullptr
+                      && activeOldVersion->audio != nullptr
+                      && activeOldVersion->audio->getNumSamples() > 0,
+                  "source removal invalidated an active immutable prepared version");
+            allowBlockedCall.store(true);
+        }
+        else
+        {
+            allowBlockedCall.store(true);
+        }
+    }
+    check(file.deleteFile(), "could not remove stale-stretch fixture");
+}
 }
 
 int main()
@@ -946,6 +1169,7 @@ int main()
     testRegionsAndVoices();
     testCodecRateReduction();
     testHostGrid();
+    testFullCreativeChainSafety();
     testFreezeProcessor();
     testScrambleProcessor();
     testFractureProcessorAndPresets();
@@ -955,6 +1179,7 @@ int main()
     testSpectralDrawProcessor();
     testStateMigration();
     testStretchSemanticsAndPublication();
+    testStretchStaleJobsAndRemoval();
     if (failures == 0)
         std::cout << "All recompiler.dll foundation tests passed.\n";
     return failures == 0 ? 0 : 1;

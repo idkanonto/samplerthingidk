@@ -6,12 +6,12 @@ tags:
   - architecture
   - realtime
   - verification
-status: in-progress
+status: active
 ---
 
 # Realtime Safety Audit
 
-This audit covers the Gate D branch against [[DSP_NOTES]]. Gate C passed PR run #46 and post-merge run #47; Gate D runtime verification is pending. Source/CI review does not replace an allocator hook, realtime profiler, or DAW stress pass.
+This audit covers verified Gate D `main` and Gate E PR #15 against [[DSP_NOTES]]. Gate D passed PR run #48 and post-merge run #49. Gate E head `027c57b8c0c30bf5450042de64f006c1c9e92fb0` passed [Windows Release CI run #51](https://github.com/idkanonto/samplerthingidk/actions/runs/34164215738), including the expanded lifecycle and exact full-chain stress suite. Source/CI review does not replace an allocator hook, realtime profiler, or DAW stress pass.
 
 ## Audio-thread paths
 
@@ -33,10 +33,11 @@ This audit covers the Gate D branch against [[DSP_NOTES]]. Gate C passed PR run 
 - File validation, decoding, waveform preparation, source-state restore, pool publication, and retirement collection remain control/state work.
 - Signalsmith work runs on the dedicated worker. Source identity and revision reject stale publication.
 - Source edits use `mutationMutex`; the stretch queue uses its own mutex and condition variable. Neither is reached by the callback.
+- Gate E finite-clamps hostile persisted/updated source Gain and Weight before publication. Voice envelope/sample sanitization is fixed-cost and protects internal voice state before the global chain.
 - Editor selection is a stable source ID. Trigger highlighting is a separate atomic runtime ID and cannot retarget edits.
 - Canvas drawing, clamping, encoding, restore, and canonical mutation occur on UI/state paths. Publication writes a free slot completely before its release-store; the callback reads only a held immutable slot.
 - State migration allocates/mutates only during host state restore, never during audio rendering.
 
-## Required later audit
+## External verification boundary
 
-Gate E repeats the full-chain audit, adds compatibility/lifecycle stress evidence, and records external checks still not run. In particular, no allocator hook, realtime profiler, or DAW host stress pass is available in CI.
+Gate E source review found no callback file access, explicit locks, waits, logging, parsing, stretch preparation, canvas copying, or callback-owned final reclamation. Run #51 exercised the exact global order under variable blocks, discontinuity, hostile state/audio, stale worker completion, source removal during preparation, and retained old prepared versions. No allocator hook, realtime profiler, or DAW host stress pass is available in CI; those remain explicit external release checks.

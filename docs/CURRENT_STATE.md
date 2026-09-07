@@ -11,7 +11,9 @@ verified: 2026-09-07
 
 # Current Implementation State
 
-The verified remote baseline is `main` at `a5e1f09df740bb4ef6de17547d0f0e1874194617`; [post-merge Windows Release CI run #47](https://github.com/idkanonto/samplerthingidk/actions/runs/34144904944) passed. Gate C PR #13 passed [PR run #46](https://github.com/idkanonto/samplerthingidk/actions/runs/34140666576) at `08b4ffc638926610c45835bdf1a1187e4b61185f`. Its `recompiler-dll-Windows-VST3` artifact (`10025978696`) had GitHub SHA-256 `f6655154f4d40b91c4ab26e0460f25068fa86f6fa493a843c592b90c6aa9239e` and contained the workflow-verified 7,433,216-byte Windows module at `recompiler.dll.vst3/Contents/x86_64-win/recompiler.dll.vst3`.
+The verified remote baseline is `main` at `37e1963d14d4f8889b81b56fcd89a78a2f6a2c7e`; [post-merge Windows Release CI run #49](https://github.com/idkanonto/samplerthingidk/actions/runs/34151063471) passed. Gate D PR #14 passed [PR run #48](https://github.com/idkanonto/samplerthingidk/actions/runs/34147146261) at `af45dd9906704279084c48267d813f45fe52b6a8`. Its `recompiler-dll-Windows-VST3` artifact (`10028206942`) had GitHub SHA-256 `8e3b2c91493b571ece1f0966b31614234cf0b00059803c5b5dc7a98143577bca` and contained the workflow-verified 7,462,400-byte Windows module at `recompiler.dll.vst3/Contents/x86_64-win/recompiler.dll.vst3`.
+
+Gate E PR #15 passed [Windows Release CI run #51](https://github.com/idkanonto/samplerthingidk/actions/runs/34164215738) at code head `027c57b8c0c30bf5450042de64f006c1c9e92fb0`. CTest passed 1/1 in 0.13 seconds. Artifact `10033734310` had GitHub SHA-256 `73cfed01c3e2cd781bd7ada26a185797fedad33751a994838ee3c3ca22ff9b3f`; the workflow verified the complete bundle, required notices, and the non-empty 7,465,472-byte Windows module at `recompiler.dll.vst3/Contents/x86_64-win/recompiler.dll.vst3`. Documentation-only successors and the squash-merged `main` remain subject to the same exact-head workflow gate.
 
 ## Verified Gate A implementation
 
@@ -46,17 +48,26 @@ The verified remote baseline is `main` at `a5e1f09df740bb4ef6de17547d0f0e1874194
 - CODEC combines deterministic bandwidth loss, held predictive residuals, and watery/metallic reconstruction with the preserved 1x–64x sample-and-hold Rate Reduction. The old `rateReduction` parameter ID remains stable but is presented and processed only inside CODEC.
 - Gate C adds neutral migration defaults and state version 5. Its focused CTest suite and complete build/package workflow passed on both the PR head and squash-merged `main`.
 
-## Gate D branch implementation
+## Verified Gate D implementation
 
 - SPECTRAL DRAW is inserted globally between FRACTURE and SMEAR. It uses a real 1024-point STFT, 256-sample hop, square-root Hann overlap-add, and reports 1024 samples of plug-in latency.
 - A 128×64 attenuation-only canvas provides Draw, Erase, and Clear. Bilinear lookup smooths scanner/time and square-root frequency coordinates; Depth defaults to 0% for an exact latency-matched bypass.
 - Scan Rate offers 2 beats, 1 bar, 2 bars, and 4 bars. The scanner aligns to finite host PPQ and BPM when available, otherwise continues from the safe tempo fallback.
 - Canvas state is clamped, base64-encoded into state version 6, and transferred to the callback through fixed immutable snapshot slots. Audio rendering takes only an atomic read handle; it neither locks nor copies the canvas.
-- Gate D tests cover publication immutability, hostile values, persistence, exact bypass latency, empty/full masks, STFT reconstruction, arbitrary block sizes, 44.1/48/96 kHz preparation, scanner wrap/alignment, discontinuity, and live canvas replacement. This branch remains unverified until its Windows CI and post-merge `main` gate pass.
+- Gate D tests cover publication immutability, hostile values, persistence, exact bypass latency, empty/full masks, STFT reconstruction, arbitrary block sizes, 44.1/48/96 kHz preparation, scanner wrap/alignment, discontinuity, and live canvas replacement. They passed on both the PR head and squash-merged `main`.
 
-## Not yet implemented
+## Verified Gate E implementation
 
-- Gate E: full-chain integration, compatibility/realtime audit, final functional UI cleanup, and shipping evidence.
+- The complete runtime order is `FREEZE -> SCRAMBLE -> FRACTURE -> SPECTRAL DRAW -> SMEAR -> CODEC -> OUTPUT`; the surviving 29 APVTS parameter IDs each have exactly one functional editor attachment.
+- Runtime and UI source audit found the removed Take History, Step Mask, per-event Reverse/Retrigger/Skip/Reorder/Bend/Drop, and Bit Crush systems only in migration/tests where legacy state is intentionally rejected.
+- Restored and live-edited source Gain/Weight values are finite-clamped before immutable publication. Voice inputs, decoded samples, accumulated output, and envelope state are fixed-cost sanitized so hostile non-finite state cannot poison or indefinitely retain a voice.
+- Gate E tests add hostile source/voice state, the exact complete chain under variable block sizes and transport discontinuity, stale stretch-result rejection, source removal while preparation is active, and old prepared-version lifetime coverage.
+- Windows run #51 compiled the VST3, Standalone, and tests; passed the full CTest executable; verified packaging; and uploaded the release bundle.
+- CodeRabbit was considered only as a second opinion and auto-skipped PR #15 because the repository does not meet its review threshold; it produced no actionable review findings.
+
+## Remaining external verification
+
+- An allocator hook/realtime profiler and hands-on DAW host stress/listening pass are not available in CI and remain explicit external release checks.
 - Final visual redesign is explicitly outside the current delivery boundary.
 
 See [[TEST_MATRIX]] for what is runtime-verified and [[REALTIME_AUDIT]] for the callback contract.

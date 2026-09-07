@@ -1,5 +1,19 @@
 #include "RandomSamplerVoice.h"
+#include <algorithm>
 #include <cmath>
+
+namespace
+{
+float sanitiseAudio(float value) noexcept
+{
+    return std::isfinite(value) ? std::clamp(value, -64.0f, 64.0f) : 0.0f;
+}
+
+float safeSeconds(float value) noexcept
+{
+    return std::isfinite(value) ? std::clamp(value, 0.0f, 60.0f) : 0.0f;
+}
+}
 
 void RandomSamplerVoice::start(PreparedSamplePtr newSample, int note, float velocity,
                                double startFrame, randomchop::FrameRegion sourceRegion,
@@ -34,11 +48,17 @@ void RandomSamplerVoice::start(PreparedSamplePtr newSample, int note, float velo
     const auto safePitchRatio = std::isfinite(playbackPitchRatio) && playbackPitchRatio > 0.0
         ? playbackPitchRatio : 1.0;
     increment = (sample->sampleRate / juce::jmax(1.0, hostRate)) * safePitchRatio;
-    targetLevel = juce::jmax(0.0f, velocity * voiceGain);
+    const auto safeVelocity = std::isfinite(velocity)
+        ? std::clamp(velocity, 0.0f, 1.0f) : 0.0f;
+    const auto safeVoiceGain = std::isfinite(voiceGain)
+        ? std::clamp(voiceGain, 0.0f, 16.0f) : 0.0f;
+    const auto safeAttack = safeSeconds(attackSeconds);
+    const auto safeRelease = safeSeconds(releaseSeconds);
+    targetLevel = std::clamp(safeVelocity * safeVoiceGain, 0.0f, 64.0f);
     level = 0.0f;
-    attackStep = attackSeconds <= 0.00001f ? targetLevel
-        : targetLevel / juce::jmax(1.0f, attackSeconds * static_cast<float>(hostRate));
-    releaseStep = targetLevel / juce::jmax(1.0f, releaseSeconds * static_cast<float>(hostRate));
+    attackStep = safeAttack <= 0.00001f ? targetLevel
+        : targetLevel / juce::jmax(1.0f, safeAttack * static_cast<float>(hostRate));
+    releaseStep = targetLevel / juce::jmax(1.0f, safeRelease * static_cast<float>(hostRate));
     const auto safeFinalLength = !std::isfinite(finalLengthMilliseconds)
             || finalLengthMilliseconds <= 0.0f
         ? 0.0f : juce::jlimit(10.0f, 5000.0f, finalLengthMilliseconds);
@@ -46,7 +66,7 @@ void RandomSamplerVoice::start(PreparedSamplePtr newSample, int note, float velo
         : juce::jmax<std::int64_t>(1, static_cast<std::int64_t>(std::llround(
             static_cast<double>(safeFinalLength) * hostRate / 1000.0)));
     finalBoundaryReleaseFrames = juce::jmax(1, static_cast<int>(std::llround(
-        juce::jmax(0.0f, releaseSeconds) * static_cast<float>(hostRate))));
+        safeRelease * static_cast<float>(hostRate))));
     if (finalLengthFrames > 0)
         finalBoundaryReleaseFrames = static_cast<int>(juce::jmin<std::int64_t>(
             finalBoundaryReleaseFrames, finalLengthFrames));
@@ -57,7 +77,8 @@ void RandomSamplerVoice::start(PreparedSamplePtr newSample, int note, float velo
 void RandomSamplerVoice::release(float releaseSeconds) noexcept
 {
     if (!isActive()) return;
-    releaseStep = level / juce::jmax(1.0f, releaseSeconds * static_cast<float>(hostRate));
+    releaseStep = level / juce::jmax(
+        1.0f, safeSeconds(releaseSeconds) * static_cast<float>(hostRate));
     stage = Stage::release;
 }
 
@@ -117,10 +138,14 @@ void RandomSamplerVoice::render(juce::AudioBuffer<float>& output, int startSampl
         {
             const int sourceChannel = sourceChannels == 1 ? 0 : juce::jmin(channel, sourceChannels - 1);
             const float* data = sample->audio->getReadPointer(sourceChannel);
-            const float value = data[index] + fraction * (data[index + 1] - data[index]);
-            const float voiceOutput = value * level * endGain * finalLengthGain;
+            const float value = sanitiseAudio(
+                data[index] + fraction * (data[index + 1] - data[index]));
+            const float voiceOutput = sanitiseAudio(
+                value * level * endGain * finalLengthGain);
             const int stereoChannel = juce::jmin(channel, 1);
-            output.addSample(channel, startSample + i, voiceOutput + stealTail[stereoChannel] * tailGain);
+            const auto mixed = sanitiseAudio(output.getSample(channel, startSample + i)
+                + voiceOutput + sanitiseAudio(stealTail[stereoChannel] * tailGain));
+            output.setSample(channel, startSample + i, mixed);
             lastOutput[stereoChannel] = voiceOutput;
         }
         if (stealTailRemaining > 0) --stealTailRemaining;
