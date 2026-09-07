@@ -6,12 +6,12 @@ tags:
   - architecture
   - realtime
   - verification
-status: in-progress
+status: active
 ---
 
 # Realtime Safety Audit
 
-This audit covers verified Gate D `main` and the Gate E hardening branch against [[DSP_NOTES]]. Gate D passed PR run #48 and post-merge run #49. Gate E Windows verification is pending. Source/CI review does not replace an allocator hook, realtime profiler, or DAW stress pass.
+This audit covers verified Gate D `main` and Gate E PR #15 against [[DSP_NOTES]]. Gate D passed PR run #48 and post-merge run #49. Gate E head `027c57b8c0c30bf5450042de64f006c1c9e92fb0` passed [Windows Release CI run #51](https://github.com/idkanonto/samplerthingidk/actions/runs/34164215738), including the expanded lifecycle and exact full-chain stress suite. Source/CI review does not replace an allocator hook, realtime profiler, or DAW stress pass.
 
 ## Audio-thread paths
 
@@ -38,6 +38,6 @@ This audit covers verified Gate D `main` and the Gate E hardening branch against
 - Canvas drawing, clamping, encoding, restore, and canonical mutation occur on UI/state paths. Publication writes a free slot completely before its release-store; the callback reads only a held immutable slot.
 - State migration allocates/mutates only during host state restore, never during audio rendering.
 
-## Required later audit
+## External verification boundary
 
-Gate E repeats the full-chain audit, adds compatibility/lifecycle stress evidence, and records external checks still not run. In particular, no allocator hook, realtime profiler, or DAW host stress pass is available in CI.
+Gate E source review found no callback file access, explicit locks, waits, logging, parsing, stretch preparation, canvas copying, or callback-owned final reclamation. Run #51 exercised the exact global order under variable blocks, discontinuity, hostile state/audio, stale worker completion, source removal during preparation, and retained old prepared versions. No allocator hook, realtime profiler, or DAW host stress pass is available in CI; those remain explicit external release checks.
