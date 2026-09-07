@@ -1,79 +1,32 @@
-# Random Chop Sampler
+# recompiler.dll
 
-A 16-voice JUCE VST3/standalone sampler instrument. In LIVE, every MIDI note advances an event-driven Step Mask, then chooses a weighted random source and a random legal start point. Completed passes become one of the latest eight Takes; HISTORY replays their exact stored source/start/Chance decisions from new incoming MIDI. The current V2 build supports WAV, AIFF/AIF, MP3, and FLAC sources.
+`recompiler.dll` is a JUCE VST3/standalone sampler instrument. It loads up to 20 WAV, AIFF/AIF, MP3, or FLAC sources, selects enabled sources by Weight, chooses a legal random start inside each editable source region, and plays through a fixed 16-voice POLY/MONO engine.
 
-## Build without local development tools (recommended)
+The visible product name intentionally contains `.dll`; the Windows plug-in is still distributed as the standards-compliant `recompiler.dll.vst3` bundle, not as a loose DLL.
 
-1. Create an empty GitHub repository and upload/push this project so `CMakeLists.txt` is at the repository root.
-2. Open the repository's **Actions** tab, select **Build Windows VST3**, and choose **Run workflow**. It also runs automatically on pushes and pull requests to `main`.
-3. When the run finishes, open it and download **Random-Chop-Sampler-Windows-VST3** from the Artifacts section.
-4. Extract the downloaded archive. Copy the complete `Random Chop Sampler.vst3` directory to `C:\Program Files\Common Files\VST3\` and rescan plug-ins in the DAW.
+## Build with GitHub Actions
 
-The workflow uses GitHub's `windows-2022` runner with Visual Studio 2022 and CMake. CMake FetchContent downloads pinned JUCE 8.0.13 automatically, builds the Release VST3, Standalone, and test targets, runs CTest with real format-decoder fixtures, verifies both deliverables, and uploads the complete `.vst3` bundle. Nothing needs to be installed locally.
+Run **Build Windows VST3** in the repository Actions tab. The workflow configures a pinned JUCE 8.0.13/Signalsmith build, builds Release VST3, Standalone, and tests, runs CTest, verifies the bundle and executable, and uploads **recompiler-dll-Windows-VST3**.
+
+Extract the artifact and copy the complete `recompiler.dll.vst3` directory to `C:\Program Files\Common Files\VST3\`, then rescan plug-ins in the DAW.
 
 ## Optional local build
 
-If you already have Visual Studio 2022 with **Desktop development with C++**, Git, and CMake, JUCE is still downloaded automatically:
-
 ```powershell
 cmake -S . -B build -G "Visual Studio 17 2022" -A x64
-cmake --build build --config Release --target RandomChopSampler_VST3
+cmake --build build --config Release --target RandomChopSampler_VST3 RandomChopSampler_Standalone RandomChopSamplerTests
+ctest --test-dir build -C Release --output-on-failure
 ```
 
-The built bundle is normally at `build/RandomChopSampler_artefacts/Release/VST3/Random Chop Sampler.vst3`. Copy the entire `.vst3` bundle to:
+The target name remains `RandomChopSampler` to preserve build continuity; the host-visible product name is `recompiler.dll`.
 
-`C:\Program Files\Common Files\VST3\`
+## Current functional boundary
 
-Then rescan VST3 plug-ins in the DAW, create an instrument track, insert **Random Chop Sampler**, drag WAV/AIFF files into its panel, and play MIDI notes. The Standalone target is useful for initial UI/audio-device testing.
+- Immutable 20-source pool, missing-source persistence, stable identity, deferred non-realtime reclamation.
+- Weighted source selection; editable Start/End, Source Key, Transpose, Fine Tune, Gain, Weight, and 0/OFF or 1x–4x Stretch.
+- Target Key, optional MIDI pitch/root, Random Start, Final Length, Attack, Release, POLY/MONO, Seed, and Output.
+- Host-derived 1/8, 1/16, or 1/32 global grid with a safe 120 BPM fallback.
+- The former Take History, Step Mask, per-event Reverse/Retrigger/Skip/Reorder/Bend/Drop, and Bit Crush systems are removed. Old state entries are ignored safely.
+- Rate Reduction remains temporarily functional and will become part of the global CODEC stage.
 
-## Architecture and real-time safety
-
-- `SampleManager` decodes files only from message/host state threads and publishes immutable pool snapshots atomically.
-- `SampleManager` performs non-unity Signalsmith Stretch work on one background worker and atomically publishes immutable, revisioned prepared audio. Stale/removed-source results are discarded and queued work is coalesced.
-- Prepared data is reference-counted. Voices retain their exact version, so removal or replacement cannot invalidate active playback. Superseded snapshots, sources, and prepared buffers are reclaimed only from control-thread maintenance after realtime references have drained.
-- `RandomSamplerVoice` performs linear sample-rate conversion combined with the Note-On-resolved pitch ratio, mono-to-stereo routing, sample-counted Final Length, per-voice attack/release, a source-region boundary fade, and a 3 ms tail crossfade when a voice is stolen.
-- `PluginProcessor` owns a fixed 16-voice pool and an allocation-free xorshift64* randomizer. POLY steals the oldest voice; MONO replaces the primary voice through the same short crossfade and releases residual POLY voices.
-- Each Note On resolves Chance once into a fixed-size `EventDecision`; rendering uses only those stored choices, so no render-time RNG or heap allocation is required and the event can later be replayed exactly.
-- The Step Mask owns a fixed audio-thread event cursor and uses atomically published bits/reset generation. NORMAL steps skip Chance resolution; FX steps permit it. The cursor advances only on MIDI Note On, with no tempo or transport dependency.
-- Take History uses fixed audio-thread-owned arrays and stores explicit decisions plus immutable prepared-version references, never rendered audio. HISTORY cycles the selected Take without RNG; browser requests/status cross threads through atomics, and final prepared-data reclamation remains on the control thread.
-- The stereo master chain is Bit Crush (OFF or 4–24 bit) → Sample Rate Reduction (1x/OFF through 64x) → Output Gain. It uses fixed state, stays deterministic across host blocks, and sanitizes non-finite input.
-- MIDI rendering is sample-accurate within each host block. No disk access, decoding, blocking mutex, logging, or explicit allocation occurs in the audio callback.
-
-## MVP checklist
-
-- [x] VST3 instrument and standalone CMake targets; stereo output and MIDI input
-- [x] Multi-file drag/drop and file picker for WAV, AIFF/AIF, MP3, and FLAC
-- [x] Hard 20-source cap with visible count and graceful rejection
-- [x] Visible scrollable list, per-file Enable/Remove, Enable All, Disable All, Clear All, and status feedback
-- [x] Weighted enabled-source selection plus per-source gain
-- [x] Selected-source waveform with draggable Start/End markers and region-bounded Random Start
-- [x] Source Key/Target Key tonic correction, per-source Transpose and Fine Tune
-- [x] MIDI Pitch on/off with configurable Root MIDI Note (default C5/MIDI 72)
-- [x] Per-source 0.5x–2.0x pitch-preserving Stretch with background preparation and safe version replacement
-- [x] Reproducible Seed sequence (sequence restarts after prepare or a Seed change)
-- [x] 16-voice POLY and MONO modes with oldest-voice stealing, clean replacement, and Note Off release
-- [x] Final Length with FULL or 10–5000 ms behavior and Attack/Release boundary shaping
-- [x] Reverse, Retrigger, Skip, four-piece Reorder, Bend, and smoothed eight-slot Drop Chance effects
-- [x] Fixed-size explicit event decisions suitable for deterministic Take History replay
-- [x] Event-driven 2/4/8/16 Step Mask with NORMAL/FX, bulk/randomize controls, reset behavior, and persistence
-- [x] Latest-eight Take History with complete-pass LIVE capture and indefinite exact-decision HISTORY replay
-- [x] Previous/Next/dropdown/LIVE Take browser and session-only history lifecycle
-- [x] Global 4–24-bit Bit Crush and 1x–64x Sample Rate Reduction before Output Gain
-- [x] Source-rate conversion via linear interpolation; mono and stereo playback
-- [x] Per-voice attack/release plus 3 ms source-region boundary fade
-- [x] Random Start, Final Length, Voice Mode, Attack, Release, Output, and Seed automation/state
-- [x] Sample path persistence and graceful missing-file handling
-- [x] Safe removal/clear while voices are active
-
-## Known MVP limitations
-
-- Samples are decoded fully into RAM; very large libraries are not streamed.
-- Linear interpolation favors low CPU use over premium resampling quality.
-- Restoring sample paths is synchronous because JUCE host state restoration provides no completion callback; it never occurs in `processBlock`, but an unusually large library can briefly delay project loading.
-- Take History is intentionally session-only and is not serialized with project state.
-- Automated Windows integration and artifact checks do not replace a DAW/host smoke test, listening pass, or realtime profiler session on the release machine.
-- A reproducible Seed gives a deterministic trigger sequence for the same pool/order and parameter/MIDI event sequence; changing the pool changes the results.
-
-## Practical test pass
-
-Test in the standalone build first, then at least one VST3 DAW. Exercise mono/stereo WAV, AIFF/AIF, MP3, and FLAC sources at 44.1/48/96 kHz where available, rapid repeated notes, chords, Note Off, automation, Remove/Clear during playback, project save/reopen, and reopening after moving one source file.
+The approved global creative chain is `FREEZE → SCRAMBLE → FRACTURE → SPECTRAL DRAW → SMEAR → CODEC → OUTPUT`. See the project brain in [`docs/INDEX.md`](docs/INDEX.md) for gate status and realtime constraints. The current gate is functional engineering only; final visual design is intentionally deferred.

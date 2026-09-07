@@ -222,8 +222,8 @@ public:
 RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(RandomChopSamplerAudioProcessor& p)
     : AudioProcessorEditor(&p), processor(p)
 {
-    setSize(1050, 1120);
-    title.setText("RANDOM CHOP SAMPLER V2", juce::dontSendNotification);
+    setSize(1050, 850);
+    title.setText("recompiler.dll", juce::dontSendNotification);
     title.setFont(juce::Font(24.0f, juce::Font::bold));
     title.setColour(juce::Label::textColourId, juce::Colour(0xfff2f2f5));
     status.setColour(juce::Label::textColourId, juce::Colour(0xffa9acb7));
@@ -234,17 +234,9 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
         &sourceKeyLabel,
         &sourceTransposeLabel, &sourceFineTuneLabel, &sourceGainLabel, &sourceWeightLabel,
         &sourceStretchLabel, &targetKey, &targetKeyLabel, &midiPitch,
-        &voiceMode, &voiceModeLabel, &stepLength, &stepLengthLabel,
-        &allNormalButton, &allFxButton, &randomiseStepsButton, &takeStatus,
-        &previousTakeButton, &liveButton, &nextTakeButton, &takeSelector };
+        &voiceMode, &voiceModeLabel, &globalGrid, &globalGridLabel,
+        &rateReduction, &rateReductionLabel };
     for (auto* component : components) addAndMakeVisible(component);
-    for (auto& button : stepButtons)
-        addAndMakeVisible(button);
-    for (auto* component : { static_cast<juce::Component*>(&bitDepth),
-                             static_cast<juce::Component*>(&rateReduction),
-                             static_cast<juce::Component*>(&bitDepthLabel),
-                             static_cast<juce::Component*>(&rateReductionLabel) })
-        addAndMakeVisible(component);
     list.setColour(juce::ListBox::backgroundColourId, juce::Colour(0xff191b21));
     list.setRowHeight(34);
 
@@ -255,14 +247,9 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     }
     voiceMode.addItem("POLY", 1);
     voiceMode.addItem("MONO", 2);
-    stepLength.addItem("2", 1);
-    stepLength.addItem("4", 2);
-    stepLength.addItem("8", 3);
-    stepLength.addItem("16", 4);
-    takeSelector.setTextWhenNothingSelected("Select Take");
-    bitDepth.addItem("OFF", 1);
-    for (int bits = 4; bits <= 24; ++bits)
-        bitDepth.addItem(juce::String(bits) + " bit", bits - 2);
+    globalGrid.addItem("1/8", 1);
+    globalGrid.addItem("1/16", 2);
+    globalGrid.addItem("1/32", 3);
     for (const auto& name : juce::StringArray { "1x (OFF)", "2x", "4x", "8x", "16x", "32x", "64x" })
         rateReduction.addItem(name, rateReduction.getNumItems() + 1);
     sourceTranspose.setRange(-24.0, 24.0, 1.0);
@@ -272,8 +259,15 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     sourceGain.setRange(-60.0, 12.0, 0.1);
     sourceGain.setTextValueSuffix(" dB");
     sourceWeight.setRange(0.01, 10.0, 0.01);
-    sourceStretch.setRange(0.5, 2.0, 0.01);
-    sourceStretch.setTextValueSuffix(" x");
+    sourceStretch.setRange(0.0, 4.0, 0.01);
+    sourceStretch.textFromValueFunction = [](double value)
+    {
+        return value < 1.0 ? juce::String("OFF") : juce::String(value, 2) + " x";
+    };
+    sourceStretch.valueFromTextFunction = [](const juce::String& text)
+    {
+        return text.trim().equalsIgnoreCase("OFF") ? 0.0 : text.getDoubleValue();
+    };
     for (auto* slider : { &sourceTranspose, &sourceFineTune, &sourceGain, &sourceWeight,
                           &sourceStretch })
     {
@@ -288,65 +282,14 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     sourceStretchLabel.setText("STRETCH", juce::dontSendNotification);
     targetKeyLabel.setText("TARGET KEY", juce::dontSendNotification);
     voiceModeLabel.setText("VOICE MODE", juce::dontSendNotification);
-    stepLengthLabel.setText("STEP MASK", juce::dontSendNotification);
-    bitDepthLabel.setText("BIT CRUSH", juce::dontSendNotification);
+    globalGridLabel.setText("GLOBAL GRID", juce::dontSendNotification);
     rateReductionLabel.setText("RATE REDUCTION", juce::dontSendNotification);
     voiceModeLabel.setJustificationType(juce::Justification::centredLeft);
     for (auto* label : { &sourceKeyLabel, &sourceTransposeLabel, &sourceFineTuneLabel,
                          &sourceGainLabel, &sourceWeightLabel, &sourceStretchLabel,
-                         &targetKeyLabel, &voiceModeLabel, &stepLengthLabel })
+                         &targetKeyLabel, &voiceModeLabel, &globalGridLabel,
+                         &rateReductionLabel })
         label->setColour(juce::Label::textColourId, juce::Colour(0xffc8cad1));
-    for (auto* label : { &bitDepthLabel, &rateReductionLabel })
-        label->setColour(juce::Label::textColourId, juce::Colour(0xffc8cad1));
-    for (int index = 0; index < static_cast<int>(stepButtons.size()); ++index)
-    {
-        auto& button = stepButtons[static_cast<size_t>(index)];
-        button.onClick = [this, index]
-        {
-            processor.stepMask.setStep(index,
-                stepButtons[static_cast<size_t>(index)].getToggleState());
-            refreshStepMaskControls();
-        };
-    }
-    allNormalButton.onClick = [this]
-    {
-        processor.stepMask.setAll(false);
-        refreshStepMaskControls();
-    };
-    allFxButton.onClick = [this]
-    {
-        processor.stepMask.setAll(true);
-        refreshStepMaskControls();
-    };
-    randomiseStepsButton.onClick = [this]
-    {
-        processor.stepMask.setMask(static_cast<std::uint16_t>(
-            juce::Random::getSystemRandom().nextInt(1 << randomchop::StepMask::maximumSteps)));
-        refreshStepMaskControls();
-    };
-    previousTakeButton.onClick = [this]
-    {
-        const auto count = processor.takeHistory.getTakeCount();
-        if (count <= 0)
-            return;
-        const auto selected = processor.takeHistory.getSelectedTake();
-        processor.takeHistory.requestHistory(selected < 0 ? count - 1
-                                                          : (selected + count - 1) % count);
-    };
-    nextTakeButton.onClick = [this]
-    {
-        const auto count = processor.takeHistory.getTakeCount();
-        if (count <= 0)
-            return;
-        const auto selected = processor.takeHistory.getSelectedTake();
-        processor.takeHistory.requestHistory(selected < 0 ? 0 : (selected + 1) % count);
-    };
-    liveButton.onClick = [this] { processor.takeHistory.requestLive(); };
-    takeSelector.onChange = [this]
-    {
-        if (takeSelector.getSelectedItemIndex() >= 0)
-            processor.takeHistory.requestHistory(takeSelector.getSelectedItemIndex());
-    };
     sourceKey.onChange = [this]
     {
         if (selectedSourceId.isNotEmpty()) processor.samples.updateSettings(selectedSourceId,
@@ -385,8 +328,7 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
             {
                 s.stretchRatio = static_cast<float>(sourceStretch.getValue());
             });
-        displayPool = processor.samples.getSnapshot();
-        list.repaint();
+        refresh();
     };
     waveform.onRegionChanged = [this](double start, double end)
     {
@@ -408,14 +350,6 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     configureKnob(output, outputLabel, "OUTPUT");
     configureKnob(seed, seedLabel, "SEED");
     configureKnob(rootNote, rootNoteLabel, "ROOT MIDI NOTE");
-    configureLinearControl(reverseChance, reverseChanceLabel, "REVERSE CHANCE");
-    configureLinearControl(retriggerChance, retriggerChanceLabel, "RETRIGGER CHANCE");
-    configureLinearControl(skipChance, skipChanceLabel, "SKIP CHANCE");
-    configureLinearControl(reorderChance, reorderChanceLabel, "REORDER CHANCE");
-    configureLinearControl(bendChance, bendChanceLabel, "BEND CHANCE");
-    configureLinearControl(dropChance, dropChanceLabel, "DROP CHANCE");
-    configureLinearControl(retriggerSize, retriggerSizeLabel, "REPEAT SIZE");
-    configureLinearControl(retriggerCount, retriggerCountLabel, "REPEAT COUNT");
     finalLength.setNumDecimalPlacesToDisplay(0);
     finalLength.textFromValueFunction = [](double value)
     {
@@ -437,29 +371,11 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     rootNoteAttachment = std::make_unique<SliderAttachment>(p.parameters, "rootNote", rootNote);
     targetKeyAttachment = std::make_unique<ComboBoxAttachment>(p.parameters, "targetKey", targetKey);
     voiceModeAttachment = std::make_unique<ComboBoxAttachment>(p.parameters, "voiceMode", voiceMode);
-    stepLengthAttachment = std::make_unique<ComboBoxAttachment>(
-        p.parameters, "stepLength", stepLength);
-    bitDepthAttachment = std::make_unique<ComboBoxAttachment>(
-        p.parameters, "bitDepth", bitDepth);
+    globalGridAttachment = std::make_unique<ComboBoxAttachment>(
+        p.parameters, "globalGrid", globalGrid);
     rateReductionAttachment = std::make_unique<ComboBoxAttachment>(
         p.parameters, "rateReduction", rateReduction);
     midiPitchAttachment = std::make_unique<ButtonAttachment>(p.parameters, "midiPitch", midiPitch);
-    reverseChanceAttachment = std::make_unique<SliderAttachment>(
-        p.parameters, "reverseChance", reverseChance);
-    retriggerChanceAttachment = std::make_unique<SliderAttachment>(
-        p.parameters, "retriggerChance", retriggerChance);
-    retriggerSizeAttachment = std::make_unique<SliderAttachment>(
-        p.parameters, "retriggerSize", retriggerSize);
-    retriggerCountAttachment = std::make_unique<SliderAttachment>(
-        p.parameters, "retriggerCount", retriggerCount);
-    skipChanceAttachment = std::make_unique<SliderAttachment>(
-        p.parameters, "skipChance", skipChance);
-    reorderChanceAttachment = std::make_unique<SliderAttachment>(
-        p.parameters, "reorderChance", reorderChance);
-    bendChanceAttachment = std::make_unique<SliderAttachment>(
-        p.parameters, "bendChance", bendChance);
-    dropChanceAttachment = std::make_unique<SliderAttachment>(
-        p.parameters, "dropChance", dropChance);
 
     addButton.onClick = [this]
     {
@@ -478,8 +394,6 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     clearButton.onClick = [this] { processor.samples.clear(); refresh(); };
     enableAllButton.onClick = [this] { processor.samples.setAllEnabled(true); refresh(); };
     disableAllButton.onClick = [this] { processor.samples.setAllEnabled(false); refresh(); };
-    refreshStepMaskControls();
-    refreshTakeControls();
     refresh();
     startTimerHz(8);
 }
@@ -490,19 +404,6 @@ void RandomChopSamplerAudioProcessorEditor::configureKnob(juce::Slider& slider, 
     slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 82, 20);
     slider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff8b5cf6));
-    label.setText(text, juce::dontSendNotification);
-    label.setJustificationType(juce::Justification::centred);
-    label.setColour(juce::Label::textColourId, juce::Colour(0xffc8cad1));
-    addAndMakeVisible(slider);
-    addAndMakeVisible(label);
-}
-
-void RandomChopSamplerAudioProcessorEditor::configureLinearControl(
-    juce::Slider& slider, juce::Label& label, const juce::String& text)
-{
-    slider.setSliderStyle(juce::Slider::LinearHorizontal);
-    slider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 72, 20);
-    slider.setColour(juce::Slider::trackColourId, juce::Colour(0xff8b5cf6));
     label.setText(text, juce::dontSendNotification);
     label.setJustificationType(juce::Justification::centred);
     label.setColour(juce::Label::textColourId, juce::Colour(0xffc8cad1));
@@ -540,11 +441,7 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     disableAllButton.setBounds(toolbar.removeFromLeft(105).reduced(2));
 
     auto globalControls = area.removeFromBottom(135);
-    auto masterControls = area.removeFromBottom(40);
-    auto chanceControls2 = area.removeFromBottom(58);
-    auto chanceControls1 = area.removeFromBottom(58);
-    auto takeControls = area.removeFromBottom(38);
-    auto stepControls = area.removeFromBottom(82);
+    auto timingControls = area.removeFromBottom(42);
     auto globalPitchControls = area.removeFromBottom(58);
     auto sourcePitchControls = area.removeFromBottom(58);
     auto sourceControls = area.removeFromBottom(58);
@@ -580,6 +477,13 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     voiceModeLabel.setBounds(voiceCell.removeFromLeft(105));
     voiceMode.setBounds(voiceCell.reduced(2, 10));
 
+    auto gridCell = timingControls.removeFromLeft(330).reduced(3);
+    globalGridLabel.setBounds(gridCell.removeFromLeft(115));
+    globalGrid.setBounds(gridCell.reduced(2, 5));
+    auto rateCell = timingControls.removeFromLeft(400).reduced(3);
+    rateReductionLabel.setBounds(rateCell.removeFromLeft(145));
+    rateReduction.setBounds(rateCell.reduced(2, 5));
+
     const int knobWidth = globalControls.getWidth() / 6;
     juce::Slider* sliders[] = { &randomStart, &finalLength, &attack, &release, &output, &seed };
     juce::Label* labels[] = { &randomStartLabel, &finalLengthLabel, &attackLabel,
@@ -590,50 +494,6 @@ void RandomChopSamplerAudioProcessorEditor::resized()
         labels[i]->setBounds(cell.removeFromTop(22));
         sliders[i]->setBounds(cell.reduced(4));
     }
-    juce::Slider* chanceSliders1[] = {
-        &reverseChance, &retriggerChance, &skipChance, &reorderChance
-    };
-    juce::Label* chanceLabels1[] = {
-        &reverseChanceLabel, &retriggerChanceLabel, &skipChanceLabel, &reorderChanceLabel
-    };
-    juce::Slider* chanceSliders2[] = {
-        &bendChance, &dropChance, &retriggerSize, &retriggerCount
-    };
-    juce::Label* chanceLabels2[] = {
-        &bendChanceLabel, &dropChanceLabel, &retriggerSizeLabel, &retriggerCountLabel
-    };
-    for (int index = 0; index < 4; ++index)
-    {
-        auto cell1 = chanceControls1.removeFromLeft(chanceControls1.getWidth() / (4 - index));
-        chanceLabels1[index]->setBounds(cell1.removeFromTop(20));
-        chanceSliders1[index]->setBounds(cell1.reduced(4, 2));
-        auto cell2 = chanceControls2.removeFromLeft(chanceControls2.getWidth() / (4 - index));
-        chanceLabels2[index]->setBounds(cell2.removeFromTop(20));
-        chanceSliders2[index]->setBounds(cell2.reduced(4, 2));
-    }
-    auto stepToolbar = stepControls.removeFromTop(32);
-    stepLengthLabel.setBounds(stepToolbar.removeFromLeft(100).reduced(3));
-    stepLength.setBounds(stepToolbar.removeFromLeft(90).reduced(3));
-    allNormalButton.setBounds(stepToolbar.removeFromLeft(115).reduced(3));
-    allFxButton.setBounds(stepToolbar.removeFromLeft(90).reduced(3));
-    randomiseStepsButton.setBounds(stepToolbar.removeFromLeft(105).reduced(3));
-    for (int index = 0; index < static_cast<int>(stepButtons.size()); ++index)
-    {
-        auto cell = stepControls.removeFromLeft(
-            stepControls.getWidth() / (static_cast<int>(stepButtons.size()) - index));
-        stepButtons[static_cast<size_t>(index)].setBounds(cell.reduced(2));
-    }
-    takeStatus.setBounds(takeControls.removeFromLeft(210).reduced(3));
-    previousTakeButton.setBounds(takeControls.removeFromLeft(95).reduced(3));
-    liveButton.setBounds(takeControls.removeFromLeft(75).reduced(3));
-    nextTakeButton.setBounds(takeControls.removeFromLeft(75).reduced(3));
-    takeSelector.setBounds(takeControls.removeFromLeft(200).reduced(3));
-    auto bitDepthCell = masterControls.removeFromLeft(330).reduced(3);
-    bitDepthLabel.setBounds(bitDepthCell.removeFromLeft(110));
-    bitDepth.setBounds(bitDepthCell.reduced(2, 5));
-    auto rateReductionCell = masterControls.removeFromLeft(390).reduced(3);
-    rateReductionLabel.setBounds(rateReductionCell.removeFromLeft(145));
-    rateReduction.setBounds(rateReductionCell.reduced(2, 5));
     waveform.setBounds(waveformArea.reduced(10));
     list.setBounds(area.reduced(10));
 }
@@ -694,52 +554,6 @@ void RandomChopSamplerAudioProcessorEditor::refresh()
     }
     list.repaint();
     repaint();
-}
-
-void RandomChopSamplerAudioProcessorEditor::refreshStepMaskControls()
-{
-    const auto length = randomchop::StepMask::lengthFromChoice(static_cast<int>(
-        processor.parameters.getRawParameterValue("stepLength")->load()));
-    for (int index = 0; index < static_cast<int>(stepButtons.size()); ++index)
-    {
-        auto& button = stepButtons[static_cast<size_t>(index)];
-        const bool isFx = processor.stepMask.isFxStep(index);
-        button.setToggleState(isFx, juce::dontSendNotification);
-        button.setButtonText(juce::String(index + 1) + (isFx ? " FX" : " NORMAL"));
-        button.setVisible(index < length);
-    }
-}
-
-void RandomChopSamplerAudioProcessorEditor::refreshTakeControls()
-{
-    const auto count = processor.takeHistory.getTakeCount();
-    const auto selected = processor.takeHistory.getSelectedTake();
-    if (count != displayedTakeCount)
-    {
-        displayedTakeCount = count;
-        takeSelector.clear(juce::dontSendNotification);
-        for (int index = 0; index < count; ++index)
-            takeSelector.addItem("Take " + juce::String(index + 1), index + 1);
-    }
-
-    const bool hasTakes = count > 0;
-    previousTakeButton.setEnabled(hasTakes);
-    nextTakeButton.setEnabled(hasTakes);
-    takeSelector.setEnabled(hasTakes);
-    liveButton.setEnabled(selected >= 0);
-    if (selected >= 0 && selected < count)
-    {
-        takeSelector.setSelectedItemIndex(selected, juce::dontSendNotification);
-        takeStatus.setText("HISTORY — Take " + juce::String(selected + 1) + " / 8",
-                           juce::dontSendNotification);
-    }
-    else
-    {
-        takeSelector.setSelectedId(0, juce::dontSendNotification);
-        takeStatus.setText("LIVE — " + juce::String(count) + " / 8 Takes",
-                           juce::dontSendNotification);
-    }
-    takeStatus.setColour(juce::Label::textColourId, juce::Colour(0xffc8cad1));
 }
 
 int RandomChopSamplerAudioProcessorEditor::getNumRows()
@@ -821,7 +635,5 @@ void RandomChopSamplerAudioProcessorEditor::timerCallback()
     else if (transientMessage.isNotEmpty())
         message += " — " + transientMessage;
     status.setText(message, juce::dontSendNotification);
-    refreshStepMaskControls();
-    refreshTakeControls();
     list.repaint();
 }

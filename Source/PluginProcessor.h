@@ -1,19 +1,18 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include "VoicePool.h"
+#include "HostGrid.h"
+#include "MasterDigitalProcessor.h"
 #include "RandomizationEngine.h"
 #include "SourceSelection.h"
-#include "StepMask.h"
-#include "TakeHistory.h"
-#include "MasterDigitalProcessor.h"
+#include "StateMigration.h"
+#include "VoicePool.h"
 
-class RandomChopSamplerAudioProcessor final : public juce::AudioProcessor,
-    private juce::AudioProcessorValueTreeState::Listener
+class RandomChopSamplerAudioProcessor final : public juce::AudioProcessor
 {
 public:
     RandomChopSamplerAudioProcessor();
-    ~RandomChopSamplerAudioProcessor() override;
+    ~RandomChopSamplerAudioProcessor() override = default;
     void prepareToPlay(double, int) override;
     void releaseResources() override {}
     bool isBusesLayoutSupported(const BusesLayout&) const override;
@@ -36,18 +35,18 @@ public:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     juce::AudioProcessorValueTreeState parameters;
     SampleManager samples;
-    randomchop::StepMask stepMask;
-    randomchop::TakeHistory takeHistory;
     std::atomic<uint64_t> lastTriggeredRuntimeId { 0 };
     std::atomic<bool> triggeredWhileEmpty { false };
 
 private:
     void noteOn(int note, float velocity) noexcept;
     void noteOff(int note) noexcept;
-    void startTakeEvent(const randomchop::TakeEvent&, int note, float velocity) noexcept;
-    void parameterChanged(const juce::String&, float) override;
+    randomchop::HostTiming readHostTiming() const noexcept;
+
     randomchop::VoicePool voices;
     randomchop::MasterDigitalProcessor masterDigitalProcessor;
+    randomchop::HostGrid hostGrid;
+    randomchop::GridBoundaries lastGridBoundaries;
     RandomizationEngine random;
     double currentRate = 44100.0;
     uint64_t voiceCounter = 0;

@@ -6,46 +6,31 @@ tags:
   - implementation
   - current-state
 status: active
-verified: 2026-09-05
+verified: 2026-09-07
 ---
 
 # Current Implementation State
 
-Evidence: source and [[REALTIME_AUDIT]] inspection plus [Windows Release CI run #39](https://github.com/idkanonto/samplerthingidk/actions/runs/33940234501) at commit `7265f77b44bf5db53eb2a59ba6abbbfccd9bcfb4`. The Windows Server 2022 Release workflow built `RandomChopSampler_VST3`, `RandomChopSampler_Standalone`, and `RandomChopSamplerTests`; decoded the supported-format fixture matrix; passed `ctest --test-dir build -C Release --output-on-failure`; verified the VST3 bundle, notices, and 7,460,352-byte Standalone executable; and uploaded the VST3. The independently inspected archive matched GitHub's SHA-256 `c1a2324c392e51ef7a869f0a21f2cfc44e42f0fb12755dbea063e7dd567cf020` and contained a 7,410,176-byte module at `Random Chop Sampler.vst3/Contents/x86_64-win/Random Chop Sampler.vst3`. No DAW/host audio interaction or realtime profiler session was run.
+The last verified remote baseline is `main` at `85f970522b5a8416b0a58268103e224dba7f5ea6`; [Windows Release CI run #41](https://github.com/idkanonto/samplerthingidk/actions/runs/33950109493) passed. Gate A is implemented on `gate/a-cleanup-foundation` but remains unverified until its Windows CI, artifact, merge, and post-merge gate complete. Do not present branch-only work as shipped.
 
-## Implemented in code
+## Gate A branch implementation
 
-- JUCE 8.0.13 CMake project producing VST3 and Standalone targets; Windows VST3 GitHub Actions workflow.
-- Stereo instrument output, MIDI input, and 16 fixed voices. POLY supports overlap and chords with oldest-voice stealing; MONO replaces the current primary voice through the existing 3 ms tail crossfade and releases any remaining POLY voices.
-- WAV, AIFF/AIF, MP3, and FLAC extensions are accepted and passed to JUCE decoding; source audio is loaded fully into RAM.
-- Maximum 20 stored sources; multi-file picker/drop, remove, clear, enable/disable, enable all, and disable all.
-- Random selection among enabled, playable sources using per-source Weight.
-- Per-source Gain affects playback. Per-source Gain and Weight are editable in the UI and persisted.
-- The selected source displays an immutable, decode-time peak envelope with draggable normalized Start/End markers and percentage, seconds, and sample-position feedback.
-- Random Start expands proportionally from Start and remains inside the manual Start/End region with interpolation and boundary-fade margins.
-- Per-source Source Key (`NONE` or chromatic tonic), Transpose (-24 to +24 semitones), and Fine Tune (-100 to +100 cents) are editable and persisted. Global Target Key, MIDI Pitch, and Root MIDI Note are automatable host-state parameters; MIDI Pitch defaults off and the root defaults to C5/MIDI 72.
-- Note On resolves the shortest signed tonic correction (with the six-semitone tie upward), manual Transpose, Fine Tune, and optional MIDI offset into one finite playback ratio. This is a uniform pitch shift and does not transform chord quality.
-- Per-source pitch-preserving Stretch is editable and persisted as a 0.5x–2.0x duration multiplier. Signalsmith Stretch is pinned at `57b93f4e9206a089a45387eaa39bdc9f310d3308`; 1.0x reuses decoded PCM, while other ratios are prepared by one background worker and published as immutable revisioned versions.
-- Repeated stretch edits coalesce queued work. Source runtime identity and revision checks reject stale or removed-source results; active voices retain superseded prepared versions, and final prepared-buffer reclamation occurs during non-realtime maintenance.
-- Sample-accurate MIDI event handling within each block; Note Off starts the global release envelope.
-- Final Length defaults to FULL and otherwise constrains an event to 10–5000 ms. Its Release fade is fitted inside the forced boundary, while Attack and Note Off Release continue to shape the final event.
-- Chance resolves once per Note On in the fixed Reverse → Retrigger → Skip → Reorder → Bend → Drop order. A fixed-size `EventDecision` stores all applied flags, repeat values, signed jump, four-piece permutation/span, signed bend depth, and eight-slot drop mask; voices consume no additional randomness.
-- Reverse mirrors the event start and reads backward within Start/End. Retrigger repeats a 10–500 ms segment 1–8 times; Skip applies one bounded signed start jump; Reorder permutes four pieces of a fragment that starts at the resolved event position and is capped at one second; Bend ramps playback rate by up to ±12 semitones; Drop applies a deterministically stored eight-slot mute mask with 1 ms edge smoothing.
-- The event-driven Step Mask supports 2, 4, 8, or 16 steps and defaults to eight FX steps. Every MIDI Note On consumes exactly one step in MIDI-buffer order, including triggers without a playable source; NORMAL bypasses Chance without consuming its RNG calls, while FX permits the fixed Chance chain.
-- Individual NORMAL/FX toggles, All NORMAL, All FX, Randomize, and the automatable length selector are functional. Mask bits persist in a versioned state child, legacy states default to all FX, and every length change atomically resets the audio-thread event cursor without using time, tempo, or transport state.
-- LIVE records each completed Step Mask pass into fixed-capacity `TakeEvent`/`Take` storage and keeps the latest eight Takes. Incomplete passes are discarded on length edits, HISTORY selection, and LIVE reset; silent Note On positions are retained as explicit events so cycle alignment remains exact.
-- A Take stores the stable source UUID in fixed bytes, its exact immutable prepared-data reference, source region/settings, resolved start, NORMAL/FX state, and complete `EventDecision`; it never stores rendered audio or relies on replaying an RNG seed. HISTORY uses incoming MIDI timing, note, and velocity, cycles the selected Take indefinitely, creates no new Takes, and resets to event one when another Take is selected.
-- Previous, Next, dropdown selection, Take count/status, and LIVE controls are functional. Take History is intentionally session-only and is cleared on state restore; source pool, Step Mask, and all core parameters continue to persist.
-- Take arrays and replay cursors belong only to the audio thread. UI selection requests and published browser status use atomics; SampleManager's current/retired ownership roots keep historical prepared versions alive and ensure Take eviction cannot perform final large-buffer destruction on the audio thread.
-- Global Bit Crush provides OFF or 4–24-bit quantization, followed by deterministic stereo sample-and-hold Sample Rate Reduction at 1x/OFF, 2x, 4x, 8x, 16x, 32x, or 64x, then the existing Output Gain. Reduction state is fixed-size and continues across host blocks; factor changes and prepare reset its phase.
-- The master stage replaces non-finite values with silence and bounds pathological finite inputs before quantization/hold. Both new controls are automatable appended APVTS parameters and default to unchanged processing.
-- Global Attack, Release, Final Length, Voice Mode, all six Chance percentages, Repeat Size/Count, Output Gain, deterministic Seed, Target Key, MIDI Pitch, and Root MIDI Note parameters with host state persistence. All Chance percentages default to 0% and consume no RNG state while disabled.
-- Path and source-setting persistence, missing-file representation, immutable pool snapshots, and deferred control-thread reclamation after realtime references drain.
-- Linear source-rate conversion combined with the resolved pitch ratio, mono-to-stereo playback, source-region boundary fade, and a short voice-steal tail crossfade.
-- `RandomChopSamplerTests` CTest coverage for the pool, region, pitch, stretch, lifetime, voice, envelope, Chance, Step Mask, Take, and master behavior. Phase 10 additionally performs real WAV, AIFF, AIF, and FLAC decoding for mono/stereo fixtures at 44.1/48/96 kHz plus a real stereo 48 kHz MP3 decode. The Windows workflow builds VST3, Standalone, and tests, runs CTest, and validates the complete VST3 bundle plus Standalone executable.
+- Visible product name and expected deliverables are `recompiler.dll`, `recompiler.dll.vst3`, and `recompiler.dll.exe`. The CMake target, bundle ID, manufacturer code, and plug-in code remain stable.
+- The sampler core remains: 20-source immutable pool; WAV/AIFF/AIF/MP3/FLAC; enabled/missing handling; Weight; Gain; stable IDs; Start/End and random legal starts; Source/Target keys; Transpose; Fine Tune; MIDI pitch/root; fixed 16-voice POLY/MONO; Final Length; Attack/Release; persistence; and deferred non-realtime reclamation.
+- Source Stretch now stores `0` as OFF/original, treats `1x` as original, and permits extension through `4x`. Legacy values below `1x` restore as original. Signalsmith preparation remains on the background worker.
+- A shared fixed-capacity Host Grid derives 1/8, 1/16-default, or 1/32 sample offsets from block-start BPM/PPQ. It detects discontinuities and falls back to the latest valid BPM or 120 BPM without allocation.
+- Take History, Step Mask, and per-event Reverse/Retrigger/Skip/Reorder/Bend/Drop were removed from the trigger, voice, UI, build, and tests.
+- Bit Crush was removed. Rate Reduction remains temporarily functional before Output and moves inside CODEC in Gate C.
+- State version 3 removes obsolete parameter children and legacy Step/Take nodes before restoring surviving APVTS state. Source state remains separate and preserved.
+- The selected editor source remains keyed by stable source ID; random trigger highlighting does not change the editor selection.
+- Gate A tests cover pool/state, weighted selection, pitch, regions, voice/envelope/polyphony, rate reduction, grid behavior, migration, and stretch semantics/publication.
 
-## Verification boundary
+## Not yet implemented
 
-- The approved V2 feature boundary and Phase 10 integration/hardening work are implemented and pass the automated Windows gate. A DAW/host smoke test, interactive automation/save-reopen pass, listening evaluation, and instrumented realtime profiler/stress session remain external verification rather than automated evidence.
+- Gate B: global FREEZE and SCRAMBLE.
+- Gate C: global FRACTURE presets, SMEAR, and CODEC integration.
+- Gate D: real STFT overlap-add SPECTRAL DRAW and persistent canvas.
+- Gate E: full-chain integration, compatibility/realtime audit, final functional UI cleanup, and shipping evidence.
+- Final visual redesign is explicitly outside the current delivery boundary.
 
-See [[TEST_MATRIX]] before changing an item from planned to implemented.
+See [[TEST_MATRIX]] for what is runtime-verified and [[REALTIME_AUDIT]] for the callback contract.

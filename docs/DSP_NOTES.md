@@ -10,29 +10,26 @@ status: active
 
 ## Realtime contract
 
-- The audio callback must not perform file I/O, decoding, blocking locks, logging, avoidable allocation/deallocation, expensive analysis, or stretch preparation.
-- Publish immutable sample-pool snapshots to the audio thread. Ensure removal and replacement cannot make the realtime thread perform final reclamation.
-- Prepare pitch-preserving stretch outside the realtime thread and publish/cache completed results safely.
-- Preserve sample-accurate handling of MIDI offsets within host blocks.
+- No file I/O, decoding, blocking lock, logging, background wait, avoidable allocation/deallocation, analysis, or stretch preparation in `processBlock`.
+- Publish source pools and prepared source versions immutably. Keep non-realtime retirement roots so audio-thread reference release cannot reclaim a large buffer.
+- Read playhead timing once per block. Creative stages consume the resulting fixed-capacity boundary list; they do not query the host or UI.
+- Preallocate global-effect buffers in `prepareToPlay`. Bound every scan by the block size, source limit, voice count, grid capacity, or explicit DSP buffer capacity.
+- Make bypass values transparent and keep fresh-instance creative processing neutral.
 
-## Current engine
+## Sampler and stretch
 
-- Sources are decoded fully into RAM on control/state paths.
-- Non-unity Stretch is prepared by one background worker with Signalsmith Stretch. Immutable prepared versions are selected by source runtime identity and revision; stale results are discarded, queued work is coalesced/cancelled, and superseded buffers are reclaimed off the audio thread after voices release them.
-- Playback uses linear interpolation for source-rate conversion.
-- Each voice has Attack/Release, optional sample-counted Final Length, a 3 ms source-region boundary fade, and a 3 ms tail crossfade on stealing.
-- Sixteen voices are preallocated. POLY steals the oldest active voice; MONO reuses the primary voice with that same crossfade and releases residual POLY voices.
-- Chance randomness is resolved once during Note On into a fixed-size value. Voice rendering uses only stored values, bounded four-piece Reorder work, a precomputed Bend multiplier, and a smoothed eight-slot Drop gain; it performs no RNG calls or allocation.
-- Step Mask bits and reset generation are atomically published from control/state paths. Its fixed cursor belongs to the audio thread, advances once per Note On in MIDI-buffer order, and bypasses Chance resolution entirely on NORMAL steps.
-- Take capture and replay use fixed arrays owned by the audio thread. `TakeEvent` stores fixed UUID bytes, an immutable prepared reference, and resolved event values; HISTORY performs no RNG calls. UI mode/selection requests and status use bounded atomics rather than locks or mutable UI access.
-- Prepared versions referenced by Takes remain rooted in SampleManager's current or retired storage. Replacing a Take may decrement a reference on the audio thread, but cannot destroy the prepared audio there; the last retained reference is erased only by control-thread garbage collection or processor teardown.
-- Master processing runs after the voice mix with Bit Crush first, stereo sample-and-hold rate reduction second, and Output Gain last. It keeps two held floats plus a bounded phase counter, preserves phase across blocks, resets on factor changes/prepare, and performs no allocation, locking, or RNG.
-- The master stage sanitizes non-finite samples to zero and clamps pathological finite values to ±64 before quantization. With the parameter's maximum +6 dB Output Gain, this keeps the final scalar range finite and bounded while leaving ordinary bypassed audio unchanged.
-- A xorshift64* generator supplies allocation-free seeded random decisions.
+- Sources decode fully into RAM on control/state paths. Waveform peaks are immutable.
+- `0` and `1x` Stretch both reuse decoded PCM. Ratios above one through `4x` run through pinned Signalsmith Stretch on one worker.
+- Jobs carry source runtime identity and monotonically increasing revision. Queued work coalesces; stale/removed results do not publish.
+- Voices retain immutable prepared data and use linear interpolation, per-source Gain, Final Length, Attack/Release, a 3 ms region fade, and a 3 ms steal tail.
 
-## Stretch teardown
+## Host grid
 
-Queued stretch work is cancelled during source removal, pool replacement, and teardown. An already-running pinned Signalsmith `exact()` call is joined off the realtime thread because the upstream one-shot API has no safe mid-call cancellation hook; detaching it would permit code to run after plugin unload.
+- Grid units are 0.5, 0.25, or 0.125 quarter notes for 1/8, 1/16, or 1/32.
+- A playing host with finite positive BPM and finite PPQ is authoritative. The enumerator treats each block as a half-open interval so a boundary is emitted once.
+- Expected PPQ continuity is computed from the previous block's rate and BPM. A seek, loop, incompatible transport jump, grid edit, or clock-source transition marks a discontinuity.
+- Missing or stopped host transport uses a continuous sample countdown at the latest valid BPM, initially 120. Grid output is a fixed array and cannot allocate.
 
-Processing order is defined in [[SIGNAL_CHAIN]]. Verification belongs in [[TEST_MATRIX]].
-The path-by-path Phase 10 review is recorded in [[REALTIME_AUDIT]].
+## Removed DSP
+
+The old Take/Step/per-event effect path and Bit Crush are absent. They must not be reintroduced as implementation shortcuts for the global chain in [[SIGNAL_CHAIN]].

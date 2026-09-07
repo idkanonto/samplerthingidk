@@ -61,7 +61,7 @@ SampleSettings readSettings(const juce::ValueTree& node)
     s.fineTuneCents = randomchop::clampFineTune(
         static_cast<float>(node.getProperty("fineTune", 0.0f)));
     s.stretchRatio = randomchop::clampStretchRatio(
-        static_cast<float>(node.getProperty("stretch", 1.0f)));
+        static_cast<float>(node.getProperty("stretch", 0.0f)));
     s.selectionWeight = juce::jlimit(0.01f, 10.0f, static_cast<float>(node.getProperty("weight", 1.0f)));
     return s;
 }
@@ -299,7 +299,7 @@ SampleManager::SamplePtr SampleManager::loadFile(const juce::File& file,
             errors.push_back(file.getFileName() + ": could not prepare decoded audio");
             return {};
         }
-        if (std::abs(sample->settings.stretchRatio - 1.0f) >= 0.000001f)
+        if (randomchop::stretchDurationMultiplier(sample->settings.stretchRatio) > 1.0f)
         {
             sample->requestedStretchRevision = 1;
             sample->stretchPending = true;
@@ -391,7 +391,8 @@ void SampleManager::updateSettings(const juce::String& id,
             return;
         auto next = std::make_shared<Pool>(*current);
         auto copy = std::make_shared<SampleData>(*(*next)[index]);
-        const auto previousStretchRatio = copy->settings.stretchRatio;
+        const auto previousStretchRatio = randomchop::stretchDurationMultiplier(
+            copy->settings.stretchRatio);
         update(copy->settings);
         const auto region = randomchop::clampNormalisedRegion(copy->settings.startNormalised,
                                                               copy->settings.endNormalised);
@@ -406,10 +407,11 @@ void SampleManager::updateSettings(const juce::String& id,
         copy->settings.selectionWeight = juce::jlimit(0.01f, 10.0f,
                                                       copy->settings.selectionWeight);
 
-        const auto stretchChanged = std::abs(copy->settings.stretchRatio
-                                               - previousStretchRatio) >= 0.000001f;
-        if (stretchChanged || (copy->stretchFailed
-                               && std::abs(copy->settings.stretchRatio - 1.0f) >= 0.000001f))
+        const auto effectiveStretchRatio = randomchop::stretchDurationMultiplier(
+            copy->settings.stretchRatio);
+        const auto stretchChanged = std::abs(effectiveStretchRatio
+                                              - previousStretchRatio) >= 0.000001f;
+        if (stretchChanged || (copy->stretchFailed && effectiveStretchRatio > 1.0f))
         {
             copy->requestedStretchRevision = (*next)[index]->requestedStretchRevision + 1;
             copy->stretchFailed = false;
@@ -417,7 +419,7 @@ void SampleManager::updateSettings(const juce::String& id,
             {
                 copy->stretchPending = false;
             }
-            else if (std::abs(copy->settings.stretchRatio - 1.0f) < 0.000001f)
+            else if (effectiveStretchRatio <= 1.0f)
             {
                 copy->prepared = randomchop::prepareStretch(
                     copy->audio, copy->sampleRate, 1.0f, copy->requestedStretchRevision);
@@ -428,7 +430,7 @@ void SampleManager::updateSettings(const juce::String& id,
             {
                 copy->stretchPending = true;
                 job = { copy->settings.id, copy->runtimeId, copy->audio, copy->sampleRate,
-                        copy->settings.stretchRatio, copy->requestedStretchRevision };
+                        effectiveStretchRatio, copy->requestedStretchRevision };
                 shouldEnqueue = true;
             }
             shouldDiscardQueued = !shouldEnqueue;
@@ -490,7 +492,9 @@ std::vector<juce::String> SampleManager::restoreState(const juce::ValueTree& sta
             {
                 if (loaded->stretchPending)
                     pendingJobs.push_back({ loaded->settings.id, loaded->runtimeId, loaded->audio,
-                                            loaded->sampleRate, loaded->settings.stretchRatio,
+                                            loaded->sampleRate,
+                                            randomchop::stretchDurationMultiplier(
+                                                loaded->settings.stretchRatio),
                                             loaded->requestedStretchRevision });
                 next->push_back(std::move(loaded));
             }

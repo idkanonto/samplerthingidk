@@ -16,7 +16,7 @@ PreparedSamplePtr prepareStretch(
         || !std::isfinite(sampleRate) || sampleRate <= 0.0)
         return {};
 
-    const auto ratio = clampStretchRatio(durationMultiplier);
+    const auto ratio = stretchDurationMultiplier(durationMultiplier);
     try
     {
         auto prepared = std::make_shared<PreparedSampleData>();
