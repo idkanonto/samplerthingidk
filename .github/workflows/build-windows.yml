@@ -52,7 +52,7 @@ jobs:
       - name: Verify artifact
         shell: pwsh
         run: |
-          $plugin = Join-Path $env:GITHUB_WORKSPACE 'build\RandomChopSampler_artefacts\Release\VST3\Random Chop Sampler.vst3'
+          $plugin = Join-Path $env:GITHUB_WORKSPACE 'build\RandomChopSampler_artefacts\Release\VST3\recompiler.dll.vst3'
           if (-not (Test-Path -LiteralPath $plugin -PathType Container)) {
             throw "Expected VST3 bundle was not produced: $plugin"
           }
@@ -60,7 +60,7 @@ jobs:
           if ($module.Count -lt 1) {
             throw "The VST3 bundle does not contain a module binary."
           }
-          $standalone = Join-Path $env:GITHUB_WORKSPACE 'build\RandomChopSampler_artefacts\Release\Standalone\Random Chop Sampler.exe'
+          $standalone = Join-Path $env:GITHUB_WORKSPACE 'build\RandomChopSampler_artefacts\Release\Standalone\recompiler.dll.exe'
           if (-not (Test-Path -LiteralPath $standalone -PathType Leaf) -or
               (Get-Item -LiteralPath $standalone).Length -eq 0) {
             throw "Expected standalone executable was not produced: $standalone"
@@ -84,9 +84,9 @@ jobs:
       - name: Upload VST3
         uses: actions/upload-artifact@v7
         with:
-          name: Random-Chop-Sampler-Windows-VST3
+          name: recompiler-dll-Windows-VST3
           # Upload the parent so the downloaded archive preserves the required
-          # top-level "Random Chop Sampler.vst3" bundle directory.
+          # top-level "recompiler.dll.vst3" bundle directory.
           path: build/RandomChopSampler_artefacts/Release/VST3
           if-no-files-found: error
           retention-days: 30

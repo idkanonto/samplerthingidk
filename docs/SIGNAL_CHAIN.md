@@ -3,32 +3,28 @@ title: Signal Chain
 tags:
   - architecture
   - dsp
-status: approved-v2
+status: approved
 ---
 
 # Signal Chain
 
-## Fixed V2 order
+## Fixed product order
 
-1. MIDI Note On and Mono/Poly voice policy.
-2. Step Mask decision: NORMAL bypasses Chance; FX permits Chance.
-3. Select a random enabled source using Weight.
-4. Select a random start inside manual Start/End.
-5. Apply source pitch controls: Source Key/Target Key behavior, MIDI pitch/root-note mode, Transpose, and Fine Tune.
-6. Apply cached pitch-preserving Stretch.
-7. Apply per-sample Gain.
-8. Apply allowed Chance processing: Reverse, Retrigger, Skip, Reorder, Bend, Drop.
-9. Apply Final Length.
-10. Apply Attack/Release.
-11. Mix up to 16 voices.
-12. Apply global Bit Crush.
-13. Apply global Sample Rate Reduction.
-14. Apply global Output Gain.
+1. MIDI Note On and POLY/MONO voice policy.
+2. Weighted selection from enabled, playable sources.
+3. Random start inside the source's manual Start/End region.
+4. Source/Target tonic correction, Transpose, Fine Tune, and optional MIDI pitch/root offset.
+5. Cached pitch-preserving Stretch and source Gain.
+6. Final Length, Attack/Release, boundary fade, and voice-steal crossfade.
+7. Mix up to 16 voices.
+8. FREEZE.
+9. SCRAMBLE.
+10. FRACTURE.
+11. SPECTRAL DRAW.
+12. SMEAR.
+13. CODEC, including Rate Reduction.
+14. Output Gain.
 
-Take History records the decisions that drive this path; it does not store rendered audio. See [[PRODUCT_SPEC_V2#Takes and replay]].
+## Gate A code path
 
-## Current code path
-
-The current implementation follows the fixed chain: decoded PCM → cached pitch-preserving Stretch preparation off the audio thread → MIDI Note On and MONO/POLY voice policy → LIVE event-driven Step Mask decision and fresh source/start/Chance resolution, or HISTORY selection of the next stored explicit event → immutable prepared version and stored source region/settings → Source/Target tonic correction + Transpose + Fine Tune + optional MIDI pitch/root offset → linear source-rate conversion and per-source Gain → stored NORMAL bypass or fixed-size Reverse/Retrigger/Skip/Reorder/Bend/Drop decision and rendering → optional Final Length → per-voice Attack/Release/region-boundary fade → voice mix → Bit Crush → Sample Rate Reduction → Output Gain. See [[CURRENT_STATE]] for verification limits.
-
-The approved chain fixes stage order; individual Chance-effect algorithms must remain consistent with [[PRODUCT_SPEC_V2]] and [[DECISIONS]].
+The current foundation implements steps 1–7, temporary standalone Rate Reduction, and Output. It also computes the shared host-grid boundaries needed by later effects. Removed Take/Step/per-event processing and Bit Crush are not in the path. Later gates must insert effects only at their assigned location and keep bypass states transparent.

@@ -20,7 +20,15 @@ namespace randomchop
 {
 inline float clampStretchRatio(float ratio) noexcept
 {
-    return std::isfinite(ratio) ? std::clamp(ratio, 0.5f, 2.0f) : 1.0f;
+    if (!std::isfinite(ratio) || ratio < 1.0f)
+        return 0.0f;
+    return std::clamp(ratio, 1.0f, 4.0f);
+}
+
+inline float stretchDurationMultiplier(float storedRatio) noexcept
+{
+    const auto setting = clampStretchRatio(storedRatio);
+    return setting <= 1.0f ? 1.0f : setting;
 }
 
 PreparedSamplePtr prepareStretch(

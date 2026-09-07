@@ -1,23 +1,20 @@
 ---
-title: Project Brain Index
+title: recompiler.dll Project Brain
 tags:
   - project-brain
   - index
 status: active
 ---
 
-# Random Chop Sampler Project Brain
-
-Use this note as the router. Product intent and implementation state are deliberately separate.
+# recompiler.dll Project Brain
 
 | Need | Read |
 |---|---|
-| Approved V2 behavior and scope | [[PRODUCT_SPEC_V2]] and [[DECISIONS]] |
+| Approved product behavior and scope | [[PRODUCT_SPEC_V2]] and [[DECISIONS]] |
 | What exists in code today | [[CURRENT_STATE]] |
 | Processing order | [[SIGNAL_CHAIN]] |
-| Realtime and DSP constraints | [[DSP_NOTES]] |
-| Realtime callback and lifetime audit | [[REALTIME_AUDIT]] |
+| DSP and realtime constraints | [[DSP_NOTES]] and [[REALTIME_AUDIT]] |
 | Verification coverage | [[TEST_MATRIX]] |
-| Postponed ideas | [[FUTURE_IDEAS]] |
+| Explicitly postponed ideas | [[FUTURE_IDEAS]] |
 
-Do not infer implementation from [[PRODUCT_SPEC_V2]]. Check [[CURRENT_STATE]] and the code first.
+The repository is the implementation truth. The specification defines intent; it does not prove a feature exists. Check [[CURRENT_STATE]] and [[TEST_MATRIX]] before reporting completion.

@@ -26,7 +26,8 @@ struct SampleSettings final
     float gainDb = 0.0f;
     int transposeSemitones = 0;
     float fineTuneCents = 0.0f;
-    float stretchRatio = 1.0f;
+    // Stored/UI value: 0 is OFF/original, 1 is also original, and >1 extends duration.
+    float stretchRatio = 0.0f;
     float selectionWeight = 1.0f;
 };
 
@@ -110,8 +111,8 @@ private:
     static size_t findSource(const Pool&, const juce::String& id) noexcept;
     juce::AudioFormatManager formats;
     std::shared_ptr<const Pool> pool { std::make_shared<const Pool>() };
-    // Replaced objects remain owned here until no realtime snapshot, voice, or
-    // future Take references them. Collection is performed only by control
+    // Replaced objects remain owned here until no realtime snapshot or voice
+    // references them. Collection is performed only by control
     // threads, so the audio thread can never become the last owner.
     std::vector<std::shared_ptr<const Pool>> retiredPools;
     std::vector<SamplePtr> retiredSamples;

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(RandomChopSampler VERSION 1.0.0 LANGUAGES CXX)
+project(RandomChopSampler VERSION 3.0.0 LANGUAGES CXX)
 
 include(CTest)
 
@@ -30,12 +30,12 @@ FetchContent_GetProperties(JUCE SOURCE_DIR juce_source_dir)
 FetchContent_GetProperties(signalsmith-linear SOURCE_DIR signalsmith_linear_source_dir)
 
 juce_add_plugin(RandomChopSampler
-    COMPANY_NAME "Random Chop Audio"
+    COMPANY_NAME "recompiler.dll"
     BUNDLE_ID "com.randomchopaudio.randomchopsampler"
     PLUGIN_MANUFACTURER_CODE RChp
     PLUGIN_CODE RCS1
     FORMATS VST3 Standalone
-    PRODUCT_NAME "Random Chop Sampler"
+    PRODUCT_NAME "recompiler.dll"
     IS_SYNTH TRUE
     NEEDS_MIDI_INPUT TRUE
     NEEDS_MIDI_OUTPUT FALSE
@@ -59,9 +59,8 @@ target_sources(RandomChopSampler PRIVATE
     Source/RandomSamplerVoice.cpp
     Source/RandomSamplerVoice.h
     Source/VoicePool.h
-    Source/ChanceEvents.h
-    Source/StepMask.h
-    Source/TakeHistory.h
+    Source/HostGrid.h
+    Source/StateMigration.h
     Source/MasterDigitalProcessor.h
     Source/RandomizationEngine.h
     Source/HarmonicPitch.h
@@ -97,7 +96,7 @@ add_custom_command(TARGET RandomChopSampler_VST3 POST_BUILD
 
 if (BUILD_TESTING)
     juce_add_console_app(RandomChopSamplerTests
-        PRODUCT_NAME "Random Chop Sampler Tests")
+        PRODUCT_NAME "recompiler.dll Tests")
     juce_generate_juce_header(RandomChopSamplerTests)
     target_sources(RandomChopSamplerTests PRIVATE
         Tests/Phase1Tests.cpp
@@ -108,9 +107,8 @@ if (BUILD_TESTING)
         Source/RandomSamplerVoice.cpp
         Source/RandomSamplerVoice.h
         Source/VoicePool.h
-        Source/ChanceEvents.h
-        Source/StepMask.h
-        Source/TakeHistory.h
+        Source/HostGrid.h
+        Source/StateMigration.h
         Source/MasterDigitalProcessor.h
         Source/RandomizationEngine.h
         Source/HarmonicPitch.h

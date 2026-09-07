@@ -8,41 +8,30 @@ status: active
 
 # Product Decisions
 
-These decisions govern V2 together with [[PRODUCT_SPEC_V2]]. New reversals must be recorded here before implementation.
+These decisions govern implementation together with [[PRODUCT_SPEC_V2]].
 
 ## Accepted
 
-- Sampler-first product; maximum 20 samples; WAV, AIFF/AIF, MP3, and FLAC.
-- Random enabled source per MIDI trigger and random start within manual Start/End.
-- Manual Source Key, global Target Key, manual per-sample Transpose, and mandatory Fine Tune.
-- Per-sample pitch-preserving Stretch, Gain, and Weight.
-- Signalsmith Stretch is the preferred MIT-licensed stretch implementation; preparation is cached and kept off the realtime thread.
-- MIDI pitch ON/OFF with a root note; 16 voices; Mono and Poly modes.
-- Chance effects: Reverse, Retrigger, Skip, Reorder, Bend, and Drop.
-- Step Mask lengths: 2, 4, 8, 16. Advance only on MIDI Note On. NORMAL bypasses Chance; FX allows Chance.
-- One Take equals one complete Step Mask cycle. Retain the latest 8 Takes.
-- History stores explicit decisions rather than rendered audio. LIVE generates; HISTORY replays deterministically.
-- Final Length follows Chance processing. Attack/Release follow Final Length.
-- Global Bit Crush, Sample Rate Reduction, and Output Gain use the fixed [[SIGNAL_CHAIN]].
-- Automatic Source Key to Target Key correction uses the shortest signed tonic interval; a six-semitone tie resolves upward.
-- Stretch is expressed as a duration multiplier: 2.0x produces twice the duration and 0.5x produces half the duration while preserving pitch.
-- Reorder begins at the event's resolved random-start position, stays inside that source's Start/End region, and uses at most one second divided into four pieces.
-- HISTORY loops the selected Take indefinitely and resets to its first event when another Take is selected.
-- V2 phases ship through sequential pull requests. Each requires passing Windows CI, an inspected VST3 artifact, and disposition of CodeRabbit findings before squash merge.
+- Preserve the sampler core, stable parameter IDs that still exist, source identity, immutable prepared data, and deferred non-realtime reclamation.
+- Brand the visible product `recompiler.dll` while retaining standards-compliant VST3 packaging and existing manufacturer/plugin codes plus bundle ID for host continuity.
+- Use a shared 1/8, 1/16-default, or 1/32 host grid for every creative global effect, with a deterministic internal fallback.
+- Process global creative effects only after voice mixing and only in the fixed [[SIGNAL_CHAIN]] order.
+- Treat CodeRabbit as a second opinion. Compilation, approved behavior, test validity, ownership/lifetime, realtime safety, and packaging findings are actionable; redesign and scope expansion are not authoritative.
+- Keep Signalsmith stretch preparation on one background worker. `0` and `1x` both mean original duration; allow extension only through `4x`.
+- Place the existing sample-and-hold Rate Reduction inside CODEC when that stage is implemented.
+- Implement a real STFT/FFT overlap-add Spectral Draw processor as its own high-risk gate.
+- Batch tests and project-brain updates with the implementation they describe; avoid documentation-only CI churn.
 
-## Rejected for V2
+## Removed
 
-- Waveform magnifier.
-- BPM detection and host tempo sync.
-- Grid-based random starts.
-- DAW bar or loop synchronization.
+- Take History and its browser/state behavior.
+- Programmable Step Mask and its event cursor.
+- Per-event Reverse, Retrigger, Skip, Reorder, Bend, and Drop.
+- Bit Crush.
 
-Do not resurrect these without an explicit decision change.
+Legacy state entries for these systems are ignored rather than reinterpreted.
 
-## Postponed
+## Deferred
 
-- Automatic key detection.
-- Automatic detune/cents detection.
-- Design and art direction until functionality is stable.
-
-Postponed work is tracked in [[FUTURE_IDEAS]].
+- Final visual redesign and art direction.
+- Any feature not named in [[PRODUCT_SPEC_V2]].

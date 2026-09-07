@@ -2,7 +2,6 @@
 
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
-#include <array>
 #include <functional>
 
 class SourceWaveformComponent final : public juce::Component
@@ -47,9 +46,6 @@ private:
     void refresh();
     void addFiles(const juce::StringArray&);
     void configureKnob(juce::Slider&, juce::Label&, const juce::String&);
-    void configureLinearControl(juce::Slider&, juce::Label&, const juce::String&);
-    void refreshStepMaskControls();
-    void refreshTakeControls();
 
     RandomChopSamplerAudioProcessor& processor;
     juce::Label title, status;
@@ -61,41 +57,24 @@ private:
     juce::Slider sourceTranspose, sourceFineTune, sourceGain, sourceWeight, sourceStretch;
     juce::Label sourceKeyLabel, sourceTransposeLabel, sourceFineTuneLabel,
         sourceGainLabel, sourceWeightLabel, sourceStretchLabel;
-    juce::ComboBox targetKey, voiceMode, bitDepth, rateReduction;
-    juce::ComboBox stepLength;
+    juce::ComboBox targetKey, voiceMode, globalGrid, rateReduction;
     juce::ToggleButton midiPitch { "MIDI Pitch" };
-    std::array<juce::ToggleButton, randomchop::StepMask::maximumSteps> stepButtons;
-    juce::TextButton allNormalButton { "All NORMAL" }, allFxButton { "All FX" },
-        randomiseStepsButton { "Randomize" };
-    juce::TextButton previousTakeButton { "Previous" }, liveButton { "LIVE" },
-        nextTakeButton { "Next" };
-    juce::ComboBox takeSelector;
     juce::Slider rootNote, randomStart, finalLength, attack, release, output, seed;
-    juce::Slider reverseChance, retriggerChance, retriggerSize, retriggerCount,
-        skipChance, reorderChance, bendChance, dropChance;
-    juce::Label targetKeyLabel, rootNoteLabel, voiceModeLabel, randomStartLabel,
-        finalLengthLabel, attackLabel, releaseLabel, outputLabel, seedLabel;
-    juce::Label reverseChanceLabel, retriggerChanceLabel, retriggerSizeLabel,
-        retriggerCountLabel, skipChanceLabel, reorderChanceLabel, bendChanceLabel,
-        dropChanceLabel;
-    juce::Label stepLengthLabel;
-    juce::Label takeStatus;
-    juce::Label bitDepthLabel, rateReductionLabel;
+    juce::Label targetKeyLabel, rootNoteLabel, voiceModeLabel, globalGridLabel,
+        rateReductionLabel, randomStartLabel, finalLengthLabel, attackLabel,
+        releaseLabel, outputLabel, seedLabel;
+
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ComboBoxAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
     std::unique_ptr<SliderAttachment> randomStartAttachment, finalLengthAttachment,
         attackAttachment, releaseAttachment, outputAttachment, seedAttachment, rootNoteAttachment;
-    std::unique_ptr<SliderAttachment> reverseChanceAttachment, retriggerChanceAttachment,
-        retriggerSizeAttachment, retriggerCountAttachment, skipChanceAttachment,
-        reorderChanceAttachment, bendChanceAttachment, dropChanceAttachment;
     std::unique_ptr<ComboBoxAttachment> targetKeyAttachment, voiceModeAttachment,
-        stepLengthAttachment, bitDepthAttachment, rateReductionAttachment;
+        globalGridAttachment, rateReductionAttachment;
     std::unique_ptr<ButtonAttachment> midiPitchAttachment;
     std::shared_ptr<const SampleManager::Pool> displayPool;
     juce::String selectedSourceId;
     std::unique_ptr<juce::FileChooser> chooser;
     juce::String transientMessage;
-    int displayedTakeCount = -1;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(RandomChopSamplerAudioProcessorEditor)
 };
