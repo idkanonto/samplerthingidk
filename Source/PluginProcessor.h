@@ -56,14 +56,13 @@ private:
     randomchop::SpectralMaskStore spectralMaskStore;
     randomchop::SpectralDrawProcessor spectralDrawProcessor;
     randomchop::SmearProcessor smearProcessor;
-    randomchop::CodecProcessor codecProcessor;
     randomchop::HostGrid hostGrid;
     randomchop::GridBoundaries lastGridBoundaries;
-    randomchop::FreezeProcessor freezeProcessor;
     randomchop::ScrambleProcessor scrambleProcessor;
     RandomizationEngine random;
+    std::atomic<uint64_t> internalSeed { 1 };
     double currentRate = 44100.0;
     uint64_t voiceCounter = 0;
-    int lastSeed = -1;
+    uint64_t lastSeed = 0;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(RandomChopSamplerAudioProcessor)
 };

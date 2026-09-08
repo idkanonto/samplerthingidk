@@ -32,20 +32,30 @@ status: active
 
 ## Temporal global effects
 
-- FREEZE and SCRAMBLE each allocate a two-second stereo ring only in `prepare`. During rendering they write the incoming global mix while idle and freeze the ring while an event references its captured logical range.
-- Activation records ring indices and fixed scalar/array decisions; it does not copy captured audio. When an event ends, logical validity resets and the old memory is overwritten incrementally.
-- FREEZE derives capture and hold frames from the current grid BPM. Its optional octave direction is fixed for the event and reads the captured ring with wrapped linear interpolation.
-- SCRAMBLE uses no more than eight chunks. Its source index and reverse flag arrays are resolved once at activation; render-time addresses are clamped to the captured logical range.
-- Separate salted RNG streams preserve sampler random-selection stability. Chance 0 and Amount 0 avoid activation; bypassed finite samples remain identical.
-- A discontinuity drops event and logical-history state in constant time. Large buffers are not cleared from the audio callback.
+- SCRAMBLE allocates one two-second stereo ring in `prepare`. Activation records only ring indices and fixed scalar/array decisions; it never copies captured audio.
+- Every eligible boundary at a nonzero Amount receives a bounded event. Amount chooses four through eight slices and a monotonically increasing number of manipulated slices, eliminating chance-driven empty phrases while retaining gesture variation.
+- A selected slice can jump, replay a micro-loop, hold a shorter region, reverse, or read at 0.5x/2x for integrated octave-style fragments. Adjacent selected slices can share one gesture to form a motif rather than unrelated switches.
+- One- or two-grid event spans are selected with an amount-dependent distribution. A 2.5 ms per-slice taper bounds discontinuities while allowing intentionally abrupt internal edits.
+- The dry signal continues to refresh history during an event only when ring capacity proves the captured range cannot be overwritten. Event completion keeps valid recent history; transport discontinuity invalidates it in constant time.
+- A separately salted RNG stream preserves sampler-source random-selection stability. Amount 0 is sample-identical and cannot activate.
 
 ## Creative character effects
 
-- FRACTURE computes stable state-variable filter coefficients once per block and runs parallel structures rather than interpolating incompatible coefficients. A prepared fractional comb supplies hollow/metallic paths; feedback, integrators, DC rejection, and output are explicitly bounded.
-- FRACTURE presets are a fixed compile-time bank. UI selection writes the six real automatable parameters on the message thread; the callback never parses, allocates, or accesses preset names.
-- SMEAR allocates half a second of stereo delay storage in `prepareToPlay`. Two complementary-window read heads move through bounded short grains, with scalar cross-block phase and blur state. Amount 0 writes history but leaves finite input samples untouched.
-- CODEC approximates bandwidth loss and packet damage with fixed per-channel predictor, residual, blur, and hold state. The existing deterministic sample-and-hold reducer is its final internal operation and retains the `rateReduction` parameter ID.
-- All three stages clamp hostile settings and active-path non-finite samples. FRACTURE Mix 0, SMEAR Amount 0, and CODEC Amount 0 with 1x Rate are exact finite-sample bypasses.
+- FRACTURE couples two phase-related slow oscillators, smoothed bounded random targets, and an input envelope. Amount uses nonlinear curves to increase wet level, drive, modulation depth, resonance, filter/formant motion, comb character, packet damage, and the effective rate-reduction severity together.
+- Predictive digital damage is inside the FRACTURE topology: bandwidth loss feeds a held residual/reconstruction stage before waveshaping and parallel stable tonal structures. Rate Reduction remains a user choice but its effective factor is moderated by the FRACTURE macro.
+- Six parallel low/band/notch/formant/hollow-comb/metallic-comb structures are blended at their outputs; incompatible filter coefficients are never interpolated. Comb feedback, filter state, a sample-rate-invariant 15 Hz DC blocker, and final output are bounded.
+- FRACTURE presets are a fixed compile-time bank. UI selection writes Amount, Character, and Rate on the message thread; callback code never parses or accesses preset names.
+- SMEAR allocates one second of stereo history and six fixed grain records in `prepareToPlay`. Grains start only when a safe read-behind distance exists, use Hann tapers, musically restricted pitch intervals, bounded scatter, stereo panning/crossfeed, and high-passed residual emphasis.
+- Fast/slow input envelopes reduce SMEAR wet level around transients so the texture complements attacks instead of turning the source into blur. Amount controls density, grain duration, interval range, scatter, and wet intensity. Amount 0 remains sample-identical while filling history.
+- Both creative engines use separately salted deterministic RNG state and fixed/preallocated storage. Hostile settings and samples are finite-clamped; maximum feedback/resonance is bounded.
+
+## Public implementation research
+
+- Signalsmith Stretch (MIT) remains the only externally integrated DSP dependency. Its license and notice are already packaged; this pass did not copy additional Signalsmith code.
+- Mutable Instruments Clouds (MIT) was studied for preallocated capture/history organization and musically coupled texture controls. No Clouds source was copied or added as a dependency.
+- DaisySP (MIT) granular-player and decimator implementations were studied for phase-offset windowing, bounded grain playback, and deterministic rate-hold structure. The shipped implementations are original and no DaisySP source was copied.
+- Signalsmith DSP (MIT) was studied as a compact realtime-DSP reference; it was not needed as a dependency.
+- chowdsp_utils (mixed licensing, with relevant DSP modules under GPLv3), Rubber Band (GPL-2.0-or-later or commercial), and Surge XT (GPLv3) were architecture references only. Their reciprocal/commercial terms were not introduced into this project and no code was copied.
 
 ## Spectral Draw
 
@@ -57,4 +67,4 @@ status: active
 
 ## Removed DSP
 
-The old Take/Step/per-event effect path and Bit Crush are absent. They must not be reintroduced as implementation shortcuts for the global chain in [[SIGNAL_CHAIN]].
+The old standalone FREEZE, standalone CODEC, blur-based SMEAR, Take/Step/per-event effect path, and Bit Crush are absent. Useful Freeze gestures and Codec damage live only inside the coherent SCRAMBLE/FRACTURE macros described above. They must not be reintroduced as duplicate headline stages or implementation shortcuts for [[SIGNAL_CHAIN]].

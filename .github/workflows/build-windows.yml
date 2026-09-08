@@ -47,7 +47,25 @@ jobs:
             throw "Failed to create the MP3 decoder fixture: $mp3"
           }
           $env:RANDOM_CHOP_TEST_MP3 = $mp3
+          $renderDir = Join-Path $env:GITHUB_WORKSPACE 'build\listening-renders'
+          New-Item -ItemType Directory -Force -Path $renderDir | Out-Null
+          $env:RANDOM_CHOP_RENDER_DIR = $renderDir
           ctest --test-dir build -C Release --output-on-failure
+
+      - name: Verify listening renders
+        shell: pwsh
+        run: |
+          $renderDir = Join-Path $env:GITHUB_WORKSPACE 'build\listening-renders'
+          $renders = Get-ChildItem -LiteralPath $renderDir -Filter '*.wav' -File
+          if ($renders.Count -ne 16) {
+            throw "Expected 16 deterministic listening renders, found $($renders.Count)."
+          }
+          foreach ($render in $renders) {
+            if ($render.Length -eq 0) {
+              throw "Listening render is empty: $($render.FullName)"
+            }
+          }
+          $renders | ForEach-Object { Write-Host "$($_.Name): $($_.Length) bytes" }
 
       - name: Verify artifact
         shell: pwsh
@@ -90,3 +108,11 @@ jobs:
           path: build/RandomChopSampler_artefacts/Release/VST3
           if-no-files-found: error
           retention-days: 30
+
+      - name: Upload listening renders
+        uses: actions/upload-artifact@v7
+        with:
+          name: recompiler-dll-listening-renders
+          path: build/listening-renders
+          if-no-files-found: error
+          retention-days: 14

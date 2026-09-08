@@ -85,8 +85,7 @@ private:
     juce::Slider sourceTranspose, sourceFineTune, sourceGain, sourceWeight, sourceStretch;
     juce::Label sourceKeyLabel, sourceTransposeLabel, sourceFineTuneLabel,
         sourceGainLabel, sourceWeightLabel, sourceStretchLabel;
-    juce::ComboBox targetKey, voiceMode, globalGrid, rateReduction, codecQuality;
-    juce::ComboBox freezeSize, freezeHold;
+    juce::ComboBox targetKey, voiceMode, globalGrid, rateReduction;
     juce::ComboBox fracturePreset;
     juce::TextButton previousFracturePreset { "<" }, nextFracturePreset { ">" };
     juce::TextButton spectralDrawButton { "Draw" }, spectralEraseButton { "Erase" },
@@ -94,32 +93,23 @@ private:
     juce::ComboBox spectralScanRate;
     SpectralCanvasComponent spectralCanvas;
     juce::ToggleButton midiPitch { "MIDI Pitch" };
-    juce::Slider rootNote, randomStart, finalLength, attack, release, output, seed;
-    juce::Slider freezeChance, freezeOctaveChance, scrambleChance, scrambleAmount;
-    juce::Slider fractureDrive, fractureCharacter, fractureFilterMorph, fractureFrequency,
-        fractureResonance, fractureMix, spectralDepth, smearAmount, codecAmount;
+    juce::Slider rootNote, randomStart, finalLength, attack, release, output;
+    juce::Slider scrambleAmount, fractureCharacter, fractureMix, spectralDepth, smearAmount;
     juce::Label targetKeyLabel, rootNoteLabel, voiceModeLabel, globalGridLabel,
         rateReductionLabel, randomStartLabel, finalLengthLabel, attackLabel,
-        releaseLabel, outputLabel, seedLabel, freezeChanceLabel, freezeSizeLabel,
-        freezeHoldLabel, freezeOctaveChanceLabel, scrambleChanceLabel,
-        scrambleAmountLabel, fracturePresetLabel, fractureDriveLabel,
-        fractureCharacterLabel, fractureFilterMorphLabel, fractureFrequencyLabel,
-        fractureResonanceLabel, fractureMixLabel, spectralDrawLabel, spectralScanRateLabel,
-        spectralDepthLabel, smearAmountLabel, codecAmountLabel, codecQualityLabel;
+        releaseLabel, outputLabel, scrambleAmountLabel, fracturePresetLabel,
+        fractureCharacterLabel, fractureMixLabel, spectralDrawLabel, spectralScanRateLabel,
+        spectralDepthLabel, smearAmountLabel;
 
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ComboBoxAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
     std::unique_ptr<SliderAttachment> randomStartAttachment, finalLengthAttachment,
-        attackAttachment, releaseAttachment, outputAttachment, seedAttachment, rootNoteAttachment,
-        freezeChanceAttachment, freezeOctaveChanceAttachment, scrambleChanceAttachment,
-        scrambleAmountAttachment, fractureDriveAttachment, fractureCharacterAttachment,
-        fractureFilterMorphAttachment, fractureFrequencyAttachment,
-        fractureResonanceAttachment, fractureMixAttachment, spectralDepthAttachment,
-        smearAmountAttachment, codecAmountAttachment;
+        attackAttachment, releaseAttachment, outputAttachment, rootNoteAttachment,
+        scrambleAmountAttachment, fractureCharacterAttachment, fractureMixAttachment,
+        spectralDepthAttachment, smearAmountAttachment;
     std::unique_ptr<ComboBoxAttachment> targetKeyAttachment, voiceModeAttachment,
-        globalGridAttachment, rateReductionAttachment, freezeSizeAttachment,
-        freezeHoldAttachment, codecQualityAttachment, spectralScanRateAttachment;
+        globalGridAttachment, rateReductionAttachment, spectralScanRateAttachment;
     std::unique_ptr<ButtonAttachment> midiPitchAttachment;
     std::shared_ptr<const SampleManager::Pool> displayPool;
     juce::String selectedSourceId;
