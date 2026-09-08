@@ -316,6 +316,11 @@ void SmearProcessor::prepare(double newSampleRate)
 void SmearProcessor::reset() noexcept
 {
     delayBuffer.clear();
+    resetRealtimeState();
+}
+
+void SmearProcessor::resetRealtimeState() noexcept
+{
     for (auto& grain : grains)
         grain = {};
     lowState.fill(0.0f);
@@ -329,7 +334,9 @@ void SmearProcessor::reset() noexcept
 void SmearProcessor::setSeed(uint64_t seed) noexcept
 {
     random.setSeed(seed ^ 0x736d6561722d6372ULL);
-    reset();
+    // Logical invalidation makes old ring contents unreachable while avoiding a
+    // one-second buffer clear if a host restores state during playback.
+    resetRealtimeState();
 }
 
 float SmearProcessor::sanitise(float value) noexcept
@@ -490,8 +497,8 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
             const auto bright = sanitise(texture[channel] - low);
             const auto crystal = sanitise(0.14f * texture[channel]
                 + (1.30f + 0.62f * amount) * bright);
-            const auto output = dry[channel] * (1.0f - 0.32f * wet)
-                + (1.02f + 0.10f * amount) * wet
+            const auto output = dry[channel] * (1.0f - 0.08f * wet)
+                + (1.30f + 0.40f * amount) * wet
                     * std::tanh(crystal * 1.25f);
             buffer.setSample(channel, frame, sanitise(output));
         }

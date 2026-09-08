@@ -158,6 +158,7 @@ private:
     static float sanitise(float value) noexcept;
     float readDelay(int channel, double position) const noexcept;
     void startGrain(float amount) noexcept;
+    void resetRealtimeState() noexcept;
 
     juce::AudioBuffer<float> delayBuffer;
     std::array<Grain, maximumGrains> grains;

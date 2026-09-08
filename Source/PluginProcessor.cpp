@@ -91,7 +91,12 @@ void RandomChopSamplerAudioProcessor::prepareToPlay(double rate, int)
     spectralDrawProcessor.prepare(currentRate);
     smearProcessor.prepare(currentRate);
     lastGridBoundaries = {};
-    lastSeed = 0;
+    const auto seed = internalSeed.load(std::memory_order_relaxed);
+    random.setSeed(seed);
+    scrambleProcessor.setSeed(seed);
+    fractureProcessor.setSeed(seed);
+    smearProcessor.setSeed(seed);
+    lastSeed = seed;
 }
 
 bool RandomChopSamplerAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
