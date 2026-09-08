@@ -11,6 +11,7 @@
 #include "VoicePool.h"
 #include <algorithm>
 #include <atomic>
+#include <cstdint>
 #include <iostream>
 #include <limits>
 
@@ -72,6 +73,9 @@ PreparedSamplePtr makeVoiceSample(float value, int frames = 1024)
 }
 
 bool bufferFiniteAndBounded(const juce::AudioBuffer<float>& buffer) noexcept;
+juce::AudioBuffer<float> makeTemporalInput(int frames, int offset = 0);
+juce::AudioBuffer<float> copyBuffer(const juce::AudioBuffer<float>& source);
+bool buffersEqual(const juce::AudioBuffer<float>&, const juce::AudioBuffer<float>&) noexcept;
 
 void testSupportedFormatsAndPoolState()
 {
@@ -314,39 +318,28 @@ void testRegionsAndVoices()
           "voice rendering propagated hostile audio/envelope state or failed to release");
 }
 
-void testCodecRateReduction()
+void testFractureRateReduction()
 {
-    randomchop::CodecProcessor processor;
-    processor.prepare(48000.0);
-    juce::AudioBuffer<float> buffer(2, 10);
-    for (int frame = 0; frame < 10; ++frame)
-    {
-        buffer.setSample(0, frame, static_cast<float>(frame + 1) * 0.1f);
-        buffer.setSample(1, frame, -static_cast<float>(frame + 1) * 0.1f);
-    }
-    processor.process(buffer, { 0.0f, 0, 4 });
-    check(buffer.getSample(0, 0) == buffer.getSample(0, 3)
-              && buffer.getSample(0, 4) == buffer.getSample(0, 7)
-              && buffer.getSample(1, 0) == buffer.getSample(1, 3),
-          "rate reducer did not preserve stereo sample-and-hold behavior");
-    check(randomchop::CodecProcessor::rateFactorFromChoice(0) == 1
-              && randomchop::CodecProcessor::rateFactorFromChoice(6) == 64,
+    check(randomchop::FractureProcessor::rateFactorFromChoice(0) == 1
+              && randomchop::FractureProcessor::rateFactorFromChoice(6) == 64
+              && randomchop::FractureProcessor::choiceFromRateFactor(16) == 4,
           "rate-reduction choice mapping changed");
 
-    processor.reset();
-    juce::AudioBuffer<float> unsafe(2, 4);
-    unsafe.setSample(0, 0, std::numeric_limits<float>::quiet_NaN());
-    unsafe.setSample(0, 1, std::numeric_limits<float>::infinity());
-    unsafe.setSample(0, 2, 1.0e30f);
-    unsafe.setSample(0, 3, -1.0e30f);
-    unsafe.copyFrom(1, 0, unsafe, 0, 0, 4);
-    processor.process(unsafe, { 100.0f, 3, 1 });
-    bool safe = true;
-    for (int channel = 0; channel < 2; ++channel)
-        for (int frame = 0; frame < 4; ++frame)
-            safe = safe && std::isfinite(unsafe.getSample(channel, frame))
-                && std::abs(unsafe.getSample(channel, frame)) <= 64.0f;
-    check(safe, "rate reducer propagated non-finite or unbounded samples");
+    randomchop::FractureProcessor fullRate;
+    randomchop::FractureProcessor reducedRate;
+    fullRate.prepare(48000.0);
+    reducedRate.prepare(48000.0);
+    fullRate.setSeed(77);
+    reducedRate.setSeed(77);
+    auto source = makeTemporalInput(4096);
+    auto fullOutput = copyBuffer(source);
+    auto reducedOutput = copyBuffer(source);
+    fullRate.process(fullOutput, { 100.0f, 80.0f, 1 });
+    reducedRate.process(reducedOutput, { 100.0f, 80.0f, 16 });
+    check(reducedRate.getLastEffectiveRateFactor() > 1
+              && !buffersEqual(fullOutput, reducedOutput)
+              && bufferFiniteAndBounded(reducedOutput),
+          "Fracture Rate did not participate in the integrated damage path");
 }
 
 void testHostGrid()
@@ -414,7 +407,7 @@ void testHostGrid()
           "1/32 grid rounding changed");
 }
 
-juce::AudioBuffer<float> makeTemporalInput(int frames, int offset = 0)
+juce::AudioBuffer<float> makeTemporalInput(int frames, int offset)
 {
     juce::AudioBuffer<float> buffer(2, frames);
     for (int channel = 0; channel < 2; ++channel)
@@ -454,23 +447,208 @@ bool bufferFiniteAndBounded(const juce::AudioBuffer<float>& buffer) noexcept
     return true;
 }
 
+float differenceRms(const juce::AudioBuffer<float>& dry,
+                    const juce::AudioBuffer<float>& wet) noexcept
+{
+    double energy = 0.0;
+    std::int64_t samples = 0;
+    for (int channel = 0; channel < std::min(dry.getNumChannels(), wet.getNumChannels()); ++channel)
+        for (int frame = 0; frame < std::min(dry.getNumSamples(), wet.getNumSamples()); ++frame)
+        {
+            const auto difference = static_cast<double>(wet.getSample(channel, frame))
+                - static_cast<double>(dry.getSample(channel, frame));
+            energy += difference * difference;
+            ++samples;
+        }
+    return samples > 0 ? static_cast<float>(std::sqrt(energy / static_cast<double>(samples)))
+                       : 0.0f;
+}
+
+float firstDifferenceRms(const juce::AudioBuffer<float>& buffer) noexcept
+{
+    double energy = 0.0;
+    std::int64_t samples = 0;
+    for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+        for (int frame = 1; frame < buffer.getNumSamples(); ++frame)
+        {
+            const auto difference = static_cast<double>(buffer.getSample(channel, frame))
+                - static_cast<double>(buffer.getSample(channel, frame - 1));
+            energy += difference * difference;
+            ++samples;
+        }
+    return samples > 0 ? static_cast<float>(std::sqrt(energy / static_cast<double>(samples)))
+                       : 0.0f;
+}
+
+juce::AudioBuffer<float> makeListeningInput(int frames, double sampleRate)
+{
+    juce::AudioBuffer<float> buffer(2, frames);
+    constexpr std::array<float, 4> roots { 110.0f, 146.832f, 164.814f, 130.813f };
+    for (int frame = 0; frame < frames; ++frame)
+    {
+        const auto time = static_cast<double>(frame) / sampleRate;
+        const auto beat = std::fmod(time, 0.5);
+        const auto barPosition = std::fmod(time, 2.0);
+        const auto chord = std::min(3, static_cast<int>(barPosition / 0.5));
+        const auto root = roots[static_cast<std::size_t>(chord)];
+        const auto kickEnvelope = static_cast<float>(std::exp(-beat * 18.0));
+        const auto kick = kickEnvelope * std::sin(juce::MathConstants<double>::twoPi
+            * (52.0 + 54.0 * std::exp(-beat * 28.0)) * beat);
+        const auto noteEnvelope = static_cast<float>(0.45 + 0.55
+            * std::exp(-std::fmod(time, 0.25) * 7.0));
+        const auto tonal = noteEnvelope * (0.34 * std::sin(
+            juce::MathConstants<double>::twoPi * root * time)
+            + 0.20 * std::sin(juce::MathConstants<double>::twoPi * root * 1.5 * time)
+            + 0.13 * std::sin(juce::MathConstants<double>::twoPi * root * 2.0 * time));
+        const auto hatEnvelope = std::exp(-std::fmod(time + 0.125, 0.25) * 55.0);
+        const auto hat = 0.10 * hatEnvelope
+            * (std::sin(juce::MathConstants<double>::twoPi * 6127.0 * time)
+               + 0.5 * std::sin(juce::MathConstants<double>::twoPi * 9173.0 * time));
+        const auto mono = static_cast<float>(0.36 * kick + tonal + hat);
+        buffer.setSample(0, frame, mono);
+        buffer.setSample(1, frame, static_cast<float>(0.36 * kick + noteEnvelope
+            * (0.34 * std::sin(juce::MathConstants<double>::twoPi * root * time + 0.08)
+               + 0.20 * std::sin(juce::MathConstants<double>::twoPi * root * 1.5 * time + 0.13)
+               + 0.13 * std::sin(juce::MathConstants<double>::twoPi * root * 2.0 * time + 0.19))
+            + hat));
+    }
+    return buffer;
+}
+
+juce::AudioBuffer<float> renderScramble(float amount,
+                                        const juce::AudioBuffer<float>& input)
+{
+    auto output = copyBuffer(input);
+    randomchop::ScrambleProcessor processor;
+    processor.prepare(48000.0);
+    processor.setSeed(0x51a7);
+    randomchop::GridBoundaries boundaries;
+    boundaries.bpm = 120.0;
+    constexpr int gridFrames = 6000;
+    for (int frame = gridFrames;
+         frame < output.getNumSamples() && boundaries.count < 64;
+         frame += gridFrames)
+        boundaries.sampleOffsets[static_cast<std::size_t>(boundaries.count++)] = frame;
+    processor.process(output, boundaries, 1, { amount });
+    return output;
+}
+
+juce::AudioBuffer<float> renderFracture(float amount,
+                                        const juce::AudioBuffer<float>& input)
+{
+    auto output = copyBuffer(input);
+    randomchop::FractureProcessor processor;
+    processor.prepare(48000.0);
+    processor.setSeed(0xf12a);
+    processor.process(output, { amount, 67.0f, 16 });
+    return output;
+}
+
+juce::AudioBuffer<float> renderSmear(float amount,
+                                     const juce::AudioBuffer<float>& input)
+{
+    auto output = copyBuffer(input);
+    randomchop::SmearProcessor processor;
+    processor.prepare(48000.0);
+    processor.setSeed(0x5ea2);
+    processor.process(output, { amount });
+    return output;
+}
+
+bool writeListeningWave(const juce::File& file,
+                        const juce::AudioBuffer<float>& buffer)
+{
+    file.deleteFile();
+    std::unique_ptr<juce::OutputStream> stream = file.createOutputStream();
+    if (stream == nullptr)
+        return false;
+    juce::WavAudioFormat format;
+    const auto options = juce::AudioFormatWriterOptions {}
+        .withSampleRate(48000.0).withNumChannels(2).withBitsPerSample(24);
+    auto writer = format.createWriterFor(stream, options);
+    return writer != nullptr
+        && writer->writeFromAudioSampleBuffer(buffer, 0, buffer.getNumSamples());
+}
+
+void testCreativeMacroProgressionAndRender()
+{
+    constexpr std::array<float, 5> levels { 0.0f, 25.0f, 50.0f, 75.0f, 100.0f };
+    constexpr int renderFrames = 48000 * 4;
+    const auto dry = makeListeningInput(renderFrames, 48000.0);
+    std::array<float, levels.size()> scrambleDistance {};
+    std::array<float, levels.size()> fractureDistance {};
+    std::array<float, levels.size()> smearDistance {};
+    const auto renderPath = juce::SystemStats::getEnvironmentVariable(
+        "RANDOM_CHOP_RENDER_DIR", {});
+    const auto renderDirectory = juce::File(renderPath);
+    if (renderPath.isNotEmpty())
+    {
+        check(renderDirectory.createDirectory().wasOk(),
+              "could not create listening-render directory");
+        check(writeListeningWave(renderDirectory.getChildFile("source_dry.wav"), dry),
+              "could not write dry listening fixture");
+    }
+
+    for (std::size_t index = 0; index < levels.size(); ++index)
+    {
+        const auto level = levels[index];
+        const auto scramble = renderScramble(level, dry);
+        const auto fracture = renderFracture(level, dry);
+        const auto smear = renderSmear(level, dry);
+        scrambleDistance[index] = differenceRms(dry, scramble);
+        fractureDistance[index] = differenceRms(dry, fracture);
+        smearDistance[index] = differenceRms(dry, smear);
+        check(bufferFiniteAndBounded(scramble) && bufferFiniteAndBounded(fracture)
+                  && bufferFiniteAndBounded(smear),
+              "a creative macro listening render was invalid or unbounded");
+        if (renderPath.isNotEmpty())
+        {
+            const auto suffix = juce::String(static_cast<int>(level)).paddedLeft('0', 3) + ".wav";
+            check(writeListeningWave(renderDirectory.getChildFile("scramble_" + suffix), scramble)
+                      && writeListeningWave(renderDirectory.getChildFile("fracture_" + suffix), fracture)
+                      && writeListeningWave(renderDirectory.getChildFile("smear_" + suffix), smear),
+                  "could not write a creative macro listening render");
+        }
+    }
+
+    check(scrambleDistance[0] == 0.0f && fractureDistance[0] == 0.0f
+              && smearDistance[0] == 0.0f,
+          "a flagship macro was not sample-identical at zero");
+    check(scrambleDistance[2] > 0.01f && scrambleDistance[4] > scrambleDistance[1],
+          "Scramble did not create consistent medium or stronger maximum transformation");
+    check(fractureDistance[2] > 0.01f && fractureDistance[4] > fractureDistance[1],
+          "Fracture did not create a meaningful macro intensity progression");
+    check(smearDistance[2] > 0.002f && smearDistance[4] > smearDistance[1]
+              && firstDifferenceRms(renderSmear(75.0f, dry))
+                    > 0.35f * firstDifferenceRms(dry),
+          "Smear did not retain meaningful crystalline/high-frequency activity");
+
+    std::cout << "Macro render difference RMS"
+              << " | Scramble " << scrambleDistance[0] << ',' << scrambleDistance[1]
+              << ',' << scrambleDistance[2] << ',' << scrambleDistance[3]
+              << ',' << scrambleDistance[4]
+              << " | Fracture " << fractureDistance[0] << ',' << fractureDistance[1]
+              << ',' << fractureDistance[2] << ',' << fractureDistance[3]
+              << ',' << fractureDistance[4]
+              << " | Smear " << smearDistance[0] << ',' << smearDistance[1]
+              << ',' << smearDistance[2] << ',' << smearDistance[3]
+              << ',' << smearDistance[4] << '\n';
+}
+
 void testFullCreativeChainSafety()
 {
     constexpr double sampleRate = 48000.0;
-    randomchop::FreezeProcessor freeze;
     randomchop::ScrambleProcessor scramble;
     randomchop::FractureProcessor fracture;
     randomchop::SpectralDrawProcessor spectral;
     randomchop::SmearProcessor smear;
-    randomchop::CodecProcessor codec;
-    freeze.prepare(sampleRate);
     scramble.prepare(sampleRate);
     fracture.prepare(sampleRate);
     spectral.prepare(sampleRate);
     smear.prepare(sampleRate);
-    codec.prepare(sampleRate);
-    freeze.setSeed(0x1234);
     scramble.setSeed(0x5678);
+    fracture.setSeed(0x9abc);
+    smear.setSeed(0xdef0);
 
     randomchop::SpectralMaskStore mask;
     randomchop::SpectralMaskStore::Canvas canvas {};
@@ -505,14 +683,12 @@ void testFullCreativeChainSafety()
             boundaries.count = 1;
             boundaries.sampleOffsets[0] = frames / 2;
         }
-        freeze.process(block, boundaries, 2, { 100.0f, 2, 0, 100.0f });
-        scramble.process(block, boundaries, 2, { 100.0f, 100.0f });
-        fracture.process(block, { 36.0f, 100.0f, 100.0f, 12000.0f, 100.0f, 100.0f });
+        scramble.process(block, boundaries, 2, { 100.0f });
+        fracture.process(block, { 100.0f, 100.0f, 64 });
         spectral.process(block, mask,
             { 100.0f, 3, boundaries.bpm, 0.0, false,
               boundaries.transportDiscontinuity });
         smear.process(block, { 100.0f });
-        codec.process(block, { 100.0f, 3, 64 });
         block.applyGain(0.5f);
         safe = safe && bufferFiniteAndBounded(block);
         if (iteration > 10)
@@ -531,15 +707,13 @@ void testFractureProcessorAndPresets()
         const auto& preset = randomchop::getFracturePreset(static_cast<int>(index));
         const auto& settings = preset.settings;
         check(juce::String(preset.name).isNotEmpty()
-                  && settings.driveDb >= 0.0f && settings.driveDb <= 36.0f
+                  && settings.amount >= 0.0f && settings.amount <= 100.0f
                   && settings.character >= 0.0f && settings.character <= 100.0f
-                  && settings.filterMorph >= 0.0f && settings.filterMorph <= 100.0f
-                  && settings.frequencyHz >= 80.0f && settings.frequencyHz <= 12000.0f
-                  && settings.resonance >= 0.0f && settings.resonance <= 100.0f
-                  && settings.mix >= 0.0f && settings.mix <= 100.0f,
+                  && settings.rateFactor >= 1 && settings.rateFactor <= 64,
               "Fracture factory preset contains an invalid name or parameter value");
         randomchop::FractureProcessor presetProcessor;
         presetProcessor.prepare(48000.0);
+        presetProcessor.setSeed(0x4000 + index);
         auto audio = makeTemporalInput(1024, static_cast<int>(index) * 17);
         presetProcessor.process(audio, settings);
         check(bufferFiniteAndBounded(audio),
@@ -553,8 +727,23 @@ void testFractureProcessorAndPresets()
     bypass.prepare(48000.0);
     auto dry = makeTemporalInput(512);
     auto output = copyBuffer(dry);
-    bypass.process(output, { 36.0f, 100.0f, 100.0f, 12000.0f, 100.0f, 0.0f });
-    check(buffersEqual(dry, output), "Fracture Mix 0 was not sample-identical bypass");
+    bypass.process(output, { 0.0f, 100.0f, 64 });
+    check(buffersEqual(dry, output), "Fracture 0 was not sample-identical bypass");
+
+    randomchop::FractureProcessor first;
+    randomchop::FractureProcessor second;
+    first.prepare(48000.0);
+    second.prepare(48000.0);
+    first.setSeed(991);
+    second.setSeed(991);
+    auto animatedA = makeTemporalInput(24000);
+    auto animatedB = copyBuffer(animatedA);
+    first.process(animatedA, { 72.0f, 63.0f, 8 });
+    second.process(animatedB, { 72.0f, 63.0f, 8 });
+    check(buffersEqual(animatedA, animatedB)
+              && first.getLastMotionDepth() > 0.0f
+              && first.getLastEffectiveRateFactor() > 1,
+          "Fracture motion/digital character was not deterministic or active");
 
     randomchop::FractureProcessor extreme;
     extreme.prepare(192000.0);
@@ -567,9 +756,20 @@ void testFractureProcessorAndPresets()
         unsafe.setSample(0, frame, value);
         unsafe.setSample(1, frame, value);
     }
-    extreme.process(unsafe, { 36.0f, 100.0f, 100.0f, 12000.0f, 100.0f, 100.0f });
+    extreme.setSeed(123);
+    extreme.process(unsafe, { 1000.0f, 1000.0f, 999 });
     check(bufferFiniteAndBounded(unsafe),
-          "Fracture extreme Drive/Resonance propagated NaN, Inf, or runaway gain");
+          "Fracture extreme macro state propagated NaN, Inf, or runaway gain");
+
+    randomchop::FractureProcessor silenceProcessor;
+    silenceProcessor.prepare(48000.0);
+    silenceProcessor.setSeed(321);
+    juce::AudioBuffer<float> silence(2, 48000);
+    silence.clear();
+    silenceProcessor.process(silence, { 100.0f, 100.0f, 64 });
+    check(silence.getMagnitude(0, silence.getNumSamples()) == 0.0f
+              && silence.getMagnitude(1, silence.getNumSamples()) == 0.0f,
+          "Fracture generated self-noise or residual DC from silence");
 }
 
 void testSmearProcessor()
@@ -583,16 +783,32 @@ void testSmearProcessor()
 
     randomchop::SmearProcessor continuous;
     continuous.prepare(48000.0);
-    auto first = makeTemporalInput(12000);
+    continuous.setSeed(411);
+    auto first = makeTemporalInput(24000);
     continuous.process(first, { 100.0f });
-    auto carried = makeTemporalInput(512, 12000);
+    auto carried = makeTemporalInput(1024, 24000);
     continuous.process(carried, { 100.0f });
     randomchop::SmearProcessor cold;
     cold.prepare(48000.0);
-    auto coldOutput = makeTemporalInput(512, 12000);
+    cold.setSeed(411);
+    auto coldOutput = makeTemporalInput(1024, 24000);
     cold.process(coldOutput, { 100.0f });
-    check(!buffersEqual(carried, coldOutput) && bufferFiniteAndBounded(carried),
-          "Smear did not retain bounded cross-block grain history");
+    check(!buffersEqual(carried, coldOutput) && bufferFiniteAndBounded(carried)
+              && continuous.getActiveGrainCount() > 0,
+          "Smear did not retain a bounded cross-block crystal-grain cloud");
+
+    randomchop::SmearProcessor deterministicA;
+    randomchop::SmearProcessor deterministicB;
+    deterministicA.prepare(44100.0);
+    deterministicB.prepare(44100.0);
+    deterministicA.setSeed(712);
+    deterministicB.setSeed(712);
+    auto sameA = makeTemporalInput(22000);
+    auto sameB = copyBuffer(sameA);
+    deterministicA.process(sameA, { 75.0f });
+    deterministicB.process(sameB, { 75.0f });
+    check(buffersEqual(sameA, sameB),
+          "Smear crystal-grain scheduling was not deterministic for a restored seed");
 
     juce::AudioBuffer<float> unsafe(2, 256);
     unsafe.clear();
@@ -601,36 +817,6 @@ void testSmearProcessor()
     continuous.process(unsafe, { 1000.0f });
     check(bufferFiniteAndBounded(unsafe),
           "Smear extreme Amount propagated invalid or unbounded output");
-}
-
-void testCodecProcessor()
-{
-    randomchop::CodecProcessor bypass;
-    bypass.prepare(48000.0);
-    auto dry = makeTemporalInput(512);
-    auto output = copyBuffer(dry);
-    bypass.process(output, { 0.0f, 0, 1 });
-    check(buffersEqual(dry, output), "Codec neutral state was not sample-identical bypass");
-
-    randomchop::CodecProcessor first;
-    randomchop::CodecProcessor second;
-    first.prepare(44100.0);
-    second.prepare(44100.0);
-    auto firstOutput = makeTemporalInput(2048);
-    auto secondOutput = copyBuffer(firstOutput);
-    first.process(firstOutput, { 88.0f, 3, 16 });
-    second.process(secondOutput, { 88.0f, 3, 16 });
-    check(buffersEqual(firstOutput, secondOutput) && bufferFiniteAndBounded(firstOutput),
-          "Codec damaged-digital processing was non-deterministic or unbounded");
-
-    juce::AudioBuffer<float> silence(2, 2048);
-    silence.clear();
-    randomchop::CodecProcessor silentCodec;
-    silentCodec.prepare(96000.0);
-    silentCodec.process(silence, { 100.0f, 99, 64 });
-    check(bufferFiniteAndBounded(silence)
-              && silence.getMagnitude(0, silence.getNumSamples()) == 0.0f,
-          "Codec created a white-noise explosion from silence");
 }
 
 void testSpectralMaskPublicationAndState()
@@ -799,84 +985,6 @@ void testSpectralDrawProcessor()
     check(safe, "Spectral canvas changes during playback lost publication or produced invalid audio");
 }
 
-void testFreezeProcessor()
-{
-    randomchop::GridBoundaries noBoundary;
-    noBoundary.bpm = 120.0;
-    randomchop::GridBoundaries trigger;
-    trigger.bpm = 120.0;
-    trigger.count = 1;
-    trigger.sampleOffsets[0] = 0;
-
-    randomchop::FreezeProcessor bypass;
-    bypass.prepare(1000.0);
-    bypass.setSeed(7);
-    auto dry = makeTemporalInput(256);
-    auto bypassed = copyBuffer(dry);
-    bypass.process(bypassed, trigger, 1, { 0.0f, 1, 1, 100.0f });
-    check(buffersEqual(dry, bypassed) && bypass.getActivationCount() == 0,
-          "Freeze Chance 0 was not sample-identical bypass");
-
-    randomchop::FreezeProcessor first;
-    randomchop::FreezeProcessor second;
-    first.prepare(1000.0);
-    second.prepare(1000.0);
-    first.setSeed(1234);
-    second.setSeed(1234);
-    auto historyA = makeTemporalInput(256);
-    auto historyB = copyBuffer(historyA);
-    first.process(historyA, noBoundary, 1, {});
-    second.process(historyB, noBoundary, 1, {});
-    auto eventDry = makeTemporalInput(200, 256);
-    auto eventA = copyBuffer(eventDry);
-    auto eventB = copyBuffer(eventDry);
-    const randomchop::FreezeSettings certain { 100.0f, 1, 0, 100.0f };
-    first.process(eventA, trigger, 1, certain);
-    second.process(eventB, trigger, 1, certain);
-    check(first.getActivationCount() == 1 && first.getLastCaptureFrames() == 63,
-          "Freeze did not begin on the eligible grid boundary with bounded capture");
-    check((first.getLastOctaveSemitones() == -12
-              || first.getLastOctaveSemitones() == 12)
-              && first.getLastOctaveSemitones() == second.getLastOctaveSemitones(),
-          "Freeze octave decision was not deterministic and exactly +/-12");
-    check(buffersEqual(eventA, eventB) && bufferFiniteAndBounded(eventA),
-          "Freeze output was non-deterministic or invalid");
-    check(eventA.getSample(0, 0) == eventDry.getSample(0, 0)
-              && std::abs(eventA.getSample(0, 1) - eventDry.getSample(0, 1)) < 1.0f,
-          "Freeze activation was not click-safe");
-
-    auto refill = makeTemporalInput(160, 456);
-    first.process(refill, noBoundary, 1, {});
-    auto secondEvent = makeTemporalInput(32, 616);
-    first.process(secondEvent, trigger, 1, certain);
-    check(first.getActivationCount() == 2 && first.isActive(),
-          "Freeze did not support a later repeated activation");
-    randomchop::GridBoundaries discontinuity;
-    discontinuity.bpm = 120.0;
-    discontinuity.transportDiscontinuity = true;
-    auto afterSeek = makeTemporalInput(32, 648);
-    const auto seekDry = copyBuffer(afterSeek);
-    first.process(afterSeek, discontinuity, 1, certain);
-    check(!first.isActive() && buffersEqual(afterSeek, seekDry),
-          "Freeze retained stale captured audio across a transport discontinuity");
-
-    bool sawDown = false;
-    bool sawUp = false;
-    for (uint64_t seed = 1; seed <= 32; ++seed)
-    {
-        randomchop::FreezeProcessor octave;
-        octave.prepare(1000.0);
-        octave.setSeed(seed);
-        auto fill = makeTemporalInput(128);
-        octave.process(fill, noBoundary, 1, {});
-        auto event = makeTemporalInput(8, 128);
-        octave.process(event, trigger, 1, { 100.0f, 0, 0, 100.0f });
-        sawDown = sawDown || octave.getLastOctaveSemitones() == -12;
-        sawUp = sawUp || octave.getLastOctaveSemitones() == 12;
-    }
-    check(sawDown && sawUp, "Freeze octave 50/50 branch did not expose both exact octaves");
-}
-
 void testScrambleProcessor()
 {
     randomchop::GridBoundaries noBoundary;
@@ -886,21 +994,13 @@ void testScrambleProcessor()
     trigger.count = 1;
     trigger.sampleOffsets[0] = 64;
 
-    randomchop::ScrambleProcessor zeroChance;
-    zeroChance.prepare(1000.0);
-    zeroChance.setSeed(88);
+    randomchop::ScrambleProcessor bypass;
+    bypass.prepare(1000.0);
+    bypass.setSeed(88);
     auto dry = makeTemporalInput(256);
     auto bypassed = copyBuffer(dry);
-    zeroChance.process(bypassed, trigger, 1, { 0.0f, 100.0f });
-    check(buffersEqual(dry, bypassed) && zeroChance.getActivationCount() == 0,
-          "Scramble Chance 0 was not sample-identical bypass");
-
-    randomchop::ScrambleProcessor zeroAmount;
-    zeroAmount.prepare(1000.0);
-    auto amountDry = makeTemporalInput(256);
-    auto amountOutput = copyBuffer(amountDry);
-    zeroAmount.process(amountOutput, trigger, 1, { 100.0f, 0.0f });
-    check(buffersEqual(amountDry, amountOutput) && zeroAmount.getActivationCount() == 0,
+    bypass.process(bypassed, trigger, 1, { 0.0f });
+    check(buffersEqual(dry, bypassed) && bypass.getActivationCount() == 0,
           "Scramble Amount 0 was not transparent");
 
     randomchop::ScrambleProcessor first;
@@ -916,8 +1016,8 @@ void testScrambleProcessor()
     auto eventDry = makeTemporalInput(256, 256);
     auto eventA = copyBuffer(eventDry);
     auto eventB = copyBuffer(eventDry);
-    first.process(eventA, trigger, 1, { 100.0f, 100.0f });
-    second.process(eventB, trigger, 1, { 100.0f, 100.0f });
+    first.process(eventA, trigger, 1, { 100.0f });
+    second.process(eventB, trigger, 1, { 100.0f });
     check(first.getActivationCount() == 1 && first.getLastCaptureFrames() == 125,
           "Scramble did not begin at the grid boundary with bounded chunk capture");
     check(buffersEqual(eventA, eventB) && bufferFiniteAndBounded(eventA),
@@ -941,28 +1041,62 @@ void testScrambleProcessor()
     auto lowFill = makeTemporalInput(256);
     low.process(lowFill, noBoundary, 1, {});
     auto lowOutput = copyBuffer(eventDry);
-    low.process(lowOutput, trigger, 1, { 100.0f, 10.0f });
+    low.process(lowOutput, trigger, 1, { 10.0f });
     check(low.getActivationCount() == 1 && bufferFiniteAndBounded(lowOutput)
               && !buffersEqual(lowOutput, eventDry),
           "low Scramble Amount did not produce a bounded understandable rearrangement");
 
-    auto refill = makeTemporalInput(100, 512);
-    first.process(refill, noBoundary, 1, {});
+    auto finishEvent = makeTemporalInput(400, 512);
+    first.process(finishEvent, noBoundary, 1, { 100.0f });
     randomchop::GridBoundaries immediateTrigger;
     immediateTrigger.bpm = 120.0;
     immediateTrigger.count = 1;
     immediateTrigger.sampleOffsets[0] = 0;
-    auto repeated = makeTemporalInput(32, 612);
-    first.process(repeated, immediateTrigger, 1, { 100.0f, 100.0f });
-    check(first.getActivationCount() == 2 && first.isActive(),
-          "Scramble did not support a later repeated activation");
+    const auto activationsBeforeRepeat = first.getActivationCount();
+    auto repeated = makeTemporalInput(32, 912);
+    first.process(repeated, immediateTrigger, 1, { 100.0f });
+    check(first.getActivationCount() == activationsBeforeRepeat + 1 && first.isActive(),
+          "Scramble discarded its history and left the next grid empty");
+
+    constexpr std::array<float, 4> amounts { 25.0f, 50.0f, 75.0f, 100.0f };
+    int previousBudget = 0;
+    for (const auto amount : amounts)
+    {
+        randomchop::ScrambleProcessor progressive;
+        progressive.prepare(1000.0);
+        progressive.setSeed(4567);
+        auto fill = makeTemporalInput(256);
+        progressive.process(fill, noBoundary, 1, {});
+        auto transformed = makeTemporalInput(192, 256);
+        progressive.process(transformed, immediateTrigger, 1, { amount });
+        const auto budget = progressive.getLastManipulatedSlices();
+        check(progressive.getActivationCount() == 1 && budget >= previousBudget
+                  && bufferFiniteAndBounded(transformed),
+              "Scramble macro did not provide a monotonic per-grid event budget");
+        previousBudget = budget;
+    }
+
+    bool sawIntegratedPitch = false;
+    for (uint64_t seed = 1; seed <= 24; ++seed)
+    {
+        randomchop::ScrambleProcessor pitched;
+        pitched.prepare(1000.0);
+        pitched.setSeed(seed);
+        auto fill = makeTemporalInput(256);
+        pitched.process(fill, noBoundary, 1, {});
+        auto output = makeTemporalInput(192, 256);
+        pitched.process(output, immediateTrigger, 1, { 100.0f });
+        sawIntegratedPitch = sawIntegratedPitch || pitched.getLastPitchedSlices() > 0;
+    }
+    check(sawIntegratedPitch,
+          "Scramble no longer exposes integrated octave/pitched fragments at high intensity");
 
     randomchop::GridBoundaries discontinuity;
     discontinuity.bpm = 120.0;
     discontinuity.transportDiscontinuity = true;
     auto seekOutput = makeTemporalInput(32, 512);
     const auto seekDry = copyBuffer(seekOutput);
-    first.process(seekOutput, discontinuity, 1, { 100.0f, 100.0f });
+    first.process(seekOutput, discontinuity, 1, { 100.0f });
     check(!first.isActive() && buffersEqual(seekOutput, seekDry),
           "Scramble retained stale chunks across a transport discontinuity");
 }
@@ -973,8 +1107,11 @@ void testStateMigration()
     state.setProperty("randomStart", 75.0f, nullptr);
     state.setProperty("reverseChance", 100.0f, nullptr);
     state.setProperty("bitDepth", 12.0f, nullptr);
+    state.setProperty("freezeChance", 80.0f, nullptr);
+    state.setProperty("codecAmount", 70.0f, nullptr);
     for (const auto* id : { "randomStart", "reverseChance", "retriggerChance",
-                            "stepLength", "bitDepth", "takeSelection" })
+                            "stepLength", "bitDepth", "takeSelection", "seed",
+                            "freezeSize", "codecQuality", "fractureDrive" })
     {
         juce::ValueTree parameter("PARAM");
         parameter.setProperty("id", id, nullptr);
@@ -987,12 +1124,16 @@ void testStateMigration()
     check(state.hasProperty("randomStart")
               && !state.hasProperty("reverseChance")
               && !state.hasProperty("bitDepth")
+              && !state.hasProperty("freezeChance")
+              && !state.hasProperty("codecAmount")
               && state.getNumChildren() == 1
               && state.getChild(0).getProperty("id").toString() == "randomStart"
               && static_cast<int>(state.getProperty("stateVersion"))
                     == randomchop::currentStateVersion,
           "legacy state migration did not ignore only removed controls and nodes");
     check(randomchop::isRemovedParameterId("dropChance")
+              && randomchop::isRemovedParameterId("freezeSize")
+              && randomchop::isRemovedParameterId("codecQuality")
               && !randomchop::isRemovedParameterId("rateReduction"),
           "legacy parameter allow/deny boundary changed");
 }
@@ -1167,14 +1308,13 @@ int main()
     testSupportedFormatsAndPoolState();
     testWeightedSelectionAndPitch();
     testRegionsAndVoices();
-    testCodecRateReduction();
+    testFractureRateReduction();
     testHostGrid();
     testFullCreativeChainSafety();
-    testFreezeProcessor();
+    testCreativeMacroProgressionAndRender();
     testScrambleProcessor();
     testFractureProcessorAndPresets();
     testSmearProcessor();
-    testCodecProcessor();
     testSpectralMaskPublicationAndState();
     testSpectralDrawProcessor();
     testStateMigration();
