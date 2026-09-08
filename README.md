@@ -6,7 +6,7 @@ The visible product name intentionally contains `.dll`; the Windows plug-in is s
 
 ## Build with GitHub Actions
 
-Run **Build Windows VST3** in the repository Actions tab. The workflow configures a pinned JUCE 8.0.13/Signalsmith build, builds Release VST3, Standalone, and tests, runs CTest, verifies the bundle and executable, and uploads **recompiler-dll-Windows-VST3**.
+Run **Build Windows VST3** in the repository Actions tab. The workflow configures a pinned JUCE 8.0.13/Signalsmith build, builds Release VST3, Standalone, and tests, runs CTest, verifies the bundle and executable, and uploads **recompiler-dll-Windows-VST3** plus deterministic creative-effect listening renders.
 
 Extract the artifact and copy the complete `recompiler.dll.vst3` directory to `C:\Program Files\Common Files\VST3\`, then rescan plug-ins in the DAW.
 
@@ -24,12 +24,12 @@ The target name remains `RandomChopSampler` to preserve build continuity; the ho
 
 - Immutable 20-source pool, missing-source persistence, stable identity, deferred non-realtime reclamation.
 - Weighted source selection; editable Start/End, Source Key, Transpose, Fine Tune, Gain, Weight, and 0/OFF or 1x–4x Stretch.
-- Target Key, optional MIDI pitch/root, Random Start, Final Length, Attack, Release, POLY/MONO, Seed, and Output.
+- Target Key, optional MIDI pitch/root, Start Range, Final Length, Attack, Release, POLY/MONO, and Output. Random source/start behavior is always part of the instrument; reproducibility uses a persisted internal seed rather than a technical Seed control.
 - Host-derived 1/8, 1/16, or 1/32 global grid with a safe 120 BPM fallback.
-- Global FREEZE with grid-sized capture/hold and deterministic optional exact-octave flipping; global SCRAMBLE with bounded chunk rearrangement and Amount.
-- Global FRACTURE with six controls and 30 real factory presets, plus bounded SMEAR and damaged-digital CODEC stages.
+- Signature SCRAMBLE macro with a consistent per-grid manipulation budget, bounded rearrangement, micro-holds/repeats, reverse, jumps, and integrated pitched fragments.
+- Signature self-moving FRACTURE macro with Character, 30 presets, and integrated filter/formant/comb, nonlinear, predictive-digital, and Rate Reduction behavior.
+- SMEAR is a six-grain, pitched, scattered, stereo crystalline texture with transient-aware wet control rather than a blur stage.
 - Real global SPECTRAL DRAW with a persistent 128×64 attenuation canvas, Draw/Erase/Clear tools, four tempo-derived scan rates, Depth, and reported 1024-sample latency.
-- The preserved 1x–64x Rate Reduction now lives inside CODEC; all three Gate C stages load neutral.
-- The former Take History, Step Mask, per-event Reverse/Retrigger/Skip/Reorder/Bend/Drop, and Bit Crush systems are removed. Old state entries are ignored safely.
+- The former standalone FREEZE and CODEC stages, Take History, Step Mask, per-event Reverse/Retrigger/Skip/Reorder/Bend/Drop, and Bit Crush systems are removed. Useful Freeze/Codec character is absorbed into SCRAMBLE/FRACTURE and old state migrates safely.
 
-The approved global creative chain is `FREEZE → SCRAMBLE → FRACTURE → SPECTRAL DRAW → SMEAR → CODEC → OUTPUT`. See the project brain in [`docs/INDEX.md`](docs/INDEX.md) for gate status and realtime constraints. The current gate is functional engineering only; final visual design is intentionally deferred.
+The approved global creative chain is `SCRAMBLE → FRACTURE → SPECTRAL DRAW → SMEAR → OUTPUT`. See the project brain in [`docs/INDEX.md`](docs/INDEX.md) for verification status and realtime constraints. Final visual art direction remains separate from this sound-and-behavior pass.

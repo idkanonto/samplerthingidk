@@ -32,6 +32,26 @@ This specification supersedes the earlier Random Chop Sampler V2 feature plan. I
 - When usable host timing is absent or transport is stopped, use a stable internal clock at the latest valid BPM or 120 BPM initially.
 - Decisions must remain deterministic and bounded across tempo changes, seeks, loops, transport transitions, arbitrary block sizes, and offline rendering.
 
+## Control audit
+
+| Surface | Classification | Reason |
+|---|---|---|
+| Add, Clear, Enable All, Disable All, per-source On/Remove, and row selection | Essential | Direct sample-pool management and editing target. |
+| Waveform Start/End | Essential | Defines the playable source region and legal random-start range. |
+| Source Key, Transpose, Fine Tune, Gain, Weight, Stretch | Essential | Source preparation, harmonic placement, balance, selection probability, and duration. |
+| Target Key, MIDI Pitch, Root MIDI Note | Essential | Global/manual harmonic behavior and keyboard tracking. |
+| POLY/MONO, Global Grid | Essential | Voice policy and the musical timing framework used by SCRAMBLE/Spectral Draw. |
+| Start Range, Final Length, Attack, Release, Output | Essential | Immediate performance shape without exposing implementation details. |
+| SCRAMBLE | Macro | Collapses density, selection, repeats, holds, reverse, jumps, pitch, and event span into one perceptual progression. |
+| FRACTURE | Macro | Collapses drive, wetness, modulation depth, filter/resonator motion, resonance, and digital damage into one progression. |
+| CHARACTER | Macro | Selects a broad nonlinear/tonal/digital personality without exposing a modulation matrix. |
+| FRACTURE RATE | Essential | Keeps the musically distinctive 1x–64x rate-reduction choice while FRACTURE controls its effective severity. |
+| Fracture preset previous/dropdown/next | Essential | Fast access to 30 curated personalities; preset parsing remains outside realtime. |
+| Spectral Draw/Erase/Clear, canvas, Depth, Scan Rate | Essential | A distinct intentional spectral role that does not duplicate the signature macros. |
+| SMEAR | Macro | Collapses grain density, length, pitch range, scatter, stereo behavior, brightness, and wetness into one control. |
+
+Internal-only values include the persisted creative seed and every technical probability, buffer size, modulation phase/depth, cutoff, resonance, predictor, grain, and transient-suppression setting.
+
 ## Global creative chain
 
 All creative processing occurs after the mixed sampler voices in this exact order:
