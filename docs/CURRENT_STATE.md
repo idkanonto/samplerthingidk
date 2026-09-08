@@ -65,6 +65,13 @@ Gate E PR #15 passed [Windows Release CI run #51](https://github.com/idkanonto/s
 - Windows run #51 compiled the VST3, Standalone, and tests; passed the full CTest executable; verified packaging; and uploaded the release bundle.
 - CodeRabbit was considered only as a second opinion and auto-skipped PR #15 because the repository does not meet its review threshold; it produced no actionable review findings.
 
+## Verified compact editor
+
+- The editor opens at 940×680 instead of 1050×1190 and is resizable from 840×640 through 1280×960.
+- Rows divide their available width proportionally, vertical sections scale within bounded limits, rotary values sit beside their knobs, and the source waveform/list/Spectral Draw regions remain present at the minimum size.
+- Minimum/default/maximum geometry review found positive bounds for every section. [Windows run #55](https://github.com/idkanonto/samplerthingidk/actions/runs/34175784343) compiled the editor at code head `4a2bae87d39e7997281b62c1dc538cc857f623c9`, passed CTest 1/1 in 0.16 seconds, verified the release bundle, and uploaded artifact `10037311950`.
+- This is a layout-only change: parameter IDs, attachments, state, DSP, signal order, and realtime behavior are unchanged.
+
 ## Remaining external verification
 
 - An allocator hook/realtime profiler and hands-on DAW host stress/listening pass are not available in CI and remain explicit external release checks.

@@ -14,7 +14,7 @@ void SourceWaveformComponent::setSource(SampleManager::SamplePtr newSource)
 
 juce::Rectangle<int> SourceWaveformComponent::getWaveformBounds() const
 {
-    return getLocalBounds().reduced(10).withTrimmedTop(28).withTrimmedBottom(42);
+    return getLocalBounds().reduced(4).withTrimmedTop(16).withTrimmedBottom(18);
 }
 
 double SourceWaveformComponent::positionToNormalised(float x) const noexcept
@@ -49,7 +49,7 @@ void SourceWaveformComponent::paint(juce::Graphics& g)
     g.setColour(juce::Colour(0xff494c5a));
     g.drawRoundedRectangle(outer.reduced(0.5f), 7.0f, 1.0f);
 
-    g.setFont(14.0f);
+    g.setFont(12.0f);
     g.setColour(juce::Colour(0xffc8cad1));
     juce::String heading("SOURCE REGION");
     if (source != nullptr)
@@ -57,7 +57,7 @@ void SourceWaveformComponent::paint(juce::Graphics& g)
         heading += " — ";
         heading += source->settings.displayName;
     }
-    g.drawText(heading, getLocalBounds().reduced(10).removeFromTop(24),
+    g.drawText(heading, getLocalBounds().reduced(4).removeFromTop(14),
                juce::Justification::centredLeft, true);
 
     const auto waveBounds = getWaveformBounds();
@@ -129,9 +129,9 @@ void SourceWaveformComponent::paint(juce::Graphics& g)
     g.drawLine(endX, static_cast<float>(waveBounds.getY()), endX,
                static_cast<float>(waveBounds.getBottom()), 2.0f);
 
-    auto footer = getLocalBounds().reduced(10).removeFromBottom(36);
+    auto footer = getLocalBounds().reduced(4).removeFromBottom(16);
     auto startText = footer.removeFromLeft(footer.getWidth() / 2);
-    g.setFont(12.0f);
+    g.setFont(10.0f);
     g.setColour(juce::Colour(0xff66e3a4));
     g.drawText(markerDescription("START", region.start), startText,
                juce::Justification::centredLeft, true);
@@ -336,7 +336,9 @@ public:
 RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(RandomChopSamplerAudioProcessor& p)
     : AudioProcessorEditor(&p), processor(p)
 {
-    setSize(1050, 1190);
+    setResizable(true, true);
+    setResizeLimits(840, 640, 1280, 960);
+    setSize(940, 680);
     title.setText("recompiler.dll", juce::dontSendNotification);
     title.setFont(juce::Font(24.0f, juce::Font::bold));
     title.setColour(juce::Label::textColourId, juce::Colour(0xfff2f2f5));
@@ -356,7 +358,7 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
         &spectralClearButton, &spectralScanRateLabel, &spectralScanRate, &spectralCanvas };
     for (auto* component : components) addAndMakeVisible(component);
     list.setColour(juce::ListBox::backgroundColourId, juce::Colour(0xff191b21));
-    list.setRowHeight(34);
+    list.setRowHeight(28);
 
     for (int index = 0; index < static_cast<int>(randomchop::tonicNames.size()); ++index)
     {
@@ -629,7 +631,7 @@ void RandomChopSamplerAudioProcessorEditor::configureKnob(juce::Slider& slider, 
                                                            const juce::String& text)
 {
     slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-    slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 82, 20);
+    slider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 62, 20);
     slider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff8b5cf6));
     label.setText(text, juce::dontSendNotification);
     label.setJustificationType(juce::Justification::centred);
@@ -670,89 +672,99 @@ void RandomChopSamplerAudioProcessorEditor::paint(juce::Graphics& g)
 
 void RandomChopSamplerAudioProcessorEditor::resized()
 {
-    auto area = getLocalBounds().reduced(20);
-    auto header = area.removeFromTop(48);
-    title.setBounds(header.removeFromLeft(360));
-    status.setBounds(header);
-    auto toolbar = area.removeFromTop(38);
-    addButton.setBounds(toolbar.removeFromLeft(145).reduced(2));
-    clearButton.setBounds(toolbar.removeFromLeft(90).reduced(2));
-    enableAllButton.setBounds(toolbar.removeFromLeft(105).reduced(2));
-    disableAllButton.setBounds(toolbar.removeFromLeft(105).reduced(2));
+    const auto verticalScale = juce::jlimit(0.9f, 1.15f,
+        static_cast<float>(getHeight()) / 680.0f);
+    const auto scaledHeight = [verticalScale](int height)
+    {
+        return juce::jmax(1, juce::roundToInt(static_cast<float>(height) * verticalScale));
+    };
+    const auto takeEqualCell = [](juce::Rectangle<int>& row, int cellsRemaining)
+    {
+        return row.removeFromLeft(row.getWidth() / juce::jmax(1, cellsRemaining)).reduced(2);
+    };
 
-    auto globalControls = area.removeFromBottom(135);
-    auto smearCodecControls = area.removeFromBottom(58);
-    auto fractureControls = area.removeFromBottom(118);
-    auto fracturePresetControls = area.removeFromBottom(42);
-    auto scrambleControls = area.removeFromBottom(58);
-    auto freezeControls = area.removeFromBottom(58);
-    auto timingControls = area.removeFromBottom(42);
-    auto globalPitchControls = area.removeFromBottom(58);
-    auto sourcePitchControls = area.removeFromBottom(58);
-    auto sourceControls = area.removeFromBottom(58);
-    auto waveformArea = area.removeFromBottom(190);
-    auto gainCell = sourceControls.removeFromLeft(350).reduced(3);
-    sourceGainLabel.setBounds(gainCell.removeFromLeft(125));
+    auto area = getLocalBounds().reduced(12);
+    auto header = area.removeFromTop(scaledHeight(32));
+    title.setBounds(header.removeFromLeft(260));
+    status.setBounds(header);
+    auto toolbar = area.removeFromTop(scaledHeight(30));
+    addButton.setBounds(takeEqualCell(toolbar, 4));
+    clearButton.setBounds(takeEqualCell(toolbar, 3));
+    enableAllButton.setBounds(takeEqualCell(toolbar, 2));
+    disableAllButton.setBounds(toolbar.reduced(2));
+
+    auto globalControls = area.removeFromBottom(scaledHeight(62));
+    auto smearCodecControls = area.removeFromBottom(scaledHeight(36));
+    auto fractureControls = area.removeFromBottom(scaledHeight(62));
+    auto fracturePresetControls = area.removeFromBottom(scaledHeight(30));
+    auto scrambleControls = area.removeFromBottom(scaledHeight(36));
+    auto freezeControls = area.removeFromBottom(scaledHeight(38));
+    auto timingControls = area.removeFromBottom(scaledHeight(28));
+    auto globalPitchControls = area.removeFromBottom(scaledHeight(34));
+    auto sourcePitchControls = area.removeFromBottom(scaledHeight(34));
+    auto sourceControls = area.removeFromBottom(scaledHeight(34));
+    auto waveformArea = area.removeFromBottom(scaledHeight(76));
+
+    auto gainCell = takeEqualCell(sourceControls, 3);
+    sourceGainLabel.setBounds(gainCell.removeFromLeft(110));
     sourceGain.setBounds(gainCell);
-    auto weightCell = sourceControls.removeFromLeft(390).reduced(3);
-    sourceWeightLabel.setBounds(weightCell.removeFromLeft(145));
+    auto weightCell = takeEqualCell(sourceControls, 2);
+    sourceWeightLabel.setBounds(weightCell.removeFromLeft(125));
     sourceWeight.setBounds(weightCell);
-    auto stretchCell = sourceControls.reduced(3);
-    sourceStretchLabel.setBounds(stretchCell.removeFromLeft(95));
+    auto stretchCell = sourceControls.reduced(2);
+    sourceStretchLabel.setBounds(stretchCell.removeFromLeft(80));
     sourceStretch.setBounds(stretchCell);
 
-    auto sourceKeyCell = sourcePitchControls.removeFromLeft(260).reduced(3);
-    sourceKeyLabel.setBounds(sourceKeyCell.removeFromLeft(105));
-    sourceKey.setBounds(sourceKeyCell.reduced(2, 10));
-    auto transposeCell = sourcePitchControls.removeFromLeft(340).reduced(3);
-    sourceTransposeLabel.setBounds(transposeCell.removeFromLeft(105));
+    auto sourceKeyCell = takeEqualCell(sourcePitchControls, 3);
+    sourceKeyLabel.setBounds(sourceKeyCell.removeFromLeft(92));
+    sourceKey.setBounds(sourceKeyCell.reduced(2, 4));
+    auto transposeCell = takeEqualCell(sourcePitchControls, 2);
+    sourceTransposeLabel.setBounds(transposeCell.removeFromLeft(92));
     sourceTranspose.setBounds(transposeCell);
-    auto fineTuneCell = sourcePitchControls.removeFromLeft(340).reduced(3);
-    sourceFineTuneLabel.setBounds(fineTuneCell.removeFromLeft(105));
+    auto fineTuneCell = sourcePitchControls.reduced(2);
+    sourceFineTuneLabel.setBounds(fineTuneCell.removeFromLeft(92));
     sourceFineTune.setBounds(fineTuneCell);
 
-    auto targetCell = globalPitchControls.removeFromLeft(265).reduced(3);
-    targetKeyLabel.setBounds(targetCell.removeFromLeft(105));
-    targetKey.setBounds(targetCell.reduced(2, 10));
-    midiPitch.setBounds(globalPitchControls.removeFromLeft(150).reduced(10));
-    auto rootCell = globalPitchControls.removeFromLeft(250).reduced(3);
-    rootNoteLabel.setBounds(rootCell.removeFromLeft(120));
+    auto targetCell = takeEqualCell(globalPitchControls, 4);
+    targetKeyLabel.setBounds(targetCell.removeFromLeft(90));
+    targetKey.setBounds(targetCell.reduced(2, 4));
+    midiPitch.setBounds(takeEqualCell(globalPitchControls, 3));
+    auto rootCell = takeEqualCell(globalPitchControls, 2);
+    rootNoteLabel.setBounds(rootCell.removeFromLeft(105));
     rootNote.setBounds(rootCell);
-    auto voiceCell = globalPitchControls.removeFromLeft(250).reduced(3);
-    voiceModeLabel.setBounds(voiceCell.removeFromLeft(105));
-    voiceMode.setBounds(voiceCell.reduced(2, 10));
+    auto voiceCell = globalPitchControls.reduced(2);
+    voiceModeLabel.setBounds(voiceCell.removeFromLeft(88));
+    voiceMode.setBounds(voiceCell.reduced(2, 4));
 
-    auto gridCell = timingControls.removeFromLeft(330).reduced(3);
-    globalGridLabel.setBounds(gridCell.removeFromLeft(115));
-    globalGrid.setBounds(gridCell.reduced(2, 5));
-    auto freezeChanceCell = freezeControls.removeFromLeft(260).reduced(3);
-    freezeChanceLabel.setBounds(freezeChanceCell.removeFromTop(20));
+    auto gridCell = timingControls.removeFromLeft(300).reduced(2);
+    globalGridLabel.setBounds(gridCell.removeFromLeft(100));
+    globalGrid.setBounds(gridCell.reduced(2, 3));
+    auto freezeChanceCell = takeEqualCell(freezeControls, 4);
+    freezeChanceLabel.setBounds(freezeChanceCell.removeFromTop(scaledHeight(16)));
     freezeChance.setBounds(freezeChanceCell);
-    auto freezeSizeCell = freezeControls.removeFromLeft(240).reduced(3);
-    freezeSizeLabel.setBounds(freezeSizeCell.removeFromLeft(100));
-    freezeSize.setBounds(freezeSizeCell.reduced(2, 8));
-    auto freezeHoldCell = freezeControls.removeFromLeft(240).reduced(3);
-    freezeHoldLabel.setBounds(freezeHoldCell.removeFromLeft(100));
-    freezeHold.setBounds(freezeHoldCell.reduced(2, 8));
-    auto octaveCell = freezeControls.reduced(3);
-    freezeOctaveChanceLabel.setBounds(octaveCell.removeFromTop(20));
+    auto freezeSizeCell = takeEqualCell(freezeControls, 3);
+    freezeSizeLabel.setBounds(freezeSizeCell.removeFromLeft(86));
+    freezeSize.setBounds(freezeSizeCell.reduced(2, 4));
+    auto freezeHoldCell = takeEqualCell(freezeControls, 2);
+    freezeHoldLabel.setBounds(freezeHoldCell.removeFromLeft(86));
+    freezeHold.setBounds(freezeHoldCell.reduced(2, 4));
+    auto octaveCell = freezeControls.reduced(2);
+    freezeOctaveChanceLabel.setBounds(octaveCell.removeFromTop(scaledHeight(16)));
     freezeOctaveChance.setBounds(octaveCell);
 
-    auto scrambleChanceCell = scrambleControls.removeFromLeft(
-        scrambleControls.getWidth() / 2).reduced(3);
-    scrambleChanceLabel.setBounds(scrambleChanceCell.removeFromTop(20));
+    auto scrambleChanceCell = takeEqualCell(scrambleControls, 2);
+    scrambleChanceLabel.setBounds(scrambleChanceCell.removeFromTop(scaledHeight(16)));
     scrambleChance.setBounds(scrambleChanceCell);
-    auto scrambleAmountCell = scrambleControls.reduced(3);
-    scrambleAmountLabel.setBounds(scrambleAmountCell.removeFromTop(20));
+    auto scrambleAmountCell = scrambleControls.reduced(2);
+    scrambleAmountLabel.setBounds(scrambleAmountCell.removeFromTop(scaledHeight(16)));
     scrambleAmount.setBounds(scrambleAmountCell);
 
-    auto presetLabelCell = fracturePresetControls.removeFromLeft(150).reduced(3);
+    auto presetLabelCell = fracturePresetControls.removeFromLeft(125).reduced(2);
     fracturePresetLabel.setBounds(presetLabelCell);
-    previousFracturePreset.setBounds(fracturePresetControls.removeFromLeft(42).reduced(3));
-    fracturePreset.setBounds(fracturePresetControls.removeFromLeft(420).reduced(3, 6));
-    nextFracturePreset.setBounds(fracturePresetControls.removeFromLeft(42).reduced(3));
+    previousFracturePreset.setBounds(fracturePresetControls.removeFromLeft(34).reduced(2));
+    nextFracturePreset.setBounds(fracturePresetControls.removeFromRight(34).reduced(2));
+    fracturePreset.setBounds(fracturePresetControls.reduced(2, 3));
 
-    const int fractureWidth = fractureControls.getWidth() / 6;
     juce::Slider* fractureSliders[] = { &fractureDrive, &fractureCharacter,
         &fractureFilterMorph, &fractureFrequency, &fractureResonance, &fractureMix };
     juce::Label* fractureLabels[] = { &fractureDriveLabel, &fractureCharacterLabel,
@@ -760,48 +772,48 @@ void RandomChopSamplerAudioProcessorEditor::resized()
         &fractureMixLabel };
     for (int index = 0; index < 6; ++index)
     {
-        auto cell = fractureControls.removeFromLeft(fractureWidth);
-        fractureLabels[index]->setBounds(cell.removeFromTop(20));
-        fractureSliders[index]->setBounds(cell.reduced(3));
+        auto cell = takeEqualCell(fractureControls, 6 - index);
+        fractureLabels[index]->setBounds(cell.removeFromTop(scaledHeight(16)));
+        fractureSliders[index]->setBounds(cell.reduced(2));
     }
 
-    auto smearCell = smearCodecControls.removeFromLeft(260).reduced(3);
-    smearAmountLabel.setBounds(smearCell.removeFromTop(20));
+    auto smearCell = takeEqualCell(smearCodecControls, 4);
+    smearAmountLabel.setBounds(smearCell.removeFromTop(scaledHeight(16)));
     smearAmount.setBounds(smearCell);
-    auto codecAmountCell = smearCodecControls.removeFromLeft(260).reduced(3);
-    codecAmountLabel.setBounds(codecAmountCell.removeFromTop(20));
+    auto codecAmountCell = takeEqualCell(smearCodecControls, 3);
+    codecAmountLabel.setBounds(codecAmountCell.removeFromTop(scaledHeight(16)));
     codecAmount.setBounds(codecAmountCell);
-    auto qualityCell = smearCodecControls.removeFromLeft(250).reduced(3);
-    codecQualityLabel.setBounds(qualityCell.removeFromLeft(115));
-    codecQuality.setBounds(qualityCell.reduced(2, 8));
-    auto rateCell = smearCodecControls.reduced(3);
-    rateReductionLabel.setBounds(rateCell.removeFromLeft(95));
-    rateReduction.setBounds(rateCell.reduced(2, 8));
+    auto qualityCell = takeEqualCell(smearCodecControls, 2);
+    codecQualityLabel.setBounds(qualityCell.removeFromLeft(100));
+    codecQuality.setBounds(qualityCell.reduced(2, 4));
+    auto rateCell = smearCodecControls.reduced(2);
+    rateReductionLabel.setBounds(rateCell.removeFromLeft(82));
+    rateReduction.setBounds(rateCell.reduced(2, 4));
 
-    const int knobWidth = globalControls.getWidth() / 6;
+    globalControls.removeFromRight(18);
     juce::Slider* sliders[] = { &randomStart, &finalLength, &attack, &release, &output, &seed };
     juce::Label* labels[] = { &randomStartLabel, &finalLengthLabel, &attackLabel,
                              &releaseLabel, &outputLabel, &seedLabel };
     for (int i = 0; i < 6; ++i)
     {
-        auto cell = globalControls.removeFromLeft(knobWidth);
-        labels[i]->setBounds(cell.removeFromTop(22));
-        sliders[i]->setBounds(cell.reduced(4));
+        auto cell = takeEqualCell(globalControls, 6 - i);
+        labels[i]->setBounds(cell.removeFromTop(scaledHeight(16)));
+        sliders[i]->setBounds(cell.reduced(2));
     }
-    waveform.setBounds(waveformArea.reduced(10));
-    auto listAndSpectral = area.reduced(10);
+    waveform.setBounds(waveformArea.reduced(4));
+    auto listAndSpectral = area.reduced(6);
     auto listArea = listAndSpectral.removeFromLeft(listAndSpectral.getWidth() / 2).reduced(2);
     list.setBounds(listArea);
     auto spectralArea = listAndSpectral.reduced(2);
-    auto spectralTools = spectralArea.removeFromTop(34);
-    spectralDrawLabel.setBounds(spectralTools.removeFromLeft(115));
-    spectralDrawButton.setBounds(spectralTools.removeFromLeft(55).reduced(2));
-    spectralEraseButton.setBounds(spectralTools.removeFromLeft(55).reduced(2));
-    spectralClearButton.setBounds(spectralTools.removeFromLeft(55).reduced(2));
-    spectralScanRateLabel.setBounds(spectralTools.removeFromLeft(75));
-    spectralScanRate.setBounds(spectralTools.reduced(2, 4));
-    auto depthArea = spectralArea.removeFromTop(38).reduced(2);
-    spectralDepthLabel.setBounds(depthArea.removeFromLeft(125));
+    auto spectralTools = spectralArea.removeFromTop(scaledHeight(26));
+    spectralDrawLabel.setBounds(spectralTools.removeFromLeft(88));
+    spectralDrawButton.setBounds(spectralTools.removeFromLeft(48).reduced(2));
+    spectralEraseButton.setBounds(spectralTools.removeFromLeft(48).reduced(2));
+    spectralClearButton.setBounds(spectralTools.removeFromLeft(48).reduced(2));
+    spectralScanRateLabel.setBounds(spectralTools.removeFromLeft(58));
+    spectralScanRate.setBounds(spectralTools.reduced(2, 3));
+    auto depthArea = spectralArea.removeFromTop(scaledHeight(28)).reduced(2);
+    spectralDepthLabel.setBounds(depthArea.removeFromLeft(105));
     spectralDepth.setBounds(depthArea);
     spectralCanvas.setBounds(spectralArea.reduced(2));
 }
