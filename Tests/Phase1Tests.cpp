@@ -620,7 +620,7 @@ void testCreativeMacroProgressionAndRender()
           "Fracture did not create a meaningful macro intensity progression");
     check(smearDistance[2] > 0.002f && smearDistance[4] > smearDistance[1]
               && firstDifferenceRms(renderSmear(75.0f, dry))
-                    > 0.35f * firstDifferenceRms(dry),
+                    > firstDifferenceRms(dry),
           "Smear did not retain meaningful crystalline/high-frequency activity");
 
     std::cout << "Macro render difference RMS"

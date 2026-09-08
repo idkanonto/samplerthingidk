@@ -481,17 +481,18 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
                                           0.0f, 1.0f);
         const auto wet = wetBase * (1.0f - 0.68f * transient);
         const auto grainNormalisation = activeGrains > 0
-            ? 0.82f / std::sqrt(static_cast<float>(activeGrains)) : 0.0f;
+            ? 0.96f / std::sqrt(static_cast<float>(activeGrains)) : 0.0f;
         for (int channel = 0; channel < channels; ++channel)
         {
             texture[channel] *= grainNormalisation;
             auto& low = lowState[static_cast<std::size_t>(channel)];
             low = sanitise(low + lowCoefficient * (texture[channel] - low));
             const auto bright = sanitise(texture[channel] - low);
-            const auto crystal = sanitise(0.24f * texture[channel]
-                + (1.02f + 0.28f * amount) * bright);
-            const auto output = dry[channel] * (1.0f - 0.18f * wet)
-                + 0.92f * wet * std::tanh(crystal * 1.08f);
+            const auto crystal = sanitise(0.14f * texture[channel]
+                + (1.30f + 0.62f * amount) * bright);
+            const auto output = dry[channel] * (1.0f - 0.32f * wet)
+                + (1.02f + 0.10f * amount) * wet
+                    * std::tanh(crystal * 1.25f);
             buffer.setSample(channel, frame, sanitise(output));
         }
 

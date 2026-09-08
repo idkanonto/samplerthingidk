@@ -17,14 +17,12 @@ status: approved
 5. Cached pitch-preserving Stretch and source Gain.
 6. Final Length, Attack/Release, boundary fade, and voice-steal crossfade.
 7. Mix up to 16 voices.
-8. FREEZE.
-9. SCRAMBLE.
-10. FRACTURE.
-11. SPECTRAL DRAW.
-12. SMEAR.
-13. CODEC, including Rate Reduction.
-14. Output Gain.
+8. SCRAMBLE, including repeat/hold/octave gestures.
+9. FRACTURE, including predictive digital damage and Rate Reduction.
+10. SPECTRAL DRAW.
+11. SMEAR crystalline grain cloud.
+12. Output Gain.
 
 ## Current code path
 
-Verified `main` implements all 14 steps in this order. SPECTRAL DRAW is a real global STFT stage after FRACTURE and before SMEAR. Rate Reduction is part of CODEC rather than a standalone module. Removed Take/Step/per-event processing and Bit Crush are not in the path, and every new creative stage defaults transparent. See [[TEST_MATRIX]] for the exact Windows evidence.
+The creative-quality branch implements all 12 steps in this order. Temporal rearrangement precedes nonlinear/digital destruction so FRACTURE can animate the chopped gestures; SPECTRAL DRAW then sculpts that result; SMEAR adds a final pitched crystalline layer without feeding it back through the destructive stages. Removed FREEZE and CODEC headline stages, Take/Step/per-event processing, and Bit Crush are not in the path. Every creative macro defaults transparent. See [[CURRENT_STATE]] and [[TEST_MATRIX]] for the exact verified status.
