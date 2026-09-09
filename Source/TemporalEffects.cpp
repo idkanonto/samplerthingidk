@@ -58,6 +58,8 @@ void ScrambleProcessor::prepare(double newSampleRate)
 
 void ScrambleProcessor::reset() noexcept
 {
+    enabled = false;
+    armed = false;
     invalidateHistory();
     activationCount = 0;
     lastCaptureFrames = 0;
@@ -75,6 +77,7 @@ void ScrambleProcessor::endEvent() noexcept
     eventFrames = 0;
     recordDuringEvent = false;
     active = false;
+    armed = enabled;
 }
 
 void ScrambleProcessor::invalidateHistory() noexcept
@@ -87,6 +90,8 @@ void ScrambleProcessor::invalidateHistory() noexcept
 void ScrambleProcessor::setSeed(uint64_t seed) noexcept
 {
     random.setSeed(seed ^ 0x736372616d626c65ULL);
+    enabled = false;
+    armed = false;
     invalidateHistory();
 }
 
@@ -144,7 +149,7 @@ void ScrambleProcessor::configureSlice(int slice, float amount) noexcept
 void ScrambleProcessor::beginEvent(const GridBoundaries& boundaries, int gridChoice,
                                    float amount) noexcept
 {
-    if (active || validFrames < 2 || amount <= 0.0f)
+    if (active || !armed || validFrames < 2 || amount <= 0.0f)
         return;
 
     const auto step = gridFrames(sampleRate, boundaries.bpm, gridChoice);
@@ -177,8 +182,9 @@ void ScrambleProcessor::beginEvent(const GridBoundaries& boundaries, int gridCho
                   order[static_cast<std::size_t>(other)]);
     }
 
+    const auto perceptualDensity = std::pow(amount, 0.78f);
     lastManipulatedSlices = std::clamp(
-        static_cast<int>(std::ceil(amount * static_cast<float>(sliceCount))),
+        static_cast<int>(std::ceil(perceptualDensity * static_cast<float>(sliceCount))),
         1, sliceCount);
     lastPitchedSlices = 0;
     for (int index = 0; index < lastManipulatedSlices; ++index)
@@ -213,6 +219,7 @@ void ScrambleProcessor::beginEvent(const GridBoundaries& boundaries, int gridCho
     lastCaptureFrames = captureFrames;
     ++activationCount;
     active = true;
+    armed = false;
 }
 
 float ScrambleProcessor::readCaptured(int channel, double logicalFrame) const noexcept
@@ -242,8 +249,19 @@ void ScrambleProcessor::process(juce::AudioBuffer<float>& buffer,
 
     const auto amount = std::clamp(std::isfinite(settings.amountPercent)
         ? settings.amountPercent * 0.01f : 0.0f, 0.0f, 1.0f);
-    if (amount <= 0.0f && active)
-        endEvent();
+    const auto wantsEnabled = amount > 0.0f;
+    if (wantsEnabled && !enabled)
+    {
+        enabled = true;
+        armed = true;
+    }
+    else if (!wantsEnabled && enabled)
+    {
+        enabled = false;
+        if (active)
+            endEvent();
+        armed = false;
+    }
 
     int boundaryIndex = 0;
     const auto capacity = history.getNumSamples();
@@ -306,3 +324,4 @@ void ScrambleProcessor::process(juce::AudioBuffer<float>& buffer,
     }
 }
 }
+

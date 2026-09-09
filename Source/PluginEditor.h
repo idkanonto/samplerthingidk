@@ -52,6 +52,23 @@ private:
     bool eraseMode = false;
 };
 
+class CreativeVisualizer final : public juce::Component
+{
+public:
+    enum class Kind { scramble, fracture, smear };
+
+    explicit CreativeVisualizer(Kind visualKind) : kind(visualKind) {}
+    void setState(float primaryPercent, float secondaryPercent = 0.0f) noexcept;
+    void advance() noexcept;
+    void paint(juce::Graphics&) override;
+
+private:
+    Kind kind;
+    float primary = 0.0f;
+    float secondary = 0.0f;
+    float phase = 0.0f;
+};
+
 class RandomChopSamplerAudioProcessorEditor final : public juce::AudioProcessorEditor,
     public juce::FileDragAndDropTarget, private juce::ListBoxModel, private juce::Timer
 {
@@ -73,7 +90,6 @@ private:
     void addFiles(const juce::StringArray&);
     void configureKnob(juce::Slider&, juce::Label&, const juce::String&);
     void configureLinearControl(juce::Slider&, juce::Label&, const juce::String&);
-    void selectFracturePreset(int index);
 
     RandomChopSamplerAudioProcessor& processor;
     juce::Label title, status;
@@ -85,37 +101,36 @@ private:
     juce::Slider sourceTranspose, sourceFineTune, sourceGain, sourceWeight, sourceStretch;
     juce::Label sourceKeyLabel, sourceTransposeLabel, sourceFineTuneLabel,
         sourceGainLabel, sourceWeightLabel, sourceStretchLabel;
-    juce::ComboBox targetKey, voiceMode, globalGrid, rateReduction;
-    juce::ComboBox fracturePreset;
-    juce::TextButton previousFracturePreset { "<" }, nextFracturePreset { ">" };
+    juce::ComboBox targetKey, voiceMode, globalGrid;
     juce::TextButton spectralDrawButton { "Draw" }, spectralEraseButton { "Erase" },
         spectralClearButton { "Clear" };
     juce::ComboBox spectralScanRate;
     SpectralCanvasComponent spectralCanvas;
+    CreativeVisualizer scrambleVisual { CreativeVisualizer::Kind::scramble };
+    CreativeVisualizer fractureVisual { CreativeVisualizer::Kind::fracture };
+    CreativeVisualizer smearVisual { CreativeVisualizer::Kind::smear };
     juce::ToggleButton midiPitch { "MIDI Pitch" };
-    juce::Slider rootNote, randomStart, finalLength, attack, release, output;
+    juce::Slider rootNote, output;
     juce::Slider scrambleAmount, fractureCharacter, fractureMix, spectralDepth, smearAmount;
     juce::Label targetKeyLabel, rootNoteLabel, voiceModeLabel, globalGridLabel,
-        rateReductionLabel, randomStartLabel, finalLengthLabel, attackLabel,
-        releaseLabel, outputLabel, scrambleAmountLabel, fracturePresetLabel,
+        outputLabel, scrambleAmountLabel,
         fractureCharacterLabel, fractureMixLabel, spectralDrawLabel, spectralScanRateLabel,
         spectralDepthLabel, smearAmountLabel;
 
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ComboBoxAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
-    std::unique_ptr<SliderAttachment> randomStartAttachment, finalLengthAttachment,
-        attackAttachment, releaseAttachment, outputAttachment, rootNoteAttachment,
+    std::unique_ptr<SliderAttachment> outputAttachment, rootNoteAttachment,
         scrambleAmountAttachment, fractureCharacterAttachment, fractureMixAttachment,
         spectralDepthAttachment, smearAmountAttachment;
     std::unique_ptr<ComboBoxAttachment> targetKeyAttachment, voiceModeAttachment,
-        globalGridAttachment, rateReductionAttachment, spectralScanRateAttachment;
+        globalGridAttachment, spectralScanRateAttachment;
     std::unique_ptr<ButtonAttachment> midiPitchAttachment;
     std::shared_ptr<const SampleManager::Pool> displayPool;
     juce::String selectedSourceId;
     std::unique_ptr<juce::FileChooser> chooser;
     juce::String transientMessage;
-    int selectedFracturePreset = -1;
     uint64_t lastSpectralCanvasGeneration = 0;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(RandomChopSamplerAudioProcessorEditor)
 };
+

@@ -35,7 +35,6 @@ public:
     void setStateInformation(const void*, int) override;
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
-    void applyFracturePreset(int index);
     randomchop::SpectralMaskStore::Canvas getSpectralCanvas() const;
     void setSpectralCanvas(const randomchop::SpectralMaskStore::Canvas& canvas);
     void clearSpectralCanvas();
@@ -66,3 +65,4 @@ private:
     uint64_t lastSeed = 0;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(RandomChopSamplerAudioProcessor)
 };
+

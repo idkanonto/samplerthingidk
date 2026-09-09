@@ -27,6 +27,7 @@ public:
     int getLastPitchedSlices() const noexcept { return lastPitchedSlices; }
     uint64_t getActivationCount() const noexcept { return activationCount; }
     bool isActive() const noexcept { return active; }
+    bool isArmed() const noexcept { return armed; }
 
 private:
     static constexpr int maximumSlices = 8;
@@ -60,5 +61,8 @@ private:
     uint64_t activationCount = 0;
     bool recordDuringEvent = false;
     bool active = false;
+    bool enabled = false;
+    bool armed = false;
 };
 }
+

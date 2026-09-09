@@ -242,6 +242,14 @@ void testWeightedSelectionAndPitch()
         "combined source, key, tuning, and MIDI pitch calculation changed");
     check(std::abs(randomchop::pitchRatioForSemitones(12.0) - 2.0) < 0.000001,
           "pitch ratio conversion changed");
+    check(randomchop::midiNoteName(0) == "C-1"
+              && randomchop::midiNoteName(60) == "C4"
+              && randomchop::midiNoteName(127) == "G9"
+              && randomchop::midiNoteFromName("C4") == 60
+              && randomchop::midiNoteFromName("F#4") == 66
+              && randomchop::midiNoteFromName("Db3") == 49
+              && randomchop::midiNoteFromName("72") == 72,
+          "root-note musical display or parsing changed");
 }
 
 void testRegionsAndVoices()
@@ -318,28 +326,27 @@ void testRegionsAndVoices()
           "voice rendering propagated hostile audio/envelope state or failed to release");
 }
 
-void testFractureRateReduction()
+void testFractureDistortionAndMorph()
 {
-    check(randomchop::FractureProcessor::rateFactorFromChoice(0) == 1
-              && randomchop::FractureProcessor::rateFactorFromChoice(6) == 64
-              && randomchop::FractureProcessor::choiceFromRateFactor(16) == 4,
-          "rate-reduction choice mapping changed");
-
-    randomchop::FractureProcessor fullRate;
-    randomchop::FractureProcessor reducedRate;
-    fullRate.prepare(48000.0);
-    reducedRate.prepare(48000.0);
-    fullRate.setSeed(77);
-    reducedRate.setSeed(77);
+    randomchop::FractureProcessor lowMorph;
+    randomchop::FractureProcessor highMorph;
+    lowMorph.prepare(48000.0);
+    highMorph.prepare(48000.0);
+    lowMorph.setSeed(77);
+    highMorph.setSeed(77);
     auto source = makeTemporalInput(4096);
-    auto fullOutput = copyBuffer(source);
-    auto reducedOutput = copyBuffer(source);
-    fullRate.process(fullOutput, { 100.0f, 80.0f, 1 });
-    reducedRate.process(reducedOutput, { 100.0f, 80.0f, 16 });
-    check(reducedRate.getLastEffectiveRateFactor() > 1
-              && !buffersEqual(fullOutput, reducedOutput)
-              && bufferFiniteAndBounded(reducedOutput),
-          "Fracture Rate did not participate in the integrated damage path");
+    auto lowOutput = copyBuffer(source);
+    auto highOutput = copyBuffer(source);
+    lowMorph.process(lowOutput, { 72.0f, 8.0f });
+    highMorph.process(highOutput, { 72.0f, 92.0f });
+    check(lowMorph.getLastDriveGain() > 1.0f
+              && lowMorph.getLastMotionDepth() > 0.0f
+              && lowMorph.getLastMorphPosition() < 1.0f
+              && highMorph.getLastMorphPosition() > 2.0f
+              && !buffersEqual(lowOutput, highOutput)
+              && bufferFiniteAndBounded(lowOutput)
+              && bufferFiniteAndBounded(highOutput),
+          "Fracture distortion/filter morph axes were inactive or indistinguishable");
 }
 
 void testHostGrid()
@@ -540,7 +547,7 @@ juce::AudioBuffer<float> renderFracture(float amount,
     randomchop::FractureProcessor processor;
     processor.prepare(48000.0);
     processor.setSeed(0xf12a);
-    processor.process(output, { amount, 67.0f, 16 });
+    processor.process(output, { amount, 67.0f });
     return output;
 }
 
@@ -684,7 +691,7 @@ void testFullCreativeChainSafety()
             boundaries.sampleOffsets[0] = frames / 2;
         }
         scramble.process(block, boundaries, 2, { 100.0f });
-        fracture.process(block, { 100.0f, 100.0f, 64 });
+        fracture.process(block, { 100.0f, 100.0f });
         spectral.process(block, mask,
             { 100.0f, 3, boundaries.bpm, 0.0, false,
               boundaries.transportDiscontinuity });
@@ -698,36 +705,13 @@ void testFullCreativeChainSafety()
           "the complete global chain became invalid, unbounded, or permanently silent");
 }
 
-void testFractureProcessorAndPresets()
+void testFractureProcessor()
 {
-    check(randomchop::fracturePresets.size() == 30,
-          "Fracture factory preset bank does not contain 30 real presets");
-    for (std::size_t index = 0; index < randomchop::fracturePresets.size(); ++index)
-    {
-        const auto& preset = randomchop::getFracturePreset(static_cast<int>(index));
-        const auto& settings = preset.settings;
-        check(juce::String(preset.name).isNotEmpty()
-                  && settings.amount >= 0.0f && settings.amount <= 100.0f
-                  && settings.character >= 0.0f && settings.character <= 100.0f
-                  && settings.rateFactor >= 1 && settings.rateFactor <= 64,
-              "Fracture factory preset contains an invalid name or parameter value");
-        randomchop::FractureProcessor presetProcessor;
-        presetProcessor.prepare(48000.0);
-        presetProcessor.setSeed(0x4000 + index);
-        auto audio = makeTemporalInput(1024, static_cast<int>(index) * 17);
-        presetProcessor.process(audio, settings);
-        check(bufferFiniteAndBounded(audio),
-              "Fracture factory preset produced invalid or unbounded audio");
-    }
-    check(juce::String(randomchop::getFracturePreset(-1).name) == "Glass Teeth"
-              && juce::String(randomchop::getFracturePreset(999).name) == "Cold Wire",
-          "Fracture preset index bounds changed");
-
     randomchop::FractureProcessor bypass;
     bypass.prepare(48000.0);
     auto dry = makeTemporalInput(512);
     auto output = copyBuffer(dry);
-    bypass.process(output, { 0.0f, 100.0f, 64 });
+    bypass.process(output, { 0.0f, 100.0f });
     check(buffersEqual(dry, output), "Fracture 0 was not sample-identical bypass");
 
     randomchop::FractureProcessor first;
@@ -738,12 +722,12 @@ void testFractureProcessorAndPresets()
     second.setSeed(991);
     auto animatedA = makeTemporalInput(24000);
     auto animatedB = copyBuffer(animatedA);
-    first.process(animatedA, { 72.0f, 63.0f, 8 });
-    second.process(animatedB, { 72.0f, 63.0f, 8 });
+    first.process(animatedA, { 72.0f, 63.0f });
+    second.process(animatedB, { 72.0f, 63.0f });
     check(buffersEqual(animatedA, animatedB)
               && first.getLastMotionDepth() > 0.0f
-              && first.getLastEffectiveRateFactor() > 1,
-          "Fracture motion/digital character was not deterministic or active");
+              && first.getLastDriveGain() > 1.0f,
+          "Fracture distortion/filter motion was not deterministic or active");
 
     randomchop::FractureProcessor extreme;
     extreme.prepare(192000.0);
@@ -757,7 +741,7 @@ void testFractureProcessorAndPresets()
         unsafe.setSample(1, frame, value);
     }
     extreme.setSeed(123);
-    extreme.process(unsafe, { 1000.0f, 1000.0f, 999 });
+    extreme.process(unsafe, { 1000.0f, 1000.0f });
     check(bufferFiniteAndBounded(unsafe),
           "Fracture extreme macro state propagated NaN, Inf, or runaway gain");
 
@@ -766,7 +750,7 @@ void testFractureProcessorAndPresets()
     silenceProcessor.setSeed(321);
     juce::AudioBuffer<float> silence(2, 48000);
     silence.clear();
-    silenceProcessor.process(silence, { 100.0f, 100.0f, 64 });
+    silenceProcessor.process(silence, { 100.0f, 100.0f });
     check(silence.getMagnitude(0, silence.getNumSamples()) == 0.0f
               && silence.getMagnitude(1, silence.getNumSamples()) == 0.0f,
           "Fracture generated self-noise or residual DC from silence");
@@ -794,8 +778,9 @@ void testSmearProcessor()
     auto coldOutput = makeTemporalInput(1024, 24000);
     cold.process(coldOutput, { 100.0f });
     check(!buffersEqual(carried, coldOutput) && bufferFiniteAndBounded(carried)
-              && continuous.getActiveGrainCount() > 0,
-          "Smear did not retain a bounded cross-block crystal-grain cloud");
+              && continuous.getActiveGrainCount() > 0
+              && continuous.getLastMotionAmount() > 0.99f,
+          "Smear did not retain its bounded moving crystal-grain cloud");
 
     randomchop::SmearProcessor deterministicA;
     randomchop::SmearProcessor deterministicB;
@@ -1013,13 +998,23 @@ void testScrambleProcessor()
     auto fillB = copyBuffer(fillA);
     first.process(fillA, noBoundary, 1, {});
     second.process(fillB, noBoundary, 1, {});
-    auto eventDry = makeTemporalInput(256, 256);
+    auto armDry = makeTemporalInput(32, 256);
+    auto armA = copyBuffer(armDry);
+    auto armB = copyBuffer(armDry);
+    first.process(armA, noBoundary, 1, { 100.0f });
+    second.process(armB, noBoundary, 1, { 100.0f });
+    check(first.isArmed() && second.isArmed()
+              && first.getActivationCount() == 0
+              && buffersEqual(armA, armDry) && buffersEqual(armB, armDry),
+          "Scramble did not arm silently while waiting for the next grid boundary");
+
+    auto eventDry = makeTemporalInput(256, 288);
     auto eventA = copyBuffer(eventDry);
     auto eventB = copyBuffer(eventDry);
     first.process(eventA, trigger, 1, { 100.0f });
     second.process(eventB, trigger, 1, { 100.0f });
     check(first.getActivationCount() == 1 && first.getLastCaptureFrames() == 125,
-          "Scramble did not begin at the grid boundary with bounded chunk capture");
+          "armed Scramble did not begin at the next grid boundary with bounded capture");
     check(buffersEqual(eventA, eventB) && bufferFiniteAndBounded(eventA),
           "Scramble fixed-seed output was non-deterministic or invalid");
     bool unchangedBeforeBoundary = true;
@@ -1091,6 +1086,17 @@ void testScrambleProcessor()
     check(sawIntegratedPitch,
           "Scramble no longer exposes integrated octave/pitched fragments at high intensity");
 
+    auto disableBlock = makeTemporalInput(16, 944);
+    const auto disableDry = copyBuffer(disableBlock);
+    first.process(disableBlock, noBoundary, 1, { 0.0f });
+    check(!first.isActive() && !first.isArmed() && buffersEqual(disableBlock, disableDry),
+          "disabling Scramble did not cancel its active/armed state transparently");
+    auto rearmBlock = makeTemporalInput(16, 960);
+    const auto rearmDry = copyBuffer(rearmBlock);
+    first.process(rearmBlock, noBoundary, 1, { 65.0f });
+    check(first.isArmed() && !first.isActive() && buffersEqual(rearmBlock, rearmDry),
+          "re-enabling Scramble did not wait for a fresh musical boundary");
+
     randomchop::GridBoundaries discontinuity;
     discontinuity.bpm = 120.0;
     discontinuity.transportDiscontinuity = true;
@@ -1104,14 +1110,16 @@ void testScrambleProcessor()
 void testStateMigration()
 {
     juce::ValueTree state("PARAMETERS");
+    state.setProperty("output", -3.0f, nullptr);
     state.setProperty("randomStart", 75.0f, nullptr);
     state.setProperty("reverseChance", 100.0f, nullptr);
     state.setProperty("bitDepth", 12.0f, nullptr);
     state.setProperty("freezeChance", 80.0f, nullptr);
     state.setProperty("codecAmount", 70.0f, nullptr);
-    for (const auto* id : { "randomStart", "reverseChance", "retriggerChance",
+    for (const auto* id : { "output", "randomStart", "reverseChance", "retriggerChance",
                             "stepLength", "bitDepth", "takeSelection", "seed",
-                            "freezeSize", "codecQuality", "fractureDrive" })
+                            "freezeSize", "codecQuality", "fractureDrive", "finalLength",
+                            "attack", "release", "rateReduction" })
     {
         juce::ValueTree parameter("PARAM");
         parameter.setProperty("id", id, nullptr);
@@ -1121,20 +1129,26 @@ void testStateMigration()
     state.appendChild(juce::ValueTree("STEP_MASK"), nullptr);
     state.appendChild(juce::ValueTree("TAKE_HISTORY"), nullptr);
     randomchop::removeLegacyState(state);
-    check(state.hasProperty("randomStart")
+    check(state.hasProperty("output")
+              && !state.hasProperty("randomStart")
               && !state.hasProperty("reverseChance")
               && !state.hasProperty("bitDepth")
               && !state.hasProperty("freezeChance")
               && !state.hasProperty("codecAmount")
               && state.getNumChildren() == 1
-              && state.getChild(0).getProperty("id").toString() == "randomStart"
+              && state.getChild(0).getProperty("id").toString() == "output"
               && static_cast<int>(state.getProperty("stateVersion"))
                     == randomchop::currentStateVersion,
           "legacy state migration did not ignore only removed controls and nodes");
     check(randomchop::isRemovedParameterId("dropChance")
               && randomchop::isRemovedParameterId("freezeSize")
               && randomchop::isRemovedParameterId("codecQuality")
-              && !randomchop::isRemovedParameterId("rateReduction"),
+              && randomchop::isRemovedParameterId("randomStart")
+              && randomchop::isRemovedParameterId("finalLength")
+              && randomchop::isRemovedParameterId("attack")
+              && randomchop::isRemovedParameterId("release")
+              && randomchop::isRemovedParameterId("rateReduction")
+              && !randomchop::isRemovedParameterId("output"),
           "legacy parameter allow/deny boundary changed");
 }
 
@@ -1308,12 +1322,12 @@ int main()
     testSupportedFormatsAndPoolState();
     testWeightedSelectionAndPitch();
     testRegionsAndVoices();
-    testFractureRateReduction();
+    testFractureDistortionAndMorph();
     testHostGrid();
     testFullCreativeChainSafety();
     testCreativeMacroProgressionAndRender();
     testScrambleProcessor();
-    testFractureProcessorAndPresets();
+    testFractureProcessor();
     testSmearProcessor();
     testSpectralMaskPublicationAndState();
     testSpectralDrawProcessor();
@@ -1324,3 +1338,4 @@ int main()
         std::cout << "All recompiler.dll foundation tests passed.\n";
     return failures == 0 ? 0 : 1;
 }
+
