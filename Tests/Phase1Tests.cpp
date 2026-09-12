@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <iostream>
 #include <limits>
+#include <vector>
 
 namespace
 {
@@ -412,6 +413,41 @@ void testHostGrid()
     check(fastest.count == 8 && fastest.sampleOffsets[1] == 63
               && fastest.sampleOffsets[7] == 438,
           "1/32 grid rounding changed");
+
+    const auto collectBoundaries = [](const std::vector<int>& blockSizes)
+    {
+        randomchop::HostGrid partitioned;
+        randomchop::HostTiming timing { 123.0, 0.0, true, true, true };
+        std::vector<int> absolute;
+        int start = 0;
+        for (const auto size : blockSizes)
+        {
+            timing.ppq = static_cast<double>(start) * timing.bpm / (60.0 * 48000.0);
+            const auto block = partitioned.process(48000.0, size, 1, timing);
+            for (int index = 0; index < block.count; ++index)
+                absolute.push_back(start + block.sampleOffsets[static_cast<std::size_t>(index)]);
+            start += size;
+        }
+        return absolute;
+    };
+    check(collectBoundaries({ 24000 }) == collectBoundaries({ 5854, 18146 })
+              && collectBoundaries({ 24000 })
+                    == collectBoundaries({ 1, 17, 64, 511, 5854, 17553 }),
+          "fractional-tempo grid boundaries changed across host block partitions");
+
+    randomchop::HostGrid denseGrid;
+    randomchop::HostTiming denseTiming { 400.0, 0.0, true, true, true };
+    const auto dense = denseGrid.process(1000.0, 2000, 2, denseTiming);
+    check(dense.count > 64 && !dense.truncated,
+          "long offline block still lost boundaries at the old 64-event limit");
+
+    randomchop::HostGrid editGrid;
+    randomchop::HostTiming editTiming { 120.0, 0.0, true, true, true };
+    editGrid.process(1000.0, 500, 1, editTiming);
+    editTiming.ppq = 1.0;
+    const auto edited = editGrid.process(1000.0, 500, 2, editTiming);
+    check(edited.gridChanged && !edited.transportDiscontinuity,
+          "a grid-division edit was still reported as an audio discontinuity");
 }
 
 juce::AudioBuffer<float> makeTemporalInput(int frames, int offset)
@@ -429,6 +465,18 @@ juce::AudioBuffer<float> copyBuffer(const juce::AudioBuffer<float>& source)
     juce::AudioBuffer<float> copy;
     copy.makeCopyOf(source);
     return copy;
+}
+
+juce::AudioBuffer<float> delayedCopy(const juce::AudioBuffer<float>& source, int delay)
+{
+    juce::AudioBuffer<float> delayed(source.getNumChannels(), source.getNumSamples());
+    delayed.clear();
+    delay = std::clamp(delay, 0, source.getNumSamples());
+    for (int channel = 0; channel < source.getNumChannels(); ++channel)
+        if (delay < source.getNumSamples())
+            delayed.copyFrom(channel, delay, source, channel, 0,
+                             source.getNumSamples() - delay);
+    return delayed;
 }
 
 bool buffersEqual(const juce::AudioBuffer<float>& a,
@@ -585,6 +633,9 @@ void testCreativeMacroProgressionAndRender()
     std::array<float, levels.size()> scrambleDistance {};
     std::array<float, levels.size()> fractureDistance {};
     std::array<float, levels.size()> smearDistance {};
+    randomchop::FractureProcessor fractureLatencyProbe;
+    fractureLatencyProbe.prepare(48000.0);
+    const auto fractureDry = delayedCopy(dry, fractureLatencyProbe.getLatencySamples());
     const auto renderPath = juce::SystemStats::getEnvironmentVariable(
         "RANDOM_CHOP_RENDER_DIR", {});
     const auto renderDirectory = juce::File(renderPath);
@@ -603,7 +654,7 @@ void testCreativeMacroProgressionAndRender()
         const auto fracture = renderFracture(level, dry);
         const auto smear = renderSmear(level, dry);
         scrambleDistance[index] = differenceRms(dry, scramble);
-        fractureDistance[index] = differenceRms(dry, fracture);
+        fractureDistance[index] = differenceRms(fractureDry, fracture);
         smearDistance[index] = differenceRms(dry, smear);
         check(bufferFiniteAndBounded(scramble) && bufferFiniteAndBounded(fracture)
                   && bufferFiniteAndBounded(smear),
@@ -712,7 +763,9 @@ void testFractureProcessor()
     auto dry = makeTemporalInput(512);
     auto output = copyBuffer(dry);
     bypass.process(output, { 0.0f, 100.0f });
-    check(buffersEqual(dry, output), "Fracture 0 was not sample-identical bypass");
+    check(bypass.getLatencySamples() >= 0
+              && buffersEqual(delayedCopy(dry, bypass.getLatencySamples()), output),
+          "Fracture 0 did not preserve its fixed latency-compensated dry path");
 
     randomchop::FractureProcessor first;
     randomchop::FractureProcessor second;
@@ -779,7 +832,9 @@ void testSmearProcessor()
     cold.process(coldOutput, { 100.0f });
     check(!buffersEqual(carried, coldOutput) && bufferFiniteAndBounded(carried)
               && continuous.getActiveGrainCount() > 0
-              && continuous.getLastMotionAmount() > 0.99f,
+              && continuous.getLastMotionAmount() > 0.99f
+              && continuous.getLastOverlapGain() > 0.0f
+              && continuous.getLastOverlapGain() <= 1.10f,
           "Smear did not retain its bounded moving crystal-grain cloud");
 
     randomchop::SmearProcessor deterministicA;
@@ -892,14 +947,13 @@ void testSpectralDrawProcessor()
     check(fullMask.setCanvas(fullCanvas), "full Spectral canvas did not publish");
     randomchop::SpectralDrawProcessor muted;
     muted.prepare(44100.0);
-    auto fullyDrawn = makeTemporalInput(8192);
+    auto fullyDrawn = makeTemporalInput(32768);
     muted.process(fullyDrawn, fullMask,
         { 100.0f, 1, 120.0, 0.0, false, false });
-    check(fullyDrawn.getMagnitude(randomchop::SpectralDrawProcessor::latencySamples,
-                                  fullyDrawn.getNumSamples()
-                                      - randomchop::SpectralDrawProcessor::latencySamples)
-              < 0.00001f,
-          "full Spectral canvas at maximum Depth did not attenuate all bins");
+    check(fullyDrawn.getMagnitude(fullyDrawn.getNumSamples() / 2,
+                                  fullyDrawn.getNumSamples() / 2)
+               < 0.00001f,
+          "smoothed full Spectral canvas did not settle to maximum attenuation");
 
     randomchop::SpectralMaskStore partialMask;
     randomchop::SpectralMaskStore::Canvas partialCanvas {};
@@ -1087,15 +1141,36 @@ void testScrambleProcessor()
           "Scramble no longer exposes integrated octave/pitched fragments at high intensity");
 
     auto disableBlock = makeTemporalInput(16, 944);
-    const auto disableDry = copyBuffer(disableBlock);
     first.process(disableBlock, noBoundary, 1, { 0.0f });
-    check(!first.isActive() && !first.isArmed() && buffersEqual(disableBlock, disableDry),
-          "disabling Scramble did not cancel its active/armed state transparently");
+    check(!first.isActive() && !first.isArmed() && bufferFiniteAndBounded(disableBlock),
+          "disabling Scramble did not finish its bounded release transition");
+    auto settledBypass = makeTemporalInput(16, 960);
+    const auto settledDry = copyBuffer(settledBypass);
+    first.process(settledBypass, noBoundary, 1, { 0.0f });
+    check(buffersEqual(settledBypass, settledDry),
+          "settled Scramble bypass was not sample-identical");
     auto rearmBlock = makeTemporalInput(16, 960);
     const auto rearmDry = copyBuffer(rearmBlock);
     first.process(rearmBlock, noBoundary, 1, { 65.0f });
     check(first.isArmed() && !first.isActive() && buffersEqual(rearmBlock, rearmDry),
           "re-enabling Scramble did not wait for a fresh musical boundary");
+
+    randomchop::ScrambleProcessor fractional;
+    fractional.prepare(48000.0);
+    fractional.setSeed(1223);
+    auto fractionalFill = makeTemporalInput(12000);
+    fractional.process(fractionalFill, noBoundary, 1, {});
+    randomchop::GridBoundaries fractionalBoundaries;
+    fractionalBoundaries.bpm = 123.0;
+    fractionalBoundaries.count = 4;
+    fractionalBoundaries.sampleOffsets[0] = 0;
+    fractionalBoundaries.sampleOffsets[1] = 5854;
+    fractionalBoundaries.sampleOffsets[2] = 11707;
+    fractionalBoundaries.sampleOffsets[3] = 17561;
+    auto fractionalAudio = makeTemporalInput(20000, 12000);
+    fractional.process(fractionalAudio, fractionalBoundaries, 1, { 10.0f });
+    check(fractional.getActivationCount() == 4,
+          "one-grid Scramble events still skipped fractional-tempo boundaries");
 
     randomchop::GridBoundaries discontinuity;
     discontinuity.bpm = 120.0;

@@ -46,10 +46,19 @@ FractureProcessor::FilterOutputs FractureProcessor::StateVariableFilter::process
     return { sanitise(low), sanitise(band), sanitise(high), sanitise(low + high) };
 }
 
-void FractureProcessor::prepare(double newSampleRate)
+void FractureProcessor::prepare(double newSampleRate, int maximumBlockSize)
 {
     sampleRate = std::clamp(std::isfinite(newSampleRate) ? newSampleRate : 44100.0,
                             1000.0, 768000.0);
+    preparedBlockSize = std::max(1, maximumBlockSize);
+    wetBuffer.setSize(2, preparedBlockSize, false, true, false);
+    controlBuffer.setSize(2, preparedBlockSize, false, true, false);
+    oversampling.initProcessing(static_cast<std::size_t>(preparedBlockSize));
+    latencySamples = std::max(0, static_cast<int>(std::llround(
+        oversampling.getLatencyInSamples())));
+    dryDelayBuffer.setSize(2, std::max(1, latencySamples), false, true, false);
+    amountSmoother.reset(sampleRate, 0.010);
+    characterSmoother.reset(sampleRate, 0.020);
     reset();
 }
 
@@ -59,7 +68,11 @@ void FractureProcessor::reset() noexcept
         filter.reset();
     dcInput.fill(0.0f);
     dcOutput.fill(0.0f);
-    previousInput.fill(0.0f);
+    oversampling.reset();
+    dryDelayBuffer.clear();
+    dryDelayPosition = 0;
+    amountSmoother.setCurrentAndTargetValue(0.0f);
+    characterSmoother.setCurrentAndTargetValue(0.0f);
     phaseA = 0.0;
     phaseB = 0.37;
     envelope = 0.0f;
@@ -116,49 +129,72 @@ float FractureProcessor::morphFilter(const FilterOutputs& outputs,
 void FractureProcessor::process(juce::AudioBuffer<float>& buffer,
                                 FractureSettings settings) noexcept
 {
-    const auto amount = normalisePercent(settings.amount);
     if (buffer.getNumChannels() < 1)
         return;
-    if (amount <= 0.0f)
+    const auto targetAmount = normalisePercent(settings.amount);
+    const auto targetCharacter = normalisePercent(settings.character);
+    amountSmoother.setTargetValue(targetAmount);
+    characterSmoother.setTargetValue(targetCharacter);
+    for (int start = 0; start < buffer.getNumSamples(); start += preparedBlockSize)
+        processChunk(buffer, start,
+                     std::min(preparedBlockSize, buffer.getNumSamples() - start), settings);
+    if (targetAmount <= 0.0f && !amountSmoother.isSmoothing())
     {
-        for (auto& filter : mainFilters)
-            filter.reset();
-        dcInput.fill(0.0f);
-        dcOutput.fill(0.0f);
-        previousInput.fill(0.0f);
-        envelope = 0.0f;
         lastMotionDepth = 0.0f;
         lastDriveGain = 1.0f;
+    }
+}
+
+void FractureProcessor::processChunk(juce::AudioBuffer<float>& buffer,
+                                     int startFrame, int frameCount,
+                                     FractureSettings) noexcept
+{
+    if (frameCount <= 0)
         return;
+    const auto channels = std::min(2, buffer.getNumChannels());
+    for (int frame = 0; frame < frameCount; ++frame)
+    {
+        controlBuffer.setSample(0, frame, amountSmoother.getNextValue());
+        controlBuffer.setSample(1, frame, characterSmoother.getNextValue());
+        const auto left = sanitise(buffer.getSample(0, startFrame + frame));
+        wetBuffer.setSample(0, frame, left);
+        wetBuffer.setSample(1, frame, sanitise(buffer.getSample(
+            std::min(1, channels - 1), startFrame + frame)));
     }
 
-    const auto character = normalisePercent(settings.character);
-    const auto macroCurve = std::pow(amount, 0.82f);
-    const auto motionDepth = std::pow(amount, 1.15f);
-    const auto driveGain = 1.0f + 24.0f * std::pow(amount, 1.35f);
-    const auto driveCompensation = 1.0f / std::sqrt(1.0f + 0.16f * (driveGain - 1.0f));
-    const auto wet = std::pow(amount, 0.78f);
-    const auto baseFrequency = 260.0f * std::pow(20.0f, character);
+    auto wetBlock = juce::dsp::AudioBlock<float>(wetBuffer)
+        .getSubBlock(0, static_cast<std::size_t>(frameCount));
+    const auto constantWetBlock = juce::dsp::AudioBlock<const float>(wetBlock);
+    auto oversampledBlock = oversampling.processSamplesUp(constantWetBlock);
+    const auto oversamplingFactor = static_cast<int>(oversampling.getOversamplingFactor());
+    const auto internalRate = sampleRate * static_cast<double>(oversamplingFactor);
     const auto maximumFrequency = static_cast<float>(sampleRate * 0.44);
-    const auto phaseIncrementA = (0.07 + 0.55 * amount * amount) / sampleRate;
-    const auto phaseIncrementB = (0.11 + 0.83 * amount) / sampleRate;
     const auto attackCoefficient = 1.0f - std::exp(-1.0f /
-        static_cast<float>(sampleRate * 0.003));
+        static_cast<float>(internalRate * 0.003));
     const auto releaseCoefficient = 1.0f - std::exp(-1.0f /
-        static_cast<float>(sampleRate * 0.075));
+        static_cast<float>(internalRate * 0.075));
     const auto randomCoefficient = 1.0f - std::exp(-1.0f /
-        static_cast<float>(sampleRate * 0.18));
+        static_cast<float>(internalRate * 0.18));
     const auto dcCoefficient = std::exp(-juce::MathConstants<float>::twoPi
-        * 15.0f / static_cast<float>(sampleRate));
-    const auto channels = std::min(2, buffer.getNumChannels());
-    lastMotionDepth = motionDepth;
-    lastDriveGain = driveGain;
+        * 15.0f / static_cast<float>(internalRate));
 
-    for (int frame = 0; frame < buffer.getNumSamples(); ++frame)
+    for (std::size_t frame = 0; frame < oversampledBlock.getNumSamples(); ++frame)
     {
+        const auto controlFrame = std::min(frameCount - 1,
+            static_cast<int>(frame) / oversamplingFactor);
+        const auto amount = controlBuffer.getSample(0, controlFrame);
+        const auto character = controlBuffer.getSample(1, controlFrame);
+        const auto macroCurve = std::pow(amount, 0.82f);
+        const auto motionDepth = std::pow(amount, 1.15f);
+        const auto driveGain = 1.0f + 24.0f * std::pow(amount, 1.35f);
+        const auto driveCompensation = 1.0f
+            / std::sqrt(1.0f + 0.16f * (driveGain - 1.0f));
+        const auto baseFrequency = 260.0f * std::pow(20.0f, character);
+        lastMotionDepth = motionDepth;
+        lastDriveGain = driveGain;
         float dry[2] {
-            sanitise(buffer.getSample(0, frame)),
-            sanitise(buffer.getSample(std::min(1, channels - 1), frame))
+            sanitise(oversampledBlock.getChannelPointer(0)[frame]),
+            sanitise(oversampledBlock.getChannelPointer(1)[frame])
         };
         const auto inputEnvelope = std::max(std::abs(dry[0]), std::abs(dry[1]));
         const auto envelopeCoefficient = inputEnvelope > envelope
@@ -170,7 +206,7 @@ void FractureProcessor::process(juce::AudioBuffer<float>& buffer,
         if (randomCountdown-- <= 0)
         {
             randomTarget = static_cast<float>(random.unit() * 2.0 - 1.0);
-            randomCountdown = std::max(1, static_cast<int>(std::llround(sampleRate
+            randomCountdown = std::max(1, static_cast<int>(std::llround(internalRate
                 * (0.72 - 0.30 * amount)
                 * (0.82 + 0.36 * random.unit()))));
         }
@@ -191,7 +227,7 @@ void FractureProcessor::process(juce::AudioBuffer<float>& buffer,
         const auto frequency = std::clamp(baseFrequency * std::pow(2.0f, frequencyOctaves),
                                           35.0f, maximumFrequency);
         const auto g = std::clamp(std::tan(juce::MathConstants<float>::pi
-                                          * frequency / static_cast<float>(sampleRate * 2.0)),
+                                          * frequency / static_cast<float>(internalRate)),
                                   0.00001f, 24.0f);
         const auto resonance = std::clamp(0.08f + 0.54f * macroCurve
             + motionDepth * (0.07f * slowMotion + 0.06f * envelopeMotion), 0.0f, 0.82f);
@@ -200,37 +236,51 @@ void FractureProcessor::process(juce::AudioBuffer<float>& buffer,
             + motionDepth * (0.16f * crossMotion
                              + 0.08f * (envelopeMotion - 0.5f)), 0.0f, 3.0f);
         lastMorphPosition = morphPosition;
-        const auto animatedCharacter = std::clamp(character
+        const auto animatedShape = std::clamp(0.08f + 0.84f * macroCurve
             + 0.08f * motionDepth * crossMotion, 0.0f, 1.0f);
 
-        for (int channel = 0; channel < channels; ++channel)
+        for (int channel = 0; channel < 2; ++channel)
         {
-            const auto previous = previousInput[static_cast<std::size_t>(channel)];
-            auto tonal = 0.0f;
-            for (int oversample = 0; oversample < 2; ++oversample)
-            {
-                const auto interpolation = 0.5f + 0.5f * static_cast<float>(oversample);
-                const auto input = lerp(previous, dry[channel], interpolation);
-                const auto animatedDrive = driveGain
-                    * (1.0f + 0.10f * motionDepth * crossMotion);
-                const auto shaped = waveshape(input * animatedDrive, animatedCharacter)
-                    * driveCompensation;
-                tonal += 0.5f * morphFilter(
-                    mainFilters[static_cast<std::size_t>(channel)].process(shaped, g, damping),
-                    morphPosition);
-            }
-            previousInput[static_cast<std::size_t>(channel)] = dry[channel];
+            const auto animatedDrive = driveGain
+                * (1.0f + 0.10f * motionDepth * crossMotion);
+            const auto shaped = waveshape(dry[channel] * animatedDrive,
+                                          animatedShape) * driveCompensation;
+            const auto tonal = morphFilter(
+                mainFilters[static_cast<std::size_t>(channel)].process(shaped, g, damping),
+                morphPosition);
             const auto dcBlocked = tonal - dcInput[static_cast<std::size_t>(channel)]
                 + dcCoefficient * dcOutput[static_cast<std::size_t>(channel)];
             dcInput[static_cast<std::size_t>(channel)] = sanitise(tonal);
             dcOutput[static_cast<std::size_t>(channel)] = sanitise(dcBlocked);
             const auto processed = 1.04f * std::tanh(sanitise(dcBlocked) * 1.08f);
-            buffer.setSample(channel, frame,
-                sanitise(lerp(dry[channel], processed, wet)));
+            oversampledBlock.getChannelPointer(static_cast<std::size_t>(channel))[frame]
+                = sanitise(processed);
         }
 
-        phaseA = wrap(phaseA + phaseIncrementA, 1.0);
-        phaseB = wrap(phaseB + phaseIncrementB, 1.0);
+        phaseA = wrap(phaseA + (0.07 + 0.55 * amount * amount) / internalRate, 1.0);
+        phaseB = wrap(phaseB + (0.11 + 0.83 * amount) / internalRate, 1.0);
+    }
+
+    oversampling.processSamplesDown(wetBlock);
+    for (int frame = 0; frame < frameCount; ++frame)
+    {
+        const auto amount = controlBuffer.getSample(0, frame);
+        const auto wet = std::pow(amount, 0.78f);
+        for (int channel = 0; channel < channels; ++channel)
+        {
+            const auto dry = sanitise(buffer.getSample(channel, startFrame + frame));
+            auto delayedDry = dry;
+            if (latencySamples > 0)
+            {
+                delayedDry = dryDelayBuffer.getSample(channel, dryDelayPosition);
+                dryDelayBuffer.setSample(channel, dryDelayPosition, dry);
+            }
+            const auto processed = sanitise(wetBuffer.getSample(channel, frame));
+            buffer.setSample(channel, startFrame + frame,
+                sanitise(lerp(delayedDry, processed, wet)));
+        }
+        if (latencySamples > 0 && ++dryDelayPosition >= latencySamples)
+            dryDelayPosition = 0;
     }
 }
 
@@ -240,12 +290,19 @@ void SmearProcessor::prepare(double newSampleRate)
                             1000.0, 768000.0);
     const auto frames = std::max(32, static_cast<int>(std::ceil(sampleRate * 1.0)) + 4);
     delayBuffer.setSize(2, frames, false, true, false);
+    mediumBandDelayBuffer.setSize(2, frames, false, true, false);
+    highBandDelayBuffer.setSize(2, frames, false, true, false);
+    mediumFilterCoefficient = 1.0f - std::exp(-juce::MathConstants<float>::twoPi * 0.22f);
+    highFilterCoefficient = 1.0f - std::exp(-juce::MathConstants<float>::twoPi * 0.10f);
+    amountSmoother.reset(sampleRate, 0.010);
     reset();
 }
 
 void SmearProcessor::reset() noexcept
 {
     delayBuffer.clear();
+    mediumBandDelayBuffer.clear();
+    highBandDelayBuffer.clear();
     resetRealtimeState();
 }
 
@@ -255,10 +312,17 @@ void SmearProcessor::resetRealtimeState() noexcept
         grain = {};
     lowState.fill(0.0f);
     feedbackState.fill(0.0f);
+    for (auto& channel : mediumFilterState)
+        channel.fill(0.0f);
+    for (auto& channel : highFilterState)
+        channel.fill(0.0f);
     fastEnvelope = 0.0f;
     slowEnvelope = 0.0f;
     motionPhase = 0.0f;
     lastMotionAmount = 0.0f;
+    overlapEnergy = 0.0f;
+    lastOverlapGain = 0.0f;
+    amountSmoother.setCurrentAndTargetValue(0.0f);
     writePosition = 0;
     validFrames = 0;
     grainCountdown = 0;
@@ -277,17 +341,23 @@ float SmearProcessor::sanitise(float value) noexcept
     return std::isfinite(value) ? std::clamp(value, -64.0f, 64.0f) : 0.0f;
 }
 
-float SmearProcessor::readDelay(int channel, double position) const noexcept
+float SmearProcessor::readDelay(int channel, double position,
+                                double increment) const noexcept
 {
-    const auto size = delayBuffer.getNumSamples();
+    const auto* source = &delayBuffer;
+    if (increment > 2.1)
+        source = &highBandDelayBuffer;
+    else if (increment > 1.1)
+        source = &mediumBandDelayBuffer;
+    const auto size = source->getNumSamples();
     if (size <= 1)
         return 0.0f;
     position = wrap(position, static_cast<double>(size));
     const auto first = static_cast<int>(position);
     const auto second = first + 1 < size ? first + 1 : 0;
     const auto fraction = static_cast<float>(position - first);
-    return lerp(delayBuffer.getSample(channel, first),
-                delayBuffer.getSample(channel, second), fraction);
+    return lerp(source->getSample(channel, first),
+                source->getSample(channel, second), fraction);
 }
 
 void SmearProcessor::startGrain(float amount) noexcept
@@ -335,9 +405,11 @@ void SmearProcessor::startGrain(float amount) noexcept
     destination->increment = increment;
     destination->pan = static_cast<float>(random.unit() * 2.0 - 1.0);
     destination->pitchPhase = static_cast<float>(random.unit());
-    destination->pitchRate = static_cast<float>((0.18 + 0.72 * random.unit()) / sampleRate);
+    destination->pitchRate = static_cast<float>((0.22 + 0.50 * random.unit())
+                                                 / static_cast<double>(length));
     destination->panPhase = static_cast<float>(random.unit());
-    destination->panRate = static_cast<float>((0.10 + 0.44 * random.unit()) / sampleRate);
+    destination->panRate = static_cast<float>((0.18 + 0.44 * random.unit())
+                                               / static_cast<double>(length));
     destination->brightness = static_cast<float>(0.72 + 0.56 * random.unit());
     destination->age = 0;
     destination->length = length;
@@ -358,41 +430,57 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
 {
     if (delayBuffer.getNumSamples() <= 1 || buffer.getNumChannels() < 1)
         return;
-    const auto amount = normalisePercent(settings.amount);
+    const auto targetAmount = normalisePercent(settings.amount);
+    amountSmoother.setTargetValue(targetAmount);
     const auto channels = std::min(2, buffer.getNumChannels());
-    if (amount <= 0.0f)
-    {
-        for (auto& grain : grains)
-            grain.active = false;
-        grainCountdown = 0;
-        feedbackState.fill(0.0f);
-        lastMotionAmount = 0.0f;
-    }
-
-    const auto highPassCutoff = 1200.0f + 3600.0f * amount;
-    const auto lowCoefficient = 1.0f - std::exp(
-        -juce::MathConstants<float>::twoPi * highPassCutoff
-        / static_cast<float>(sampleRate));
     const auto fastCoefficient = 1.0f - std::exp(-1.0f
         / static_cast<float>(sampleRate * 0.004));
     const auto slowCoefficient = 1.0f - std::exp(-1.0f
         / static_cast<float>(sampleRate * 0.065));
-    const auto wetBase = std::pow(amount, 0.72f);
-    const auto feedbackGain = 0.20f * std::pow(amount, 1.45f);
-    const auto pitchOrbitCents = 3.0f + 11.0f * amount;
-    const auto panOrbitDepth = 0.16f + 0.40f * amount;
-    lastMotionAmount = amount;
+    const auto overlapCoefficient = 1.0f - std::exp(-1.0f
+        / static_cast<float>(sampleRate * 0.004));
+    const auto feedbackCoefficient = 1.0f - std::exp(-1.0f
+        / static_cast<float>(sampleRate * 0.000105));
 
     for (int frame = 0; frame < buffer.getNumSamples(); ++frame)
     {
+        const auto amount = amountSmoother.getNextValue();
+        lastMotionAmount = amount;
+        const auto highPassCutoff = 1200.0f + 3600.0f * amount;
+        const auto lowCoefficient = 1.0f - std::exp(
+            -juce::MathConstants<float>::twoPi * highPassCutoff
+            / static_cast<float>(sampleRate));
+        const auto wetBase = std::pow(amount, 0.72f);
+        const auto feedbackGain = 0.20f * std::pow(amount, 1.45f);
+        const auto pitchOrbitCents = 3.0f + 11.0f * amount;
+        const auto panOrbitDepth = 0.16f + 0.40f * amount;
         float dry[2] {
             sanitise(buffer.getSample(0, frame)),
             sanitise(buffer.getSample(std::min(1, channels - 1), frame))
         };
-        delayBuffer.setSample(0, writePosition, sanitise(
-            dry[0] + feedbackGain * feedbackState[0]));
-        delayBuffer.setSample(1, writePosition, sanitise(
-            dry[1] + feedbackGain * feedbackState[1]));
+        for (int channel = 0; channel < 2; ++channel)
+        {
+            const auto input = sanitise(dry[channel] + feedbackGain
+                * feedbackState[static_cast<std::size_t>(channel)]);
+            delayBuffer.setSample(channel, writePosition, input);
+            auto medium = input;
+            auto high = input;
+            for (int stage = 0; stage < 4; ++stage)
+            {
+                auto& mediumState = mediumFilterState[static_cast<std::size_t>(channel)]
+                                                    [static_cast<std::size_t>(stage)];
+                auto& highState = highFilterState[static_cast<std::size_t>(channel)]
+                                                [static_cast<std::size_t>(stage)];
+                mediumState = sanitise(mediumState
+                    + mediumFilterCoefficient * (medium - mediumState));
+                highState = sanitise(highState
+                    + highFilterCoefficient * (high - highState));
+                medium = mediumState;
+                high = highState;
+            }
+            mediumBandDelayBuffer.setSample(channel, writePosition, medium);
+            highBandDelayBuffer.setSample(channel, writePosition, high);
+        }
         validFrames = std::min(validFrames + 1, delayBuffer.getNumSamples());
 
         if (amount > 0.0f && grainCountdown-- <= 0)
@@ -407,7 +495,7 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
         }
 
         float texture[2] { 0.0f, 0.0f };
-        int activeGrains = 0;
+        auto windowEnergy = 0.0f;
         for (auto& grain : grains)
         {
             if (!grain.active)
@@ -424,12 +512,15 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
                                               -1.0f, 1.0f);
             const auto increment = grain.increment * std::pow(2.0,
                 static_cast<double>(pitchOrbitCents * pitchOrbit) / 1200.0);
-            const auto left = sanitise(readDelay(0, grain.readPosition)) * grain.brightness;
-            const auto right = sanitise(readDelay(1, grain.readPosition)) * grain.brightness;
+            const auto left = sanitise(readDelay(0, grain.readPosition, increment))
+                * grain.brightness;
+            const auto right = sanitise(readDelay(1, grain.readPosition, increment))
+                * grain.brightness;
             const auto leftPan = std::sqrt(0.5f * (1.0f - movingPan));
             const auto rightPan = std::sqrt(0.5f * (1.0f + movingPan));
             texture[0] += window * (left * leftPan + right * rightPan * 0.16f);
             texture[1] += window * (right * rightPan + left * leftPan * 0.16f);
+            windowEnergy += window * window;
             grain.readPosition = wrap(grain.readPosition + increment,
                                       static_cast<double>(delayBuffer.getNumSamples()));
             grain.pitchPhase = static_cast<float>(wrap(
@@ -438,7 +529,6 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
                 grain.panPhase + grain.panRate, 1.0));
             if (++grain.age >= grain.length)
                 grain.active = false;
-            ++activeGrains;
         }
 
         const auto inputEnvelope = std::max(std::abs(dry[0]), std::abs(dry[1]));
@@ -447,8 +537,12 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
         const auto transient = std::clamp((fastEnvelope - slowEnvelope) * 5.0f,
                                           0.0f, 1.0f);
         const auto wet = wetBase * (1.0f - 0.68f * transient);
-        const auto grainNormalisation = activeGrains > 0
-            ? 0.96f / std::sqrt(static_cast<float>(activeGrains)) : 0.0f;
+        overlapEnergy += overlapCoefficient * (windowEnergy - overlapEnergy);
+        const auto grainNormalisation = windowEnergy > 0.0f || overlapEnergy > 0.0001f
+            ? std::clamp(0.82f / std::sqrt(std::max(0.55f, overlapEnergy)),
+                         0.35f, 1.10f)
+            : 0.0f;
+        lastOverlapGain = grainNormalisation;
         for (int channel = 0; channel < channels; ++channel)
         {
             texture[channel] *= grainNormalisation;
@@ -457,9 +551,10 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
             const auto bright = sanitise(texture[channel] - low);
             const auto crystal = sanitise(0.10f * texture[channel]
                 + (1.34f + 0.72f * amount) * bright);
-            feedbackState[static_cast<std::size_t>(channel)] = sanitise(
-                0.82f * feedbackState[static_cast<std::size_t>(channel)]
-                + 0.18f * std::tanh(bright * (1.0f + 0.65f * amount)));
+            auto& feedback = feedbackState[static_cast<std::size_t>(channel)];
+            feedback += feedbackCoefficient
+                * (std::tanh(bright * (1.0f + 0.65f * amount)) - feedback);
+            feedback = sanitise(feedback);
             const auto output = dry[channel] * (1.0f - 0.08f * wet)
                 + (1.26f + 0.44f * amount) * wet
                     * std::tanh(crystal * 1.25f);
@@ -470,6 +565,16 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
             writePosition = 0;
         motionPhase = static_cast<float>(wrap(
             motionPhase + (0.11 + 0.31 * amount) / sampleRate, 1.0));
+    }
+    if (targetAmount <= 0.0f && !amountSmoother.isSmoothing())
+    {
+        for (auto& grain : grains)
+            grain.active = false;
+        grainCountdown = 0;
+        feedbackState.fill(0.0f);
+        overlapEnergy = 0.0f;
+        lastOverlapGain = 0.0f;
+        lastMotionAmount = 0.0f;
     }
 }
 }

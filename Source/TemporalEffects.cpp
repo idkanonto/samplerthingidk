@@ -53,6 +53,7 @@ void ScrambleProcessor::prepare(double newSampleRate)
         std::ceil(sampleRate * maximumHistorySeconds))), false, true, false);
     history.clear();
     fadeFrames = std::max(1, static_cast<int>(std::llround(sampleRate * 0.0025)));
+    bypassGain.reset(sampleRate, 0.005);
     reset();
 }
 
@@ -65,6 +66,7 @@ void ScrambleProcessor::reset() noexcept
     lastCaptureFrames = 0;
     lastManipulatedSlices = 0;
     lastPitchedSlices = 0;
+    bypassGain.setCurrentAndTargetValue(0.0f);
 }
 
 void ScrambleProcessor::endEvent() noexcept
@@ -75,6 +77,7 @@ void ScrambleProcessor::endEvent() noexcept
     sliceCount = 1;
     eventFrame = 0;
     eventFrames = 0;
+    eventBoundariesRemaining = 0;
     recordDuringEvent = false;
     active = false;
     armed = enabled;
@@ -93,6 +96,7 @@ void ScrambleProcessor::setSeed(uint64_t seed) noexcept
     enabled = false;
     armed = false;
     invalidateHistory();
+    bypassGain.setCurrentAndTargetValue(0.0f);
 }
 
 void ScrambleProcessor::configureSlice(int slice, float amount) noexcept
@@ -125,9 +129,10 @@ void ScrambleProcessor::configureSlice(int slice, float amount) noexcept
         const auto fraction = 0.72 - 0.58 * static_cast<double>(amount);
         loopFrames[static_cast<std::size_t>(slice)] = std::max(2,
             static_cast<int>(std::llround(static_cast<double>(available) * fraction)));
-        readOffset[static_cast<std::size_t>(slice)] = static_cast<double>(
-            random.bounded(static_cast<uint32_t>(std::max(1,
+        const auto loopStart = static_cast<int>(random.bounded(
+            static_cast<uint32_t>(std::max(1,
                 available - loopFrames[static_cast<std::size_t>(slice)] + 1))));
+        readOrigin[static_cast<std::size_t>(slice)] += static_cast<double>(loopStart);
     }
     else if (choice < pitchWeight + holdWeight + reverseWeight)
     {
@@ -161,7 +166,10 @@ void ScrambleProcessor::beginEvent(const GridBoundaries& boundaries, int gridCho
         captureStart += history.getNumSamples();
 
     const auto longEventChance = std::max(0.0f, amount - 0.42f) * 0.72f;
-    eventFrames = step * (random.unit() < longEventChance ? 2 : 1);
+    eventBoundariesRemaining = random.unit() < longEventChance ? 2 : 1;
+    eventFrames = static_cast<int>(std::min<std::int64_t>(
+        static_cast<std::int64_t>(std::numeric_limits<int>::max()),
+        static_cast<std::int64_t>(step) * eventBoundariesRemaining));
     recordDuringEvent = eventFrames <= history.getNumSamples() - captureFrames;
     sliceCount = std::clamp(4 + static_cast<int>(std::floor(amount * 4.0f)),
                             4, maximumSlices);
@@ -244,7 +252,7 @@ void ScrambleProcessor::process(juce::AudioBuffer<float>& buffer,
 {
     if (history.getNumSamples() < 2 || buffer.getNumChannels() < 1)
         return;
-    if (boundaries.transportDiscontinuity)
+    if (boundaries.transportDiscontinuity || boundaries.gridChanged)
         invalidateHistory();
 
     const auto amount = std::clamp(std::isfinite(settings.amountPercent)
@@ -254,13 +262,13 @@ void ScrambleProcessor::process(juce::AudioBuffer<float>& buffer,
     {
         enabled = true;
         armed = true;
+        bypassGain.setTargetValue(1.0f);
     }
     else if (!wantsEnabled && enabled)
     {
         enabled = false;
-        if (active)
-            endEvent();
         armed = false;
+        bypassGain.setTargetValue(0.0f);
     }
 
     int boundaryIndex = 0;
@@ -268,9 +276,13 @@ void ScrambleProcessor::process(juce::AudioBuffer<float>& buffer,
     const auto channels = std::min(2, buffer.getNumChannels());
     for (int frame = 0; frame < buffer.getNumSamples(); ++frame)
     {
+        const auto effectGain = bypassGain.getNextValue();
         while (boundaryIndex < boundaries.count
                && boundaries.sampleOffsets[static_cast<std::size_t>(boundaryIndex)] == frame)
         {
+            if (active && eventBoundariesRemaining > 0
+                && --eventBoundariesRemaining == 0)
+                endEvent();
             beginEvent(boundaries, gridChoice, amount);
             ++boundaryIndex;
         }
@@ -295,17 +307,48 @@ void ScrambleProcessor::process(juce::AudioBuffer<float>& buffer,
                     + static_cast<double>(localFrame)
                         * readIncrement[static_cast<std::size_t>(slice)], loop);
                 sourceFrame = readOrigin[static_cast<std::size_t>(slice)] + localRead;
-                wet = sliceWet[static_cast<std::size_t>(slice)]
-                    * edgeFade(localFrame, activeFrames, fadeFrames);
+                const auto localFade = std::min(fadeFrames,
+                                                std::max(1, activeFrames / 2));
+                wet = effectGain * sliceWet[static_cast<std::size_t>(slice)]
+                    * edgeFade(localFrame, activeFrames, localFade);
             }
             for (int channel = 0; channel < channels; ++channel)
             {
-                const auto scrambled = sanitise(readCaptured(channel, sourceFrame));
+                auto scrambled = sanitise(readCaptured(channel, sourceFrame));
+                if (manipulated[static_cast<std::size_t>(slice)])
+                {
+                    const auto loop = loopFrames[static_cast<std::size_t>(slice)];
+                    const auto seam = std::min(fadeFrames, std::max(0, loop / 4));
+                    const auto phase = sourceFrame
+                        - readOrigin[static_cast<std::size_t>(slice)];
+                    const auto increment = readIncrement[static_cast<std::size_t>(slice)];
+                    if (seam > 1 && increment >= 0.0
+                        && phase > static_cast<double>(loop - seam))
+                    {
+                        const auto blend = static_cast<float>(
+                            (phase - static_cast<double>(loop - seam)) / seam);
+                        const auto alternate = readOrigin[static_cast<std::size_t>(slice)]
+                            + phase - static_cast<double>(loop - seam);
+                        scrambled += std::clamp(blend, 0.0f, 1.0f)
+                            * (sanitise(readCaptured(channel, alternate)) - scrambled);
+                    }
+                    else if (seam > 1 && increment < 0.0
+                             && phase < static_cast<double>(seam))
+                    {
+                        const auto blend = static_cast<float>(
+                            (static_cast<double>(seam) - phase) / seam);
+                        const auto alternate = readOrigin[static_cast<std::size_t>(slice)]
+                            + static_cast<double>(loop - seam) + phase;
+                        scrambled += std::clamp(blend, 0.0f, 1.0f)
+                            * (sanitise(readCaptured(channel, alternate)) - scrambled);
+                    }
+                }
                 buffer.setSample(channel, frame, sanitise(
                     dry[channel] + wet * (scrambled - dry[channel])));
             }
             ++eventFrame;
-            if (eventFrame >= eventFrames)
+            if ((!enabled && !bypassGain.isSmoothing() && effectGain <= 0.0f)
+                || eventFrame >= eventFrames + fadeFrames)
                 endEvent();
         }
         else

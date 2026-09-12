@@ -332,6 +332,24 @@ void CreativeVisualizer::advance() noexcept
         repaint();
 }
 
+void CreativeVisualizer::setTelemetry(float first, float second,
+                                      uint32_t flags) noexcept
+{
+    const auto nextFirst = std::clamp(std::isfinite(first) ? first : 0.0f,
+                                      0.0f, 1.0f);
+    const auto nextSecond = std::clamp(std::isfinite(second) ? second : 0.0f,
+                                       0.0f, 1.0f);
+    if (std::abs(nextFirst - telemetryFirst) > 0.0001f
+        || std::abs(nextSecond - telemetrySecond) > 0.0001f
+        || flags != telemetryFlags)
+    {
+        telemetryFirst = nextFirst;
+        telemetrySecond = nextSecond;
+        telemetryFlags = flags;
+        repaint();
+    }
+}
+
 void CreativeVisualizer::paint(juce::Graphics& g)
 {
     const auto outer = getLocalBounds().toFloat();
@@ -348,8 +366,11 @@ void CreativeVisualizer::paint(juce::Graphics& g)
         const auto cellWidth = (inner.getWidth() - gap * (slices - 1)) / slices;
         for (int index = 0; index < slices; ++index)
         {
-            const auto activeSlice = static_cast<float>(index + 1) / slices
-                <= 0.08f + 0.92f * std::pow(primary, 0.78f);
+            const auto isRunning = (telemetryFlags & (uint32_t { 1 } << 8)) != 0;
+            const auto activeSlice = isRunning
+                ? (telemetryFlags & (uint32_t { 1 }
+                    << static_cast<uint32_t>(index))) != 0
+                : false;
             const auto displacement = activeSlice
                 ? std::sin((phase * 2.0f + index * 0.31f)
                            * juce::MathConstants<float>::twoPi)
@@ -362,8 +383,9 @@ void CreativeVisualizer::paint(juce::Graphics& g)
                                     : juce::Colour(0xff2d3140));
             g.fillRoundedRectangle(cell, 2.0f);
         }
-        const auto scanner = inner.getX() + phase * inner.getWidth();
-        g.setColour(juce::Colour(0xffffcf5a).withAlpha(0.70f + 0.30f * primary));
+        const auto scanner = inner.getX() + telemetryFirst * inner.getWidth();
+        const auto armed = (telemetryFlags & (uint32_t { 1 } << 9)) != 0;
+        g.setColour(juce::Colour(0xffffcf5a).withAlpha(armed ? 0.65f : 1.0f));
         g.drawLine(scanner, inner.getY() - 2.0f, scanner, inner.getBottom() + 2.0f, 1.5f);
         return;
     }
@@ -382,9 +404,9 @@ void CreativeVisualizer::paint(juce::Graphics& g)
             const auto x = inner.getX() + unit * inner.getWidth();
             const auto y = inner.getCentreY() - shaped * inner.getHeight() * 0.32f;
             const auto filterWave = std::sin((unit + phase) * juce::MathConstants<float>::pi)
-                * (0.12f + 0.30f * secondary);
+                * (0.12f + 0.30f * telemetrySecond);
             const auto filterY = inner.getBottom() - inner.getHeight()
-                * (0.18f + secondary * 0.56f + filterWave * primary);
+                * (0.18f + telemetryFirst * 0.56f + filterWave * primary);
             if (point == 0)
             {
                 distorted.startNewSubPath(x, y);
@@ -403,14 +425,17 @@ void CreativeVisualizer::paint(juce::Graphics& g)
         return;
     }
 
-    for (int index = 0; index < 6; ++index)
+    const auto visibleGrains = std::clamp(static_cast<int>(std::ceil(
+        telemetryFirst * 6.0f)), 0, 6);
+    for (int index = 0; index < visibleGrains; ++index)
     {
         const auto orbit = std::fmod(phase * (0.55f + index * 0.07f)
                                      + index * 0.173f, 1.0f);
         const auto x = inner.getX() + orbit * inner.getWidth();
         const auto y = inner.getCentreY() + std::sin((orbit + index * 0.21f)
             * juce::MathConstants<float>::twoPi) * inner.getHeight() * 0.30f * primary;
-        const auto length = 5.0f + primary * (8.0f + index * 1.4f);
+        const auto length = 5.0f + primary * (8.0f + index * 1.4f)
+            * (0.55f + 0.45f * telemetrySecond);
         g.setColour(juce::Colour(0xff67e8f9).withAlpha(0.18f + 0.62f * primary));
         g.drawLine(x - length, y + length * 0.35f, x + length, y - length * 0.35f,
                    1.0f + 1.2f * primary);
@@ -961,6 +986,12 @@ void RandomChopSamplerAudioProcessorEditor::timerCallback()
     fractureVisual.setState(readParameter("fractureMix"),
                             readParameter("fractureCharacter"));
     smearVisual.setState(readParameter("smearAmount"));
+    scrambleVisual.setTelemetry(processor.getScrambleVisualPhase(), 0.0f,
+                                processor.getScrambleVisualFlags());
+    fractureVisual.setTelemetry(processor.getFractureVisualMorph(),
+                                processor.getFractureVisualMotion());
+    smearVisual.setTelemetry(processor.getSmearVisualActivity(),
+                             processor.getSmearVisualGain());
     scrambleVisual.advance();
     fractureVisual.advance();
     smearVisual.advance();

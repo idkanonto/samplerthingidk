@@ -71,15 +71,20 @@ RandomChopSamplerAudioProcessor::createParameterLayout()
     return layout;
 }
 
-void RandomChopSamplerAudioProcessor::prepareToPlay(double rate, int)
+void RandomChopSamplerAudioProcessor::prepareToPlay(double rate, int maximumBlockSize)
 {
     currentRate = std::clamp(randomchop::finiteOr(rate, 44100.0), 1.0, 768000.0);
     voices.prepare(currentRate);
     hostGrid.reset();
     scrambleProcessor.prepare(currentRate);
-    fractureProcessor.prepare(currentRate);
+    fractureProcessor.prepare(currentRate, maximumBlockSize);
+    setLatencySamples(randomchop::SpectralDrawProcessor::latencySamples
+                      + fractureProcessor.getLatencySamples());
     spectralDrawProcessor.prepare(currentRate);
     smearProcessor.prepare(currentRate);
+    outputGain.reset(currentRate, 0.010);
+    outputGain.setCurrentAndTargetValue(juce::Decibels::decibelsToGain(
+        parameters.getRawParameterValue(IDs::output)->load()));
     lastGridBoundaries = {};
     const auto seed = internalSeed.load(std::memory_order_relaxed);
     random.setSeed(seed);
@@ -197,9 +202,19 @@ void RandomChopSamplerAudioProcessor::processBlock(
 
     scrambleProcessor.process(buffer, lastGridBoundaries, gridChoice,
         { parameters.getRawParameterValue(IDs::scrambleAmount)->load() });
+    const auto scrambleFlags = scrambleProcessor.getActiveSliceMask()
+        | (scrambleProcessor.isActive() ? uint32_t { 1 } << 8 : 0)
+        | (scrambleProcessor.isArmed() ? uint32_t { 1 } << 9 : 0);
+    scrambleVisualFlags.store(scrambleFlags, std::memory_order_relaxed);
+    scrambleVisualPhase.store(scrambleProcessor.getEventProgress(),
+                              std::memory_order_relaxed);
     fractureProcessor.process(buffer,
         { parameters.getRawParameterValue(IDs::fractureMix)->load(),
           parameters.getRawParameterValue(IDs::fractureCharacter)->load() });
+    fractureVisualMorph.store(fractureProcessor.getLastMorphPosition() / 3.0f,
+                              std::memory_order_relaxed);
+    fractureVisualMotion.store(fractureProcessor.getLastMotionDepth(),
+                               std::memory_order_relaxed);
     spectralDrawProcessor.process(buffer, spectralMaskStore,
         { parameters.getRawParameterValue(IDs::spectralDepth)->load(),
           static_cast<int>(parameters.getRawParameterValue(IDs::spectralScanRate)->load()),
@@ -209,8 +224,18 @@ void RandomChopSamplerAudioProcessor::processBlock(
           lastGridBoundaries.transportDiscontinuity });
     smearProcessor.process(buffer,
         { parameters.getRawParameterValue(IDs::smearAmount)->load() });
-    buffer.applyGain(juce::Decibels::decibelsToGain(
+    smearVisualActivity.store(static_cast<float>(smearProcessor.getActiveGrainCount()) / 6.0f,
+                              std::memory_order_relaxed);
+    smearVisualGain.store(smearProcessor.getLastOverlapGain() / 1.10f,
+                          std::memory_order_relaxed);
+    outputGain.setTargetValue(juce::Decibels::decibelsToGain(
         parameters.getRawParameterValue(IDs::output)->load()));
+    for (int frame = 0; frame < buffer.getNumSamples(); ++frame)
+    {
+        const auto gain = outputGain.getNextValue();
+        for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
+            buffer.setSample(channel, frame, buffer.getSample(channel, frame) * gain);
+    }
 }
 
 void RandomChopSamplerAudioProcessor::getStateInformation(juce::MemoryBlock& destination)

@@ -2,6 +2,7 @@
 
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
+#include <cstdint>
 #include <functional>
 
 class SourceWaveformComponent final : public juce::Component
@@ -59,6 +60,8 @@ public:
 
     explicit CreativeVisualizer(Kind visualKind) : kind(visualKind) {}
     void setState(float primaryPercent, float secondaryPercent = 0.0f) noexcept;
+    void setTelemetry(float first, float second = 0.0f,
+                      uint32_t flags = 0) noexcept;
     void advance() noexcept;
     void paint(juce::Graphics&) override;
 
@@ -67,6 +70,9 @@ private:
     float primary = 0.0f;
     float secondary = 0.0f;
     float phase = 0.0f;
+    float telemetryFirst = 0.0f;
+    float telemetrySecond = 0.0f;
+    uint32_t telemetryFlags = 0;
 };
 
 class RandomChopSamplerAudioProcessorEditor final : public juce::AudioProcessorEditor,

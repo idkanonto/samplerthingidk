@@ -137,6 +137,8 @@ void SpectralDrawProcessor::prepare(double newSampleRate)
             / static_cast<float>(fftSize));
         window[static_cast<std::size_t>(index)] = std::sqrt(std::max(0.0f, hann));
     }
+    depthSmoother.reset(sampleRate, 0.020);
+    bypassMix.reset(sampleRate, 0.020);
     reset();
 }
 
@@ -150,11 +152,15 @@ void SpectralDrawProcessor::reset() noexcept
         channel.fill(0.0f);
     timeData.fill(Complex {});
     frequencyData.fill(Complex {});
+    smoothedBinGains.fill(1.0f);
+    frameBinGains.fill(1.0f);
     scannerPhase = 0.0;
     inputWritePosition = 0;
     outputReadPosition = 0;
     dryDelayPosition = 0;
     samplesUntilFrame = hopSize;
+    depthSmoother.setCurrentAndTargetValue(0.0f);
+    bypassMix.setCurrentAndTargetValue(0.0f);
     publishedScanPosition.store(0.0f, std::memory_order_relaxed);
 }
 
@@ -196,6 +202,22 @@ void SpectralDrawProcessor::processFrame(const SpectralMaskStore::Snapshot* snap
                                          float depth, float scanPosition) noexcept
 {
     constexpr auto inverseScale = 0.5f / static_cast<float>(fftSize);
+    constexpr auto frameSmoothing = 0.35f;
+    for (int foldedBin = 0; foldedBin <= fftSize / 2; ++foldedBin)
+    {
+        const auto frequency = static_cast<float>(foldedBin)
+            / static_cast<float>(fftSize / 2);
+        const auto target = snapshot != nullptr && snapshot->hasContent
+            ? std::clamp(1.0f - depth
+                * maskValue(snapshot, scanPosition, frequency), 0.0f, 1.0f)
+            : 1.0f;
+        auto& smoothed = smoothedBinGains[static_cast<std::size_t>(foldedBin)];
+        smoothed += frameSmoothing * (target - smoothed);
+    }
+    for (int bin = 0; bin < fftSize; ++bin)
+        frameBinGains[static_cast<std::size_t>(bin)]
+            = smoothedBinGains[static_cast<std::size_t>(std::min(bin, fftSize - bin))];
+
     for (int channel = 0; channel < 2; ++channel)
     {
         for (int index = 0; index < fftSize; ++index)
@@ -209,18 +231,9 @@ void SpectralDrawProcessor::processFrame(const SpectralMaskStore::Snapshot* snap
             };
         }
         fft.fft(timeData.data(), frequencyData.data());
-        if (depth > 0.0f && snapshot != nullptr && snapshot->hasContent)
-        {
-            for (int bin = 0; bin < fftSize; ++bin)
-            {
-                const auto foldedBin = std::min(bin, fftSize - bin);
-                const auto frequency = static_cast<float>(foldedBin)
-                    / static_cast<float>(fftSize / 2);
-                const auto gain = 1.0f - depth
-                    * maskValue(snapshot, scanPosition, frequency);
-                frequencyData[static_cast<std::size_t>(bin)] *= std::clamp(gain, 0.0f, 1.0f);
-            }
-        }
+        for (int bin = 0; bin < fftSize; ++bin)
+            frequencyData[static_cast<std::size_t>(bin)]
+                *= frameBinGains[static_cast<std::size_t>(bin)];
         fft.ifft(frequencyData.data(), timeData.data());
         for (int index = 0; index < fftSize; ++index)
         {
@@ -240,8 +253,10 @@ void SpectralDrawProcessor::process(juce::AudioBuffer<float>& buffer,
 {
     if (settings.transportDiscontinuity)
         reset();
-    const auto depth = std::clamp(std::isfinite(settings.depth)
+    const auto targetDepth = std::clamp(std::isfinite(settings.depth)
         ? settings.depth * 0.01f : 0.0f, 0.0f, 1.0f);
+    depthSmoother.setTargetValue(targetDepth);
+    bypassMix.setTargetValue(targetDepth > 0.0f ? 1.0f : 0.0f);
     const auto cycle = cycleQuarterNotes(settings.scanRateChoice);
     const auto bpm = std::clamp(std::isfinite(settings.bpm) ? settings.bpm : 120.0,
                                 1.0, 1000.0);
@@ -252,12 +267,13 @@ void SpectralDrawProcessor::process(juce::AudioBuffer<float>& buffer,
             scannerPhase += 1.0;
     }
     const auto scannerIncrement = bpm / (60.0 * sampleRate * cycle);
-    const auto useSpectralOutput = depth > 0.0f;
     const auto handle = maskStore.acquire();
     const auto channels = std::min(2, buffer.getNumChannels());
 
     for (int frame = 0; frame < buffer.getNumSamples(); ++frame)
     {
+        const auto depth = depthSmoother.getNextValue();
+        const auto spectralMix = bypassMix.getNextValue();
         for (int channel = 0; channel < channels; ++channel)
         {
             const auto dry = sanitise(buffer.getSample(channel, frame));
@@ -272,7 +288,7 @@ void SpectralDrawProcessor::process(juce::AudioBuffer<float>& buffer,
             outputRing[static_cast<std::size_t>(channel)]
                       [static_cast<std::size_t>(outputReadPosition)] = 0.0f;
             buffer.setSample(channel, frame,
-                sanitise(useSpectralOutput ? spectral : delayedDry));
+                sanitise(delayedDry + spectralMix * (spectral - delayedDry)));
         }
 
         inputWritePosition = (inputWritePosition + 1) % fftSize;
@@ -292,3 +308,4 @@ void SpectralDrawProcessor::process(juce::AudioBuffer<float>& buffer,
     maskStore.release(handle);
 }
 }
+
