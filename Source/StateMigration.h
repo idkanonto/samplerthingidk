@@ -5,18 +5,19 @@
 
 namespace randomchop
 {
-inline constexpr int currentStateVersion = 7;
+inline constexpr int currentStateVersion = 8;
 
 inline bool isRemovedParameterId(const juce::String& id) noexcept
 {
-    constexpr std::array<const char*, 23> removed {
+    constexpr std::array<const char*, 28> removed {
         "reverseChance", "retriggerChance", "retriggerSize", "retriggerCount",
         "skipChance", "reorderChance", "bendChance", "dropChance",
         "stepLength", "bitDepth", "takeSelection",
         "seed", "freezeChance", "freezeSize", "freezeHold",
         "freezeOctaveChance", "scrambleChance", "fractureDrive",
         "fractureFilterMorph", "fractureFrequency", "fractureResonance",
-        "codecAmount", "codecQuality"
+        "codecAmount", "codecQuality",
+        "randomStart", "finalLength", "attack", "release", "rateReduction"
     };
     for (const auto* candidate : removed)
         if (id == candidate)
@@ -43,3 +44,4 @@ inline void removeLegacyState(juce::ValueTree& state)
     state.setProperty("stateVersion", currentStateVersion, nullptr);
 }
 }
+

@@ -19,11 +19,15 @@ struct HostTiming final
 
 struct GridBoundaries final
 {
-    static constexpr int capacity = 64;
+    // Large enough for unusually long offline blocks while remaining fixed-size
+    // and allocation-free on the audio thread.
+    static constexpr int capacity = 4096;
     std::array<int, capacity> sampleOffsets {};
     int count = 0;
     bool usedHostClock = false;
     bool transportDiscontinuity = false;
+    bool gridChanged = false;
+    bool truncated = false;
     double bpm = 120.0;
 };
 
@@ -66,6 +70,7 @@ public:
         const bool useHost = bpmValid && ppqValid && timing.isPlaying;
         result.usedHostClock = useHost;
         const bool choiceChanged = divisionChoice != previousChoice;
+        result.gridChanged = choiceChanged;
         previousChoice = divisionChoice;
 
         if (useHost)
@@ -78,28 +83,39 @@ public:
                     + static_cast<double>(previousHostFrames) * previousHostBpm
                         / (60.0 * safeRate);
                 const auto tolerance = std::max(1.0e-7, bpm / (30.0 * safeRate));
-                result.transportDiscontinuity = choiceChanged
-                    || std::abs(timing.ppq - expected) > tolerance;
+                result.transportDiscontinuity
+                    = std::abs(timing.ppq - expected) > tolerance;
             }
             else
             {
                 result.transportDiscontinuity = true;
             }
 
-            const auto endPpq = timing.ppq
-                + static_cast<double>(numSamples) * bpm / (60.0 * safeRate);
+            const auto samplesPerQuarter = 60.0 * safeRate / bpm;
+            const auto halfSamplePpq = 0.5 / samplesPerQuarter;
             const auto epsilon = 1.0e-9;
             auto boundaryIndex = static_cast<std::int64_t>(
-                std::ceil((timing.ppq - epsilon) / stepPpq));
-            for (; result.count < GridBoundaries::capacity; ++boundaryIndex)
+                std::ceil((timing.ppq - halfSamplePpq - epsilon) / stepPpq));
+            for (;; ++boundaryIndex)
             {
                 const auto boundaryPpq = static_cast<double>(boundaryIndex) * stepPpq;
-                if (boundaryPpq >= endPpq - epsilon)
+                const auto exactOffset = (boundaryPpq - timing.ppq) * samplesPerQuarter;
+                if (exactOffset >= static_cast<double>(numSamples) - 0.5)
                     break;
-                const auto offset = static_cast<int>(std::llround(
-                    (boundaryPpq - timing.ppq) * 60.0 * safeRate / bpm));
-                if (offset >= 0 && offset < numSamples)
-                    result.sampleOffsets[static_cast<std::size_t>(result.count++)] = offset;
+                if (exactOffset < -0.5)
+                    continue;
+                const auto offset = static_cast<int>(std::floor(exactOffset + 0.5));
+                if (offset < 0 || offset >= numSamples)
+                    continue;
+                if (result.count > 0
+                    && result.sampleOffsets[static_cast<std::size_t>(result.count - 1)] == offset)
+                    continue;
+                if (result.count >= GridBoundaries::capacity)
+                {
+                    result.truncated = true;
+                    break;
+                }
+                result.sampleOffsets[static_cast<std::size_t>(result.count++)] = offset;
             }
 
             previousHostPpq = timing.ppq;
@@ -111,7 +127,7 @@ public:
         }
 
         const bool switchedFromHost = previousHostValid;
-        result.transportDiscontinuity = switchedFromHost || choiceChanged;
+        result.transportDiscontinuity = switchedFromHost;
         previousHostValid = false;
         const auto interval = samplesPerStep(safeRate, lastValidBpm, stepPpq);
         if (switchedFromHost || choiceChanged || !std::isfinite(fallbackSamplesToBoundary)
@@ -120,12 +136,22 @@ public:
             fallbackSamplesToBoundary = 0.0;
 
         auto cursor = fallbackSamplesToBoundary;
-        while (cursor < static_cast<double>(numSamples)
-               && result.count < GridBoundaries::capacity)
+        while (cursor < static_cast<double>(numSamples) - 0.5)
         {
-            result.sampleOffsets[static_cast<std::size_t>(result.count++)]
-                = std::clamp(static_cast<int>(std::llround(cursor)), 0,
-                             std::max(0, numSamples - 1));
+            if (cursor >= -0.5)
+            {
+                const auto offset = std::clamp(static_cast<int>(std::floor(cursor + 0.5)),
+                                               0, std::max(0, numSamples - 1));
+                if ((result.count == 0
+                     || result.sampleOffsets[static_cast<std::size_t>(result.count - 1)] != offset)
+                    && result.count < GridBoundaries::capacity)
+                    result.sampleOffsets[static_cast<std::size_t>(result.count++)] = offset;
+                else if (result.count >= GridBoundaries::capacity)
+                {
+                    result.truncated = true;
+                    break;
+                }
+            }
             cursor += interval;
         }
         if (cursor < static_cast<double>(numSamples))
@@ -160,3 +186,4 @@ private:
     int previousChoice = 1;
 };
 }
+

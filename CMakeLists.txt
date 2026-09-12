@@ -80,6 +80,7 @@ target_compile_definitions(RandomChopSampler PUBLIC
 
 target_link_libraries(RandomChopSampler PRIVATE
     juce::juce_audio_utils
+    juce::juce_dsp
     signalsmith-stretch
     PUBLIC juce::juce_recommended_config_flags
            juce::juce_recommended_lto_flags
@@ -132,8 +133,10 @@ if (BUILD_TESTING)
     target_link_libraries(RandomChopSamplerTests PRIVATE
         juce::juce_audio_formats
         juce::juce_data_structures
+        juce::juce_dsp
         signalsmith-stretch
         PUBLIC juce::juce_recommended_config_flags
                juce::juce_recommended_warning_flags)
     add_test(NAME RandomChopSamplerTests COMMAND RandomChopSamplerTests)
 endif()
+

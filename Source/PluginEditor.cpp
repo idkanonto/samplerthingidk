@@ -310,6 +310,141 @@ void SpectralCanvasComponent::paint(juce::Graphics& g)
     g.drawRect(bounds, 1);
 }
 
+void CreativeVisualizer::setState(float primaryPercent, float secondaryPercent) noexcept
+{
+    const auto nextPrimary = std::clamp(std::isfinite(primaryPercent)
+        ? primaryPercent * 0.01f : 0.0f, 0.0f, 1.0f);
+    const auto nextSecondary = std::clamp(std::isfinite(secondaryPercent)
+        ? secondaryPercent * 0.01f : 0.0f, 0.0f, 1.0f);
+    if (std::abs(nextPrimary - primary) > 0.0001f
+        || std::abs(nextSecondary - secondary) > 0.0001f)
+    {
+        primary = nextPrimary;
+        secondary = nextSecondary;
+        repaint();
+    }
+}
+
+void CreativeVisualizer::advance() noexcept
+{
+    phase = std::fmod(phase + 0.012f + 0.030f * primary, 1.0f);
+    if (primary > 0.0001f)
+        repaint();
+}
+
+void CreativeVisualizer::setTelemetry(float first, float second,
+                                      uint32_t flags) noexcept
+{
+    const auto nextFirst = std::clamp(std::isfinite(first) ? first : 0.0f,
+                                      0.0f, 1.0f);
+    const auto nextSecond = std::clamp(std::isfinite(second) ? second : 0.0f,
+                                       0.0f, 1.0f);
+    if (std::abs(nextFirst - telemetryFirst) > 0.0001f
+        || std::abs(nextSecond - telemetrySecond) > 0.0001f
+        || flags != telemetryFlags)
+    {
+        telemetryFirst = nextFirst;
+        telemetrySecond = nextSecond;
+        telemetryFlags = flags;
+        repaint();
+    }
+}
+
+void CreativeVisualizer::paint(juce::Graphics& g)
+{
+    const auto outer = getLocalBounds().toFloat();
+    const auto inner = outer.reduced(7.0f, 8.0f);
+    g.setColour(juce::Colour(0xff171922));
+    g.fillRoundedRectangle(outer, 7.0f);
+    g.setColour(juce::Colour(0xff414657));
+    g.drawRoundedRectangle(outer.reduced(0.5f), 7.0f, 1.0f);
+
+    if (kind == Kind::scramble)
+    {
+        constexpr int slices = 8;
+        const auto gap = 2.0f;
+        const auto cellWidth = (inner.getWidth() - gap * (slices - 1)) / slices;
+        for (int index = 0; index < slices; ++index)
+        {
+            const auto isRunning = (telemetryFlags & (uint32_t { 1 } << 8)) != 0;
+            const auto activeSlice = isRunning
+                ? (telemetryFlags & (uint32_t { 1 }
+                    << static_cast<uint32_t>(index))) != 0
+                : false;
+            const auto displacement = activeSlice
+                ? std::sin((phase * 2.0f + index * 0.31f)
+                           * juce::MathConstants<float>::twoPi)
+                    * primary * inner.getHeight() * 0.16f
+                : 0.0f;
+            auto cell = juce::Rectangle<float>(
+                inner.getX() + index * (cellWidth + gap), inner.getY() + displacement,
+                cellWidth, inner.getHeight() - std::abs(displacement));
+            g.setColour(activeSlice ? juce::Colour(0xffa78bfa).withAlpha(0.42f + 0.48f * primary)
+                                    : juce::Colour(0xff2d3140));
+            g.fillRoundedRectangle(cell, 2.0f);
+        }
+        const auto scanner = inner.getX() + telemetryFirst * inner.getWidth();
+        const auto armed = (telemetryFlags & (uint32_t { 1 } << 9)) != 0;
+        g.setColour(juce::Colour(0xffffcf5a).withAlpha(armed ? 0.65f : 1.0f));
+        g.drawLine(scanner, inner.getY() - 2.0f, scanner, inner.getBottom() + 2.0f, 1.5f);
+        return;
+    }
+
+    if (kind == Kind::fracture)
+    {
+        juce::Path distorted;
+        juce::Path filter;
+        constexpr int points = 48;
+        for (int point = 0; point <= points; ++point)
+        {
+            const auto unit = static_cast<float>(point) / points;
+            const auto input = std::sin((unit * 2.0f + phase * 0.35f)
+                                        * juce::MathConstants<float>::twoPi);
+            const auto shaped = std::tanh(input * (1.0f + 5.0f * primary));
+            const auto x = inner.getX() + unit * inner.getWidth();
+            const auto y = inner.getCentreY() - shaped * inner.getHeight() * 0.32f;
+            const auto filterWave = std::sin((unit + phase) * juce::MathConstants<float>::pi)
+                * (0.12f + 0.30f * telemetrySecond);
+            const auto filterY = inner.getBottom() - inner.getHeight()
+                * (0.18f + telemetryFirst * 0.56f + filterWave * primary);
+            if (point == 0)
+            {
+                distorted.startNewSubPath(x, y);
+                filter.startNewSubPath(x, filterY);
+            }
+            else
+            {
+                distorted.lineTo(x, y);
+                filter.lineTo(x, filterY);
+            }
+        }
+        g.setColour(juce::Colour(0xffff6b6b).withAlpha(0.35f + 0.65f * primary));
+        g.strokePath(distorted, juce::PathStrokeType(2.0f));
+        g.setColour(juce::Colour(0xff7dd3fc).withAlpha(0.48f + 0.45f * primary));
+        g.strokePath(filter, juce::PathStrokeType(1.6f));
+        return;
+    }
+
+    const auto visibleGrains = std::clamp(static_cast<int>(std::ceil(
+        telemetryFirst * 6.0f)), 0, 6);
+    for (int index = 0; index < visibleGrains; ++index)
+    {
+        const auto orbit = std::fmod(phase * (0.55f + index * 0.07f)
+                                     + index * 0.173f, 1.0f);
+        const auto x = inner.getX() + orbit * inner.getWidth();
+        const auto y = inner.getCentreY() + std::sin((orbit + index * 0.21f)
+            * juce::MathConstants<float>::twoPi) * inner.getHeight() * 0.30f * primary;
+        const auto length = 5.0f + primary * (8.0f + index * 1.4f)
+            * (0.55f + 0.45f * telemetrySecond);
+        g.setColour(juce::Colour(0xff67e8f9).withAlpha(0.18f + 0.62f * primary));
+        g.drawLine(x - length, y + length * 0.35f, x + length, y - length * 0.35f,
+                   1.0f + 1.2f * primary);
+        g.setColour(juce::Colour(0xfff0f9ff).withAlpha(0.28f + 0.66f * primary));
+        g.fillEllipse(x - 1.5f - primary, y - 1.5f - primary,
+                      3.0f + 2.0f * primary, 3.0f + 2.0f * primary);
+    }
+}
+
 namespace
 {
 class SourceRowControls final : public juce::Component
@@ -317,10 +452,15 @@ class SourceRowControls final : public juce::Component
 public:
     SourceRowControls()
     {
-        setInterceptsMouseClicks(false, true);
+        setInterceptsMouseClicks(true, true);
         addAndMakeVisible(enabled);
         addAndMakeVisible(remove);
         remove.setButtonText("Remove");
+    }
+    void mouseDown(const juce::MouseEvent&) override
+    {
+        if (onSelect)
+            onSelect(row);
     }
     void resized() override
     {
@@ -330,6 +470,7 @@ public:
     }
     juce::ToggleButton enabled { "On" };
     juce::TextButton remove;
+    std::function<void(int)> onSelect;
     int row = -1;
 };
 }
@@ -352,10 +493,9 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
         &sourceTransposeLabel, &sourceFineTuneLabel, &sourceGainLabel, &sourceWeightLabel,
         &sourceStretchLabel, &targetKey, &targetKeyLabel, &midiPitch,
         &voiceMode, &voiceModeLabel, &globalGrid, &globalGridLabel,
-        &rateReduction, &rateReductionLabel, &fracturePresetLabel, &fracturePreset,
-        &previousFracturePreset, &nextFracturePreset,
         &spectralDrawLabel, &spectralDrawButton, &spectralEraseButton,
-        &spectralClearButton, &spectralScanRateLabel, &spectralScanRate, &spectralCanvas };
+        &spectralClearButton, &spectralScanRateLabel, &spectralScanRate, &spectralCanvas,
+        &scrambleVisual, &fractureVisual, &smearVisual };
     for (auto* component : components) addAndMakeVisible(component);
     list.setColour(juce::ListBox::backgroundColourId, juce::Colour(0xff191b21));
     list.setRowHeight(28);
@@ -370,12 +510,6 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     globalGrid.addItem("1/8", 1);
     globalGrid.addItem("1/16", 2);
     globalGrid.addItem("1/32", 3);
-    for (const auto& name : juce::StringArray { "1x (OFF)", "2x", "4x", "8x", "16x", "32x", "64x" })
-        rateReduction.addItem(name, rateReduction.getNumItems() + 1);
-    fracturePreset.addItem("SELECT FRACTURE PRESET", 1);
-    for (const auto& preset : randomchop::fracturePresets)
-        fracturePreset.addItem(preset.name, fracturePreset.getNumItems() + 1);
-    fracturePreset.setSelectedItemIndex(0, juce::dontSendNotification);
     for (const auto& name : juce::StringArray { "2 beats", "1 bar", "2 bars", "4 bars" })
         spectralScanRate.addItem(name, spectralScanRate.getNumItems() + 1);
     sourceTranspose.setRange(-24.0, 24.0, 1.0);
@@ -409,15 +543,12 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     targetKeyLabel.setText("TARGET KEY", juce::dontSendNotification);
     voiceModeLabel.setText("VOICE MODE", juce::dontSendNotification);
     globalGridLabel.setText("GLOBAL GRID", juce::dontSendNotification);
-    fracturePresetLabel.setText("FRACTURE PRESET", juce::dontSendNotification);
     spectralDrawLabel.setText("SPECTRAL DRAW", juce::dontSendNotification);
     spectralScanRateLabel.setText("SCAN RATE", juce::dontSendNotification);
-    rateReductionLabel.setText("FRACTURE RATE", juce::dontSendNotification);
     voiceModeLabel.setJustificationType(juce::Justification::centredLeft);
     for (auto* label : { &sourceKeyLabel, &sourceTransposeLabel, &sourceFineTuneLabel,
                          &sourceGainLabel, &sourceWeightLabel, &sourceStretchLabel,
-                         &targetKeyLabel, &voiceModeLabel, &globalGridLabel,
-                         &rateReductionLabel, &fracturePresetLabel, &spectralDrawLabel,
+                         &targetKeyLabel, &voiceModeLabel, &globalGridLabel, &spectralDrawLabel,
                          &spectralScanRateLabel })
         label->setColour(juce::Label::textColourId, juce::Colour(0xffc8cad1));
     spectralDrawButton.setClickingTogglesState(true);
@@ -434,24 +565,6 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     {
         processor.setSpectralCanvas(canvas);
         lastSpectralCanvasGeneration = processor.getSpectralCanvasGeneration();
-    };
-    fracturePreset.onChange = [this]
-    {
-        const auto index = fracturePreset.getSelectedItemIndex() - 1;
-        if (index >= 0)
-            selectFracturePreset(index);
-    };
-    previousFracturePreset.onClick = [this]
-    {
-        const auto count = static_cast<int>(randomchop::fracturePresets.size());
-        selectFracturePreset(selectedFracturePreset < 0
-            ? count - 1 : (selectedFracturePreset + count - 1) % count);
-    };
-    nextFracturePreset.onClick = [this]
-    {
-        const auto count = static_cast<int>(randomchop::fracturePresets.size());
-        selectFracturePreset(selectedFracturePreset < 0
-            ? 0 : (selectedFracturePreset + 1) % count);
     };
     sourceKey.onChange = [this]
     {
@@ -506,41 +619,29 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
         list.repaint();
     };
 
-    configureKnob(randomStart, randomStartLabel, "START RANGE");
-    configureKnob(finalLength, finalLengthLabel, "FINAL LENGTH");
-    configureKnob(attack, attackLabel, "ATTACK");
-    configureKnob(release, releaseLabel, "RELEASE");
     configureKnob(output, outputLabel, "OUTPUT");
-    configureKnob(rootNote, rootNoteLabel, "ROOT MIDI NOTE");
+    configureKnob(rootNote, rootNoteLabel, "ROOT NOTE");
     configureKnob(scrambleAmount, scrambleAmountLabel, "SCRAMBLE");
-    configureKnob(fractureCharacter, fractureCharacterLabel, "CHARACTER");
+    configureKnob(fractureCharacter, fractureCharacterLabel, "FILTER MORPH");
     configureKnob(fractureMix, fractureMixLabel, "FRACTURE");
     configureLinearControl(spectralDepth, spectralDepthLabel, "SPECTRAL DEPTH");
     configureKnob(smearAmount, smearAmountLabel, "SMEAR");
-    finalLength.setNumDecimalPlacesToDisplay(0);
-    finalLength.textFromValueFunction = [](double value)
-    {
-        return value < 5.0 ? juce::String("FULL")
-                           : juce::String(juce::roundToInt(value)) + " ms";
-    };
-    finalLength.valueFromTextFunction = [](const juce::String& text)
-    {
-        return text.trim().equalsIgnoreCase("FULL") ? 0.0 : text.getDoubleValue();
-    };
     rootNote.setSliderStyle(juce::Slider::LinearHorizontal);
-    rootNote.setTextBoxStyle(juce::Slider::TextBoxRight, false, 52, 22);
-    randomStartAttachment = std::make_unique<SliderAttachment>(p.parameters, "randomStart", randomStart);
-    finalLengthAttachment = std::make_unique<SliderAttachment>(p.parameters, "finalLength", finalLength);
-    attackAttachment = std::make_unique<SliderAttachment>(p.parameters, "attack", attack);
-    releaseAttachment = std::make_unique<SliderAttachment>(p.parameters, "release", release);
+    rootNote.setTextBoxStyle(juce::Slider::TextBoxRight, false, 62, 22);
+    rootNote.textFromValueFunction = [](double value)
+    {
+        return juce::String(randomchop::midiNoteName(juce::roundToInt(value)));
+    };
+    rootNote.valueFromTextFunction = [](const juce::String& text)
+    {
+        return static_cast<double>(randomchop::midiNoteFromName(text.toStdString(), 72));
+    };
     outputAttachment = std::make_unique<SliderAttachment>(p.parameters, "output", output);
     rootNoteAttachment = std::make_unique<SliderAttachment>(p.parameters, "rootNote", rootNote);
     targetKeyAttachment = std::make_unique<ComboBoxAttachment>(p.parameters, "targetKey", targetKey);
     voiceModeAttachment = std::make_unique<ComboBoxAttachment>(p.parameters, "voiceMode", voiceMode);
     globalGridAttachment = std::make_unique<ComboBoxAttachment>(
         p.parameters, "globalGrid", globalGrid);
-    rateReductionAttachment = std::make_unique<ComboBoxAttachment>(
-        p.parameters, "rateReduction", rateReduction);
     spectralScanRateAttachment = std::make_unique<ComboBoxAttachment>(
         p.parameters, "spectralScanRate", spectralScanRate);
     midiPitchAttachment = std::make_unique<ButtonAttachment>(p.parameters, "midiPitch", midiPitch);
@@ -573,16 +674,7 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     enableAllButton.onClick = [this] { processor.samples.setAllEnabled(true); refresh(); };
     disableAllButton.onClick = [this] { processor.samples.setAllEnabled(false); refresh(); };
     refresh();
-    startTimerHz(8);
-}
-
-void RandomChopSamplerAudioProcessorEditor::selectFracturePreset(int index)
-{
-    const auto count = static_cast<int>(randomchop::fracturePresets.size());
-    selectedFracturePreset = juce::jlimit(0, count - 1, index);
-    fracturePreset.setSelectedItemIndex(selectedFracturePreset + 1,
-                                        juce::dontSendNotification);
-    processor.applyFracturePreset(selectedFracturePreset);
+    startTimerHz(20);
 }
 
 void RandomChopSamplerAudioProcessorEditor::configureKnob(juce::Slider& slider, juce::Label& label,
@@ -651,9 +743,8 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     enableAllButton.setBounds(takeEqualCell(toolbar, 2));
     disableAllButton.setBounds(toolbar.reduced(2));
 
-    auto globalControls = area.removeFromBottom(scaledHeight(62));
     auto creativeControls = area.removeFromBottom(scaledHeight(62));
-    auto fracturePresetControls = area.removeFromBottom(scaledHeight(30));
+    auto effectVisuals = area.removeFromBottom(scaledHeight(74));
     auto timingControls = area.removeFromBottom(scaledHeight(28));
     auto globalPitchControls = area.removeFromBottom(scaledHeight(34));
     auto sourcePitchControls = area.removeFromBottom(scaledHeight(34));
@@ -695,12 +786,6 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     globalGridLabel.setBounds(gridCell.removeFromLeft(100));
     globalGrid.setBounds(gridCell.reduced(2, 3));
 
-    auto presetLabelCell = fracturePresetControls.removeFromLeft(125).reduced(2);
-    fracturePresetLabel.setBounds(presetLabelCell);
-    previousFracturePreset.setBounds(fracturePresetControls.removeFromLeft(34).reduced(2));
-    nextFracturePreset.setBounds(fracturePresetControls.removeFromRight(34).reduced(2));
-    fracturePreset.setBounds(fracturePresetControls.reduced(2, 3));
-
     auto scrambleCell = takeEqualCell(creativeControls, 5);
     scrambleAmountLabel.setBounds(scrambleCell.removeFromTop(scaledHeight(16)));
     scrambleAmount.setBounds(scrambleCell.reduced(2));
@@ -710,23 +795,18 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     auto characterCell = takeEqualCell(creativeControls, 3);
     fractureCharacterLabel.setBounds(characterCell.removeFromTop(scaledHeight(16)));
     fractureCharacter.setBounds(characterCell.reduced(2));
-    auto rateCell = takeEqualCell(creativeControls, 2);
-    rateReductionLabel.setBounds(rateCell.removeFromTop(scaledHeight(16)));
-    rateReduction.setBounds(rateCell.reduced(2, 5));
-    auto smearCell = creativeControls.reduced(2);
+    auto smearCell = takeEqualCell(creativeControls, 2);
     smearAmountLabel.setBounds(smearCell.removeFromTop(scaledHeight(16)));
     smearAmount.setBounds(smearCell.reduced(2));
+    auto outputCell = creativeControls.reduced(2);
+    outputLabel.setBounds(outputCell.removeFromTop(scaledHeight(16)));
+    output.setBounds(outputCell.reduced(2));
 
-    globalControls.removeFromRight(18);
-    juce::Slider* sliders[] = { &randomStart, &finalLength, &attack, &release, &output };
-    juce::Label* labels[] = { &randomStartLabel, &finalLengthLabel, &attackLabel,
-                             &releaseLabel, &outputLabel };
-    for (int i = 0; i < 5; ++i)
-    {
-        auto cell = takeEqualCell(globalControls, 5 - i);
-        labels[i]->setBounds(cell.removeFromTop(scaledHeight(16)));
-        sliders[i]->setBounds(cell.reduced(2));
-    }
+    auto scrambleVisualCell = takeEqualCell(effectVisuals, 3);
+    auto fractureVisualCell = takeEqualCell(effectVisuals, 2);
+    scrambleVisual.setBounds(scrambleVisualCell);
+    fractureVisual.setBounds(fractureVisualCell);
+    smearVisual.setBounds(effectVisuals.reduced(2));
     waveform.setBounds(waveformArea.reduced(4));
     auto listAndSpectral = area.reduced(6);
     auto listArea = listAndSpectral.removeFromLeft(listAndSpectral.getWidth() / 2).reduced(2);
@@ -833,11 +913,18 @@ juce::Component* RandomChopSamplerAudioProcessorEditor::refreshComponentForRow(i
     auto* controls = dynamic_cast<SourceRowControls*>(existing);
     if (controls == nullptr) { delete existing; controls = new SourceRowControls(); }
     controls->row = row;
+    controls->onSelect = [this](int selectedRow)
+    {
+        if (selectedRow >= 0 && selectedRow < getNumRows())
+            list.selectRow(selectedRow);
+    };
     if (displayPool && row >= 0 && row < static_cast<int>(displayPool->size()))
         controls->enabled.setToggleState((*displayPool)[static_cast<size_t>(row)]->settings.enabled,
                                          juce::dontSendNotification);
     controls->enabled.onClick = [this, controls]
     {
+        if (controls->onSelect)
+            controls->onSelect(controls->row);
         if (displayPool && controls->row >= 0
             && controls->row < static_cast<int>(displayPool->size()))
             processor.samples.setEnabled((*displayPool)[static_cast<size_t>(controls->row)]->settings.id,
@@ -889,5 +976,25 @@ void RandomChopSamplerAudioProcessorEditor::timerCallback()
         lastSpectralCanvasGeneration = canvasGeneration;
     }
     spectralCanvas.setScanPosition(processor.getSpectralScanPosition());
+    const auto readParameter = [this](const char* id)
+    {
+        if (const auto* value = processor.parameters.getRawParameterValue(id))
+            return value->load();
+        return 0.0f;
+    };
+    scrambleVisual.setState(readParameter("scrambleAmount"));
+    fractureVisual.setState(readParameter("fractureMix"),
+                            readParameter("fractureCharacter"));
+    smearVisual.setState(readParameter("smearAmount"));
+    scrambleVisual.setTelemetry(processor.getScrambleVisualPhase(), 0.0f,
+                                processor.getScrambleVisualFlags());
+    fractureVisual.setTelemetry(processor.getFractureVisualMorph(),
+                                processor.getFractureVisualMotion());
+    smearVisual.setTelemetry(processor.getSmearVisualActivity(),
+                             processor.getSmearVisualGain());
+    scrambleVisual.advance();
+    fractureVisual.advance();
+    smearVisual.advance();
     list.repaint();
 }
+

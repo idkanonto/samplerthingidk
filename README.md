@@ -24,12 +24,12 @@ The target name remains `RandomChopSampler` to preserve build continuity; the ho
 
 - Immutable 20-source pool, missing-source persistence, stable identity, deferred non-realtime reclamation.
 - Weighted source selection; editable Start/End, Source Key, Transpose, Fine Tune, Gain, Weight, and 0/OFF or 1x–4x Stretch.
-- Target Key, optional MIDI pitch/root, Start Range, Final Length, Attack, Release, POLY/MONO, and Output. Random source/start behavior is always part of the instrument; reproducibility uses a persisted internal seed rather than a technical Seed control.
-- Host-derived 1/8, 1/16, or 1/32 global grid with a safe 120 BPM fallback.
-- Signature SCRAMBLE macro with a consistent per-grid manipulation budget, bounded rearrangement, micro-holds/repeats, reverse, jumps, and integrated pitched fragments.
-- Signature self-moving FRACTURE macro with Character, 30 presets, and integrated filter/formant/comb, nonlinear, predictive-digital, and Rate Reduction behavior.
-- SMEAR is a six-grain, pitched, scattered, stereo crystalline texture with transient-aware wet control rather than a blur stage.
+- Target Key, optional MIDI pitch with musically named root note, POLY/MONO, and smoothed Output. Random source/start behavior is always part of the instrument; reproducibility uses a persisted internal seed rather than a technical Seed control.
+- Host-derived 1/8, 1/16, or 1/32 global grid with stable block-edge ownership and a safe 120 BPM fallback.
+- Signature SCRAMBLE macro with next-boundary arming, a consistent per-grid manipulation budget, bounded rearrangement, seam-blended micro-holds/repeats, reverse, jumps, and integrated pitched fragments.
+- Focused 2x-oversampled FRACTURE macro with independent Amount and continuous FILTER MORPH axes, latency-aligned dry mixing, and bounded autonomous motion.
+- SMEAR is a six-grain, pitched, scattered, stereo crystalline texture with lifetime-relative motion, ratio-selected filtered history, overlap-energy gain control, and transient-aware wet control rather than a blur stage.
 - Real global SPECTRAL DRAW with a persistent 128×64 attenuation canvas, Draw/Erase/Clear tools, four tempo-derived scan rates, Depth, and reported 1024-sample latency.
-- The former standalone FREEZE and CODEC stages, Take History, Step Mask, per-event Reverse/Retrigger/Skip/Reorder/Bend/Drop, and Bit Crush systems are removed. Useful Freeze/Codec character is absorbed into SCRAMBLE/FRACTURE and old state migrates safely.
+- The former standalone FREEZE and CODEC stages, broad comb/formant/predictive FRACTURE stack, FRACTURE Rate/presets, Start Range, Final Length, public Attack/Release, Take History, Step Mask, per-event Reverse/Retrigger/Skip/Reorder/Bend/Drop, and Bit Crush systems are removed. Useful Freeze gestures are absorbed into SCRAMBLE and old state migrates safely.
 
 The approved global creative chain is `SCRAMBLE → FRACTURE → SPECTRAL DRAW → SMEAR → OUTPUT`. See the project brain in [`docs/INDEX.md`](docs/INDEX.md) for verification status and realtime constraints. Final visual art direction remains separate from this sound-and-behavior pass.

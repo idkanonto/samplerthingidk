@@ -109,7 +109,11 @@ private:
     std::array<std::array<float, fftSize>, 2> dryDelay {};
     std::array<Complex, fftSize> timeData {};
     std::array<Complex, fftSize> frequencyData {};
+    std::array<float, fftSize / 2 + 1> smoothedBinGains {};
+    std::array<float, fftSize> frameBinGains {};
     std::atomic<float> publishedScanPosition { 0.0f };
+    juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> depthSmoother { 0.0f };
+    juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> bypassMix { 0.0f };
     double sampleRate = 44100.0;
     double scannerPhase = 0.0;
     int inputWritePosition = 0;
@@ -118,3 +122,4 @@ private:
     int samplesUntilFrame = hopSize;
 };
 }
+

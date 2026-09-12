@@ -2,7 +2,10 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cmath>
+#include <string>
+#include <string_view>
 
 namespace randomchop
 {
@@ -65,4 +68,76 @@ inline double pitchRatioForSemitones(double semitones) noexcept
         return 1.0;
     return std::exp2(std::clamp(semitones, -192.0, 192.0) / 12.0);
 }
+
+inline std::string midiNoteName(int midiNote)
+{
+    constexpr std::array<std::string_view, 12> names {
+        "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"
+    };
+    midiNote = std::clamp(midiNote, 0, 127);
+    return std::string(names[static_cast<std::size_t>(midiNote % 12)])
+        + std::to_string(midiNote / 12 - 1);
 }
+
+inline int midiNoteFromName(std::string_view text, int fallback = 60) noexcept
+{
+    fallback = std::clamp(fallback, 0, 127);
+    while (!text.empty() && std::isspace(static_cast<unsigned char>(text.front())))
+        text.remove_prefix(1);
+    while (!text.empty() && std::isspace(static_cast<unsigned char>(text.back())))
+        text.remove_suffix(1);
+    if (text.empty())
+        return fallback;
+
+    if (std::isdigit(static_cast<unsigned char>(text.front())))
+    {
+        int value = 0;
+        for (const auto character : text)
+        {
+            if (!std::isdigit(static_cast<unsigned char>(character)))
+                return fallback;
+            value = value * 10 + (character - '0');
+        }
+        return std::clamp(value, 0, 127);
+    }
+
+    const auto letter = static_cast<char>(std::toupper(
+        static_cast<unsigned char>(text.front())));
+    int pitchClass = letter == 'C' ? 0 : letter == 'D' ? 2 : letter == 'E' ? 4
+        : letter == 'F' ? 5 : letter == 'G' ? 7 : letter == 'A' ? 9
+        : letter == 'B' ? 11 : -100;
+    if (pitchClass < 0)
+        return fallback;
+
+    std::size_t cursor = 1;
+    if (cursor < text.size() && (text[cursor] == '#' || text[cursor] == 'b'
+                                 || text[cursor] == 'B'))
+    {
+        pitchClass += text[cursor] == '#' ? 1 : -1;
+        ++cursor;
+    }
+    if (cursor >= text.size())
+        return fallback;
+
+    bool negative = false;
+    if (text[cursor] == '-')
+    {
+        negative = true;
+        ++cursor;
+    }
+    if (cursor >= text.size())
+        return fallback;
+    int octave = 0;
+    for (; cursor < text.size(); ++cursor)
+    {
+        if (!std::isdigit(static_cast<unsigned char>(text[cursor])))
+            return fallback;
+        octave = octave * 10 + (text[cursor] - '0');
+    }
+    if (negative)
+        octave = -octave;
+    const auto note = (octave + 1) * 12 + pitchClass;
+    return note >= 0 && note <= 127 ? note : fallback;
+}
+}
+
