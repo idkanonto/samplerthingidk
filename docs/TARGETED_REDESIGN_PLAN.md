@@ -4,7 +4,7 @@ tags:
   - product
   - redesign
   - implementation-plan
-status: implementing
+status: implemented-superseded-by-logic-hardening
 date: 2026-09-08
 ---
 
@@ -86,4 +86,3 @@ All animation runs on the message-thread timer and reads APVTS atomics only. It 
 5. Fix child-control row selection and add focused selection-policy coverage.
 6. Add the three compact visual panels and re-check minimum/default/maximum geometry.
 7. Run Windows Release build, CTest, listening-render checks, bundle inspection, and post-merge `main` verification.
-

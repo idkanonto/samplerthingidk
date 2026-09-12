@@ -20,12 +20,15 @@ These decisions govern implementation together with [[PRODUCT_SPEC_V2]].
 - Keep Signalsmith stretch preparation on one background worker. `0` and `1x` both mean original duration; allow extension only through `4x`.
 - Make SCRAMBLE and FRACTURE the two signature effects. Amount is a perceptual macro, not a collection of exposed technical probabilities.
 - Fold useful Freeze repeat/hold/octave gestures into SCRAMBLE and remove Freeze as a headline stage.
-- Fold useful Codec predictive damage and the stable `rateReduction` parameter into FRACTURE and remove Codec as a headline stage.
+- Replace the broad multi-effect FRACTURE topology with a focused 2x-oversampled distortion and continuous state-variable FILTER MORPH; keep `fractureCharacter` as the stable state ID for that morph.
 - Replace the old SMEAR blur with a bright, pitched, transient-aware grain cloud.
 - Keep Spectral Draw and the sampler core intact apart from the required sample-row selection fix and control-label simplification.
 - Keep a persisted internal creative seed for coherent state restore but remove Seed from the producer-facing parameter surface.
 - Implement a real STFT/FFT overlap-add Spectral Draw processor as its own high-risk gate.
 - Batch tests and project-brain updates with the implementation they describe; avoid documentation-only CI churn.
+- Treat grid-division edits separately from transport discontinuities: re-grid SCRAMBLE, but do not clear Spectral Draw's latency/history path for a UI timing edit.
+- Keep Fracture's oversampling latency constant through Amount changes and add it to the existing Spectral Draw latency reported to the host.
+- Publish only bounded scalar creative telemetry from the callback; visualizers paint live DSP state on the message thread and never inspect audio buffers.
 
 ## Removed
 
@@ -35,6 +38,7 @@ These decisions govern implementation together with [[PRODUCT_SPEC_V2]].
 - Bit Crush.
 - Separate FREEZE and CODEC stages.
 - Exposed Seed, SCRAMBLE Chance, Freeze Size/Hold/Chance/Octave Chance, FRACTURE Drive/Filter Morph/Frequency/Resonance, and CODEC Amount/Quality.
+- Start Range, Final Length, public Attack/Release, FRACTURE RATE, and the FRACTURE preset browser. `fractureCharacter` survives under the FILTER MORPH label.
 
 Legacy state entries for these systems are ignored rather than reinterpreted.
 
