@@ -136,6 +136,28 @@ void MeltProcessor::configureSlice(int slice, int outputFrames, float amount,
     configured.sourceOrigin = static_cast<double>(random.bounded(
         static_cast<uint32_t>(availableOrigins)));
     configured.reversed = random.unit() < static_cast<double>(reverseChance);
+    constexpr int energyProbes = 24;
+    double captureEnergy = 0.0;
+    double sourceEnergy = 0.0;
+    for (int probe = 0; probe < energyProbes; ++probe)
+    {
+        const auto unit = static_cast<double>(probe)
+            / static_cast<double>(energyProbes - 1);
+        const auto captureFrame = unit * static_cast<double>(captureFrames - 1);
+        const auto sourceFrame = configured.sourceOrigin
+            + unit * static_cast<double>(configured.sourceFrames - 1);
+        for (int channel = 0; channel < 2; ++channel)
+        {
+            const auto captureSample = static_cast<double>(
+                sanitise(readCaptured(channel, captureFrame)));
+            const auto sourceSample = static_cast<double>(
+                sanitise(readCaptured(channel, sourceFrame)));
+            captureEnergy += captureSample * captureSample;
+            sourceEnergy += sourceSample * sourceSample;
+        }
+    }
+    configured.levelGain = std::clamp(static_cast<float>(std::sqrt(
+        (captureEnergy + 1.0e-9) / (sourceEnergy + 1.0e-9))), 0.80f, 1.25f);
     if (configured.reversed)
         ++lastReversedSlices;
     lastStretchRatio = std::max(lastStretchRatio,
@@ -242,7 +264,8 @@ float MeltProcessor::renderSliceSample(int channel, int slice,
         (configured.stretchRatio - 1.0) / 1.5), 0.0f, 1.0f);
     const auto normaliser = lerp(weightSum, std::sqrt(weightSquareSum),
                                  decorrelation);
-    return sanitise(sample / std::max(0.00001f, normaliser));
+    return sanitise(configured.levelGain * sample
+                    / std::max(0.00001f, normaliser));
 }
 
 void MeltProcessor::process(juce::AudioBuffer<float>& buffer,

@@ -38,6 +38,7 @@ private:
     {
         double sourceOrigin = 0.0;
         double stretchRatio = 1.0;
+        float levelGain = 1.0f;
         int sourceFrames = 2;
         bool reversed = false;
     };
