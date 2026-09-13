@@ -6,12 +6,15 @@ tags:
   - dsp
   - review
   - implementation-plan
-status: implemented-verified
+status: implemented-superseded-in-part
 date: 2026-09-11
 implementation-model: gpt-5.6-sol
 ---
 
 # Creative Effects Logic Review and Implementation Record
+
+> [!note] Historical FRACTURE record
+> The timing, SCRAMBLE, SPECTRAL DRAW, SMEAR, and realtime findings remain useful. FRACTURE-specific implementation guidance was superseded by the accepted MELT replacement in [[PRODUCT_SPEC_V2]], [[DECISIONS]], and [[CURRENT_STATE#Verified MELT replacement]]. Do not reintroduce FRACTURE from this historical review.
 
 ## Start here
 
@@ -25,9 +28,9 @@ Implemented in the quality pass:
 - M1/M2/M3: smoothed overlap-energy normalization, ratio-selected filtered histories, and lifetime-relative grain motion.
 - V1: bounded atomic DSP telemetry for the existing compact visual panels.
 
-Read `AGENTS.md`, [[TARGETED_REDESIGN_PLAN]], and this note before implementing. Preserve the four-effect identity and order:
+Read `AGENTS.md`, [[PRODUCT_SPEC_V2]], and [[DECISIONS]] before implementing. The current four-effect identity and order is:
 
-`mixed sampler voices -> SCRAMBLE -> FRACTURE -> SPECTRAL DRAW -> SMEAR -> OUTPUT`
+`mixed sampler voices -> SCRAMBLE -> MELT -> SPECTRAL DRAW -> SMEAR -> OUTPUT`
 
 The highest-value work is timing correctness and smooth transitions, followed by antialiasing and grain gain consistency. Further random modulation is lower priority until these foundations are reliable.
 
