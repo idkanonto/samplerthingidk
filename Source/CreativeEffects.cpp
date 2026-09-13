@@ -210,6 +210,7 @@ float MeltProcessor::renderSliceSample(int channel, int slice,
     const auto latestGrain = localFrame / synthesisHop;
     float sample = 0.0f;
     float weightSum = 0.0f;
+    float weightSquareSum = 0.0f;
     for (int grainOffset = 0; grainOffset <= 4; ++grainOffset)
     {
         const auto grain = latestGrain - grainOffset;
@@ -230,8 +231,18 @@ float MeltProcessor::renderSliceSample(int channel, int slice,
         sample += window * sanitise(readCaptured(channel,
             configured.sourceOrigin + oriented));
         weightSum += window;
+        weightSquareSum += window * window;
     }
-    return weightSum > 0.00001f ? sanitise(sample / weightSum) : 0.0f;
+    if (weightSum <= 0.00001f || weightSquareSum <= 0.0000001f)
+        return 0.0f;
+    // Nearby grains are phase-coherent near 1x but increasingly decorrelated
+    // as the analysis hop slows. Blend amplitude and energy normalization so
+    // deep stretches do not collapse in level without over-boosting mild ones.
+    const auto decorrelation = std::clamp(static_cast<float>(
+        (configured.stretchRatio - 1.0) / 1.5), 0.0f, 1.0f);
+    const auto normaliser = lerp(weightSum, std::sqrt(weightSquareSum),
+                                 decorrelation);
+    return sanitise(sample / std::max(0.00001f, normaliser));
 }
 
 void MeltProcessor::process(juce::AudioBuffer<float>& buffer,
@@ -291,12 +302,15 @@ void MeltProcessor::process(juce::AudioBuffer<float>& buffer,
                                            / static_cast<float>(localFade), 0.0f, 1.0f);
             const auto fadeOut = std::clamp(static_cast<float>(activeFrames - 1 - localFrame)
                                             / static_cast<float>(localFade), 0.0f, 1.0f);
-            const auto wet = effectGain * eventWet * std::min(fadeIn, fadeOut);
+            const auto blend = std::clamp(
+                effectGain * eventWet * std::min(fadeIn, fadeOut), 0.0f, 1.0f);
+            const auto dryGain = std::sqrt(1.0f - blend);
+            const auto wetGain = std::sqrt(blend);
             for (int channel = 0; channel < channels; ++channel)
             {
                 const auto stretched = renderSliceSample(channel, slice, localFrame);
                 buffer.setSample(channel, frame, sanitise(
-                    dry[channel] + wet * (stretched - dry[channel])));
+                    dryGain * dry[channel] + wetGain * stretched));
             }
             ++eventFrame;
             if ((!enabled && !bypassGain.isSmoothing() && effectGain <= 0.0f)
