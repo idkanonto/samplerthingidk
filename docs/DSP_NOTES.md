@@ -41,12 +41,13 @@ status: active
 
 ## Creative character effects
 
-- FRACTURE couples two phase-related slow oscillators, smoothed bounded random targets, and an input envelope. Amount is smoothed over 10 ms and controls drive, wetness, resonance, and movement; FILTER MORPH is smoothed over 20 ms and independently traverses low, band, notch, and high responses.
-- A prepared JUCE polyphase-IIR oversampler runs the complete waveshape, morph filter, DC blocker, and final saturation path at 2x. The dry path uses a fixed prepared delay equal to the oversampler latency, so latency is constant at Amount 0 and adds to the 1024-sample Spectral Draw latency reported to the host.
-- The nonlinear progression crossfades only adjacent soft/asymmetric/folded/clipped shapes. Filter resonance, modulation, DC state, and final output are bounded. Removed comb, formant, predictive packet, rate-reduction, and preset systems are not part of this focused effect.
+- MELT allocates one four-second stereo ring and a 4096-entry Hann lookup table in `prepareToPlay`. It stores only capture indices and at most four fixed slice records at a boundary; captured audio is never copied.
+- Each selected slice uses a fixed four-way-overlap granular synthesis hop. The analysis hop is the synthesis hop divided by a bounded amount-derived stretch ratio, while samples inside each grain advance at `+1` or `-1`. This creates pitch-preserving time expansion rather than variable-speed pitch shifting. Fractional ring reads are linear, window sums normalize overlap, and a 6 ms slice-edge taper crossfades with dry audio.
+- MELT Amount controls a two-to-four-slice progression, 24–42 ms target grain size, wet level, and a randomized `1.08x`–`4x` stretch range. REVERSE CHANCE is clamped and latched once per slice. Both channels share all timing, ratio, origin, and direction choices to preserve stereo geometry.
+- MELT arms at nonzero Amount and begins only on the next enumerated grid boundary. One-grid events end on a boundary, the ring keeps recording during playback only when the source range cannot be overwritten, and the four-second capacity covers two maximum-length supported grid intervals. Transport/grid invalidation is constant-time. An 8 ms bypass fade reaches exact sample-identical zero.
 - SMEAR allocates one second of stereo raw/medium/high filtered history and six fixed grain records in `prepareToPlay`. Grains start only when a safe read-behind distance exists, use Hann tapers, musically restricted pitch intervals, bounded scatter, lifetime-relative pitch/pan orbit, stereo panning/crossfeed, and high-passed residual emphasis.
 - Faster reads select progressively low-passed prepared history instead of reading unfiltered broadband history. Fast/slow input envelopes reduce wet level around transients, and a smoothed overlap-energy estimate normalizes active-grain gain without count-boundary steps. Amount uses a 10 ms wet fade; settled zero remains sample-identical while filling history.
-- Both creative engines use separately salted deterministic RNG state and fixed/preallocated storage. Hostile settings and samples are finite-clamped; maximum feedback/resonance is bounded.
+- MELT and SMEAR use separately salted deterministic RNG state and fixed/preallocated storage. Hostile settings and samples are finite-clamped; maximum feedback is bounded.
 
 ## Public implementation research
 
@@ -66,4 +67,4 @@ status: active
 
 ## Removed DSP
 
-The old standalone FREEZE, standalone CODEC, blur-based SMEAR, Take/Step/per-event effect path, Bit Crush, broad comb/formant/predictive FRACTURE stack, Rate Reduction, and FRACTURE preset bank are absent. Useful Freeze gestures live only inside SCRAMBLE. They must not be reintroduced as duplicate headline stages or implementation shortcuts for [[SIGNAL_CHAIN]].
+The old standalone FREEZE, standalone CODEC, FRACTURE, blur-based SMEAR, Take/Step/per-event effect path, Bit Crush, Rate Reduction, and FRACTURE preset bank are absent. Useful Freeze gestures live only inside SCRAMBLE. They must not be reintroduced as duplicate headline stages or implementation shortcuts for [[SIGNAL_CHAIN]].

@@ -1,79 +1,83 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include "HostGrid.h"
 #include "RandomizationEngine.h"
 #include <array>
 #include <cstdint>
 
 namespace randomchop
 {
-struct FractureSettings
+struct MeltSettings final
 {
-    float amount = 0.0f;
-    float character = 0.0f;
+    float amountPercent = 0.0f;
+    float reverseChancePercent = 0.0f;
 };
 
-class FractureProcessor final
+class MeltProcessor final
 {
 public:
-    void prepare(double newSampleRate, int maximumBlockSize = 16384);
+    void prepare(double newSampleRate);
     void reset() noexcept;
     void setSeed(uint64_t seed) noexcept;
-    void process(juce::AudioBuffer<float>& buffer, FractureSettings settings) noexcept;
+    void process(juce::AudioBuffer<float>&, const GridBoundaries&, int gridChoice,
+                 MeltSettings) noexcept;
 
-    float getLastMotionDepth() const noexcept { return lastMotionDepth; }
-    float getLastMorphPosition() const noexcept { return lastMorphPosition; }
-    float getLastDriveGain() const noexcept { return lastDriveGain; }
-    int getLatencySamples() const noexcept { return latencySamples; }
+    bool isActive() const noexcept { return active; }
+    bool isArmed() const noexcept { return armed; }
+    float getEventProgress() const noexcept;
+    float getLastStretchRatio() const noexcept { return lastStretchRatio; }
+    int getLastReversedSlices() const noexcept { return lastReversedSlices; }
+    uint32_t getActiveReverseMask() const noexcept;
+    uint64_t getActivationCount() const noexcept { return activationCount; }
 
 private:
-    struct FilterOutputs
+    static constexpr int maximumSlices = 4;
+    static constexpr int windowTableSize = 4096;
+    struct Slice final
     {
-        float low = 0.0f;
-        float band = 0.0f;
-        float high = 0.0f;
-        float notch = 0.0f;
-    };
-
-    struct StateVariableFilter
-    {
-        FilterOutputs process(float input, float g, float damping) noexcept;
-        void reset() noexcept { integrator1 = integrator2 = 0.0f; }
-        float integrator1 = 0.0f;
-        float integrator2 = 0.0f;
+        double sourceOrigin = 0.0;
+        double stretchRatio = 1.0;
+        int sourceFrames = 2;
+        bool reversed = false;
     };
 
     static float sanitise(float value) noexcept;
-    static float waveshape(float input, float character) noexcept;
-    static float morphFilter(const FilterOutputs&, float position) noexcept;
-    void processChunk(juce::AudioBuffer<float>&, int startFrame, int frameCount,
-                      FractureSettings) noexcept;
+    void beginEvent(const GridBoundaries&, int gridChoice, float amount,
+                    float reverseChance) noexcept;
+    void configureSlice(int slice, int outputFrames, float amount,
+                        float reverseChance) noexcept;
+    float readCaptured(int channel, double logicalFrame) const noexcept;
+    float renderSliceSample(int channel, int slice, int localFrame) const noexcept;
+    void endEvent() noexcept;
+    void invalidateHistory() noexcept;
 
-    std::array<StateVariableFilter, 2> mainFilters;
-    std::array<float, 2> dcInput { 0.0f, 0.0f };
-    std::array<float, 2> dcOutput { 0.0f, 0.0f };
-    juce::dsp::Oversampling<float> oversampling {
-        2, 1, juce::dsp::Oversampling<float>::filterHalfBandPolyphaseIIR, true, true
-    };
-    juce::AudioBuffer<float> wetBuffer;
-    juce::AudioBuffer<float> controlBuffer;
-    juce::AudioBuffer<float> dryDelayBuffer;
-    juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> amountSmoother { 0.0f };
-    juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> characterSmoother { 0.0f };
+    juce::AudioBuffer<float> history;
+    std::array<Slice, maximumSlices> slices {};
+    std::array<float, windowTableSize> hannWindow {};
     RandomizationEngine random;
     double sampleRate = 44100.0;
-    double phaseA = 0.0;
-    double phaseB = 0.37;
-    float envelope = 0.0f;
-    float smoothRandom = 0.0f;
-    float randomTarget = 0.0f;
-    float lastMotionDepth = 0.0f;
-    float lastMorphPosition = 0.0f;
-    float lastDriveGain = 1.0f;
-    int randomCountdown = 0;
-    int preparedBlockSize = 1;
-    int latencySamples = 0;
-    int dryDelayPosition = 0;
+    int writeFrame = 0;
+    int validFrames = 0;
+    int captureStart = 0;
+    int captureFrames = 0;
+    int sliceFrames = 1;
+    int sliceCount = 1;
+    int eventFrame = 0;
+    int eventFrames = 0;
+    int eventBoundariesRemaining = 0;
+    int grainFrames = 64;
+    int synthesisHop = 16;
+    int edgeFadeFrames = 1;
+    int lastReversedSlices = 0;
+    float eventWet = 0.0f;
+    float lastStretchRatio = 1.0f;
+    uint64_t activationCount = 0;
+    bool recordDuringEvent = false;
+    bool active = false;
+    bool enabled = false;
+    bool armed = false;
+    juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> bypassGain { 0.0f };
 };
 
 struct SmearSettings

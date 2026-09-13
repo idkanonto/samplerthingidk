@@ -12,8 +12,8 @@ constexpr auto rootNote = "rootNote";
 constexpr auto voiceMode = "voiceMode";
 constexpr auto globalGrid = "globalGrid";
 constexpr auto scrambleAmount = "scrambleAmount";
-constexpr auto fractureCharacter = "fractureCharacter";
-constexpr auto fractureMix = "fractureMix";
+constexpr auto meltAmount = "meltAmount";
+constexpr auto meltReverseChance = "meltReverseChance";
 constexpr auto spectralDepth = "spectralDepth";
 constexpr auto spectralScanRate = "spectralScanRate";
 constexpr auto smearAmount = "smearAmount";
@@ -56,11 +56,11 @@ RandomChopSamplerAudioProcessor::createParameterLayout()
     layout.add(std::make_unique<juce::AudioParameterFloat>(
         IDs::scrambleAmount, "Scramble",
         juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, "%"));
-    layout.add(std::make_unique<juce::AudioParameterFloat>(
-        IDs::fractureCharacter, "Fracture Character",
-        juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 42.0f, "%"));
-    layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::fractureMix, "Fracture",
+    layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::meltAmount, "Melt",
         juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, "%"));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(
+        IDs::meltReverseChance, "Melt Reverse Chance",
+        juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 35.0f, "%"));
     layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::spectralDepth, "Spectral Depth",
         juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, "%"));
     layout.add(std::make_unique<juce::AudioParameterChoice>(
@@ -73,13 +73,13 @@ RandomChopSamplerAudioProcessor::createParameterLayout()
 
 void RandomChopSamplerAudioProcessor::prepareToPlay(double rate, int maximumBlockSize)
 {
+    juce::ignoreUnused(maximumBlockSize);
     currentRate = std::clamp(randomchop::finiteOr(rate, 44100.0), 1.0, 768000.0);
     voices.prepare(currentRate);
     hostGrid.reset();
     scrambleProcessor.prepare(currentRate);
-    fractureProcessor.prepare(currentRate, maximumBlockSize);
-    setLatencySamples(randomchop::SpectralDrawProcessor::latencySamples
-                      + fractureProcessor.getLatencySamples());
+    meltProcessor.prepare(currentRate);
+    setLatencySamples(randomchop::SpectralDrawProcessor::latencySamples);
     spectralDrawProcessor.prepare(currentRate);
     smearProcessor.prepare(currentRate);
     outputGain.reset(currentRate, 0.010);
@@ -89,7 +89,7 @@ void RandomChopSamplerAudioProcessor::prepareToPlay(double rate, int maximumBloc
     const auto seed = internalSeed.load(std::memory_order_relaxed);
     random.setSeed(seed);
     scrambleProcessor.setSeed(seed);
-    fractureProcessor.setSeed(seed);
+    meltProcessor.setSeed(seed);
     smearProcessor.setSeed(seed);
     lastSeed = seed;
 }
@@ -172,7 +172,7 @@ void RandomChopSamplerAudioProcessor::processBlock(
     {
         random.setSeed(seed);
         scrambleProcessor.setSeed(seed);
-        fractureProcessor.setSeed(seed);
+        meltProcessor.setSeed(seed);
         smearProcessor.setSeed(seed);
         lastSeed = seed;
     }
@@ -208,13 +208,18 @@ void RandomChopSamplerAudioProcessor::processBlock(
     scrambleVisualFlags.store(scrambleFlags, std::memory_order_relaxed);
     scrambleVisualPhase.store(scrambleProcessor.getEventProgress(),
                               std::memory_order_relaxed);
-    fractureProcessor.process(buffer,
-        { parameters.getRawParameterValue(IDs::fractureMix)->load(),
-          parameters.getRawParameterValue(IDs::fractureCharacter)->load() });
-    fractureVisualMorph.store(fractureProcessor.getLastMorphPosition() / 3.0f,
-                              std::memory_order_relaxed);
-    fractureVisualMotion.store(fractureProcessor.getLastMotionDepth(),
-                               std::memory_order_relaxed);
+    meltProcessor.process(buffer, lastGridBoundaries, gridChoice,
+        { parameters.getRawParameterValue(IDs::meltAmount)->load(),
+          parameters.getRawParameterValue(IDs::meltReverseChance)->load() });
+    const auto meltStretch = std::clamp(
+        (meltProcessor.getLastStretchRatio() - 1.0f) / 3.0f, 0.0f, 1.0f);
+    const auto meltFlags = meltProcessor.getActiveReverseMask()
+        | (meltProcessor.isActive() ? uint32_t { 1 } << 8 : 0)
+        | (meltProcessor.isArmed() ? uint32_t { 1 } << 9 : 0);
+    meltVisualStretch.store(meltStretch, std::memory_order_relaxed);
+    meltVisualProgress.store(meltProcessor.getEventProgress(),
+                             std::memory_order_relaxed);
+    meltVisualFlags.store(meltFlags, std::memory_order_relaxed);
     spectralDrawProcessor.process(buffer, spectralMaskStore,
         { parameters.getRawParameterValue(IDs::spectralDepth)->load(),
           static_cast<int>(parameters.getRawParameterValue(IDs::spectralScanRate)->load()),
@@ -284,13 +289,6 @@ void RandomChopSamplerAudioProcessor::setStateInformation(const void* data, int 
                 oldFreezeOctave * oldFreezeChance * 0.006f }), 0.0f, 100.0f);
             state.setProperty(IDs::scrambleAmount, migratedScramble, nullptr);
 
-            const auto oldFracture = static_cast<float>(
-                state.getProperty(IDs::fractureMix, 0.0f));
-            const auto oldCodec = static_cast<float>(
-                state.getProperty("codecAmount", 0.0f));
-            const auto oldRate = static_cast<int>(state.getProperty("rateReduction", 0));
-            state.setProperty(IDs::fractureMix, std::clamp(std::max({ oldFracture,
-                oldCodec * 0.78f, oldRate > 0 ? 28.0f : 0.0f }), 0.0f, 100.0f), nullptr);
         }
         if (files.isValid())
             state.removeChild(files, nullptr);
@@ -304,8 +302,8 @@ void RandomChopSamplerAudioProcessor::setStateInformation(const void* data, int 
         };
         ensureParameter(IDs::globalGrid, 1.0f);
         ensureParameter(IDs::scrambleAmount, 0.0f);
-        ensureParameter(IDs::fractureCharacter, 42.0f);
-        ensureParameter(IDs::fractureMix, 0.0f);
+        ensureParameter(IDs::meltAmount, 0.0f);
+        ensureParameter(IDs::meltReverseChance, 35.0f);
         ensureParameter(IDs::spectralDepth, 0.0f);
         ensureParameter(IDs::spectralScanRate, 1.0f);
         ensureParameter(IDs::smearAmount, 0.0f);

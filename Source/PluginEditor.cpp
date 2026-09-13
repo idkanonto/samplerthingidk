@@ -390,38 +390,46 @@ void CreativeVisualizer::paint(juce::Graphics& g)
         return;
     }
 
-    if (kind == Kind::fracture)
+    if (kind == Kind::melt)
     {
-        juce::Path distorted;
-        juce::Path filter;
-        constexpr int points = 48;
-        for (int point = 0; point <= points; ++point)
+        constexpr int slices = 4;
+        const auto active = (telemetryFlags & (uint32_t { 1 } << 8)) != 0;
+        const auto scanner = inner.getX() + telemetrySecond * inner.getWidth();
+        const auto stretch = 0.10f + 0.90f * telemetryFirst;
+        const auto gap = 3.0f;
+        const auto cellWidth = (inner.getWidth() - gap * (slices - 1)) / slices;
+        for (int slice = 0; slice < slices; ++slice)
         {
-            const auto unit = static_cast<float>(point) / points;
-            const auto input = std::sin((unit * 2.0f + phase * 0.35f)
-                                        * juce::MathConstants<float>::twoPi);
-            const auto shaped = std::tanh(input * (1.0f + 5.0f * primary));
-            const auto x = inner.getX() + unit * inner.getWidth();
-            const auto y = inner.getCentreY() - shaped * inner.getHeight() * 0.32f;
-            const auto filterWave = std::sin((unit + phase) * juce::MathConstants<float>::pi)
-                * (0.12f + 0.30f * telemetrySecond);
-            const auto filterY = inner.getBottom() - inner.getHeight()
-                * (0.18f + telemetryFirst * 0.56f + filterWave * primary);
-            if (point == 0)
+            const auto reversed = (telemetryFlags & (uint32_t { 1 }
+                << static_cast<uint32_t>(slice))) != 0;
+            auto cell = juce::Rectangle<float>(
+                inner.getX() + slice * (cellWidth + gap), inner.getY(),
+                cellWidth, inner.getHeight());
+            g.setColour(juce::Colour(reversed ? 0xffff8fab : 0xff67e8f9)
+                .withAlpha(active ? 0.22f + 0.38f * primary : 0.12f));
+            g.fillRoundedRectangle(cell, 3.0f);
+
+            juce::Path ribbon;
+            constexpr int points = 20;
+            for (int point = 0; point <= points; ++point)
             {
-                distorted.startNewSubPath(x, y);
-                filter.startNewSubPath(x, filterY);
+                const auto unit = static_cast<float>(point) / points;
+                const auto direction = reversed ? 1.0f - unit : unit;
+                const auto x = cell.getX() + unit * cell.getWidth();
+                const auto wave = std::sin((direction * (1.0f + 2.2f * stretch)
+                    + phase * 0.35f) * juce::MathConstants<float>::twoPi);
+                const auto y = cell.getCentreY()
+                    + wave * cell.getHeight() * (0.08f + 0.22f * stretch);
+                if (point == 0) ribbon.startNewSubPath(x, y);
+                else ribbon.lineTo(x, y);
             }
-            else
-            {
-                distorted.lineTo(x, y);
-                filter.lineTo(x, filterY);
-            }
+            g.setColour(juce::Colour(reversed ? 0xffff8fab : 0xff67e8f9)
+                .withAlpha(active ? 0.90f : 0.36f));
+            g.strokePath(ribbon, juce::PathStrokeType(1.7f));
         }
-        g.setColour(juce::Colour(0xffff6b6b).withAlpha(0.35f + 0.65f * primary));
-        g.strokePath(distorted, juce::PathStrokeType(2.0f));
-        g.setColour(juce::Colour(0xff7dd3fc).withAlpha(0.48f + 0.45f * primary));
-        g.strokePath(filter, juce::PathStrokeType(1.6f));
+        g.setColour(juce::Colour(0xffffcf5a).withAlpha(active ? 1.0f : 0.45f));
+        g.drawLine(scanner, inner.getY() - 2.0f, scanner,
+                   inner.getBottom() + 2.0f, 1.5f);
         return;
     }
 
@@ -495,7 +503,7 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
         &voiceMode, &voiceModeLabel, &globalGrid, &globalGridLabel,
         &spectralDrawLabel, &spectralDrawButton, &spectralEraseButton,
         &spectralClearButton, &spectralScanRateLabel, &spectralScanRate, &spectralCanvas,
-        &scrambleVisual, &fractureVisual, &smearVisual };
+        &scrambleVisual, &meltVisual, &smearVisual };
     for (auto* component : components) addAndMakeVisible(component);
     list.setColour(juce::ListBox::backgroundColourId, juce::Colour(0xff191b21));
     list.setRowHeight(28);
@@ -622,8 +630,8 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     configureKnob(output, outputLabel, "OUTPUT");
     configureKnob(rootNote, rootNoteLabel, "ROOT NOTE");
     configureKnob(scrambleAmount, scrambleAmountLabel, "SCRAMBLE");
-    configureKnob(fractureCharacter, fractureCharacterLabel, "FILTER MORPH");
-    configureKnob(fractureMix, fractureMixLabel, "FRACTURE");
+    configureKnob(meltAmount, meltAmountLabel, "MELT");
+    configureKnob(meltReverseChance, meltReverseChanceLabel, "REVERSE CHANCE");
     configureLinearControl(spectralDepth, spectralDepthLabel, "SPECTRAL DEPTH");
     configureKnob(smearAmount, smearAmountLabel, "SMEAR");
     rootNote.setSliderStyle(juce::Slider::LinearHorizontal);
@@ -647,10 +655,10 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     midiPitchAttachment = std::make_unique<ButtonAttachment>(p.parameters, "midiPitch", midiPitch);
     scrambleAmountAttachment = std::make_unique<SliderAttachment>(
         p.parameters, "scrambleAmount", scrambleAmount);
-    fractureCharacterAttachment = std::make_unique<SliderAttachment>(
-        p.parameters, "fractureCharacter", fractureCharacter);
-    fractureMixAttachment = std::make_unique<SliderAttachment>(
-        p.parameters, "fractureMix", fractureMix);
+    meltAmountAttachment = std::make_unique<SliderAttachment>(
+        p.parameters, "meltAmount", meltAmount);
+    meltReverseChanceAttachment = std::make_unique<SliderAttachment>(
+        p.parameters, "meltReverseChance", meltReverseChance);
     spectralDepthAttachment = std::make_unique<SliderAttachment>(
         p.parameters, "spectralDepth", spectralDepth);
     smearAmountAttachment = std::make_unique<SliderAttachment>(
@@ -789,12 +797,12 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     auto scrambleCell = takeEqualCell(creativeControls, 5);
     scrambleAmountLabel.setBounds(scrambleCell.removeFromTop(scaledHeight(16)));
     scrambleAmount.setBounds(scrambleCell.reduced(2));
-    auto fractureCell = takeEqualCell(creativeControls, 4);
-    fractureMixLabel.setBounds(fractureCell.removeFromTop(scaledHeight(16)));
-    fractureMix.setBounds(fractureCell.reduced(2));
-    auto characterCell = takeEqualCell(creativeControls, 3);
-    fractureCharacterLabel.setBounds(characterCell.removeFromTop(scaledHeight(16)));
-    fractureCharacter.setBounds(characterCell.reduced(2));
+    auto meltCell = takeEqualCell(creativeControls, 4);
+    meltAmountLabel.setBounds(meltCell.removeFromTop(scaledHeight(16)));
+    meltAmount.setBounds(meltCell.reduced(2));
+    auto reverseCell = takeEqualCell(creativeControls, 3);
+    meltReverseChanceLabel.setBounds(reverseCell.removeFromTop(scaledHeight(16)));
+    meltReverseChance.setBounds(reverseCell.reduced(2));
     auto smearCell = takeEqualCell(creativeControls, 2);
     smearAmountLabel.setBounds(smearCell.removeFromTop(scaledHeight(16)));
     smearAmount.setBounds(smearCell.reduced(2));
@@ -803,9 +811,9 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     output.setBounds(outputCell.reduced(2));
 
     auto scrambleVisualCell = takeEqualCell(effectVisuals, 3);
-    auto fractureVisualCell = takeEqualCell(effectVisuals, 2);
+    auto meltVisualCell = takeEqualCell(effectVisuals, 2);
     scrambleVisual.setBounds(scrambleVisualCell);
-    fractureVisual.setBounds(fractureVisualCell);
+    meltVisual.setBounds(meltVisualCell);
     smearVisual.setBounds(effectVisuals.reduced(2));
     waveform.setBounds(waveformArea.reduced(4));
     auto listAndSpectral = area.reduced(6);
@@ -983,17 +991,18 @@ void RandomChopSamplerAudioProcessorEditor::timerCallback()
         return 0.0f;
     };
     scrambleVisual.setState(readParameter("scrambleAmount"));
-    fractureVisual.setState(readParameter("fractureMix"),
-                            readParameter("fractureCharacter"));
+    meltVisual.setState(readParameter("meltAmount"),
+                        readParameter("meltReverseChance"));
     smearVisual.setState(readParameter("smearAmount"));
     scrambleVisual.setTelemetry(processor.getScrambleVisualPhase(), 0.0f,
                                 processor.getScrambleVisualFlags());
-    fractureVisual.setTelemetry(processor.getFractureVisualMorph(),
-                                processor.getFractureVisualMotion());
+    meltVisual.setTelemetry(processor.getMeltVisualStretch(),
+                            processor.getMeltVisualProgress(),
+                            processor.getMeltVisualFlags());
     smearVisual.setTelemetry(processor.getSmearVisualActivity(),
                              processor.getSmearVisualGain());
     scrambleVisual.advance();
-    fractureVisual.advance();
+    meltVisual.advance();
     smearVisual.advance();
     list.repaint();
 }
