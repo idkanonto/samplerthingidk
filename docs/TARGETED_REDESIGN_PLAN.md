@@ -10,6 +10,9 @@ date: 2026-09-08
 
 # Targeted Redesign Plan
 
+> [!note] Historical plan
+> This plan records the now-superseded FRACTURE redesign. The accepted current replacement is MELT; follow [[PRODUCT_SPEC_V2]], [[DECISIONS]], and [[CURRENT_STATE#Verified MELT replacement]] rather than implementing FRACTURE material below.
+
 This pass follows hands-on feedback after the creative-logic release. It supersedes the affected control and FRACTURE decisions in [[PRODUCT_SPEC_V2]] while preserving the sampler, realtime, and state-compatibility contracts.
 
 ## Assessment

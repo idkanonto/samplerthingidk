@@ -40,11 +40,11 @@ This specification supersedes the earlier Random Chop Sampler V2 feature plan. I
 | Waveform Start/End | Essential | Defines the playable source region and legal random-start range. |
 | Source Key, Transpose, Fine Tune, Gain, Weight, Stretch | Essential | Source preparation, harmonic placement, balance, selection probability, and duration. |
 | Target Key, MIDI Pitch, Root MIDI Note | Essential | Global/manual harmonic behavior and keyboard tracking. |
-| POLY/MONO, Global Grid | Essential | Voice policy and the musical timing framework used by SCRAMBLE/Spectral Draw. |
+| POLY/MONO, Global Grid | Essential | Voice policy and the musical timing framework used by SCRAMBLE/MELT/Spectral Draw. |
 | Output | Essential | Final gain with a short sample-time ramp for automation safety. |
 | SCRAMBLE | Macro | Collapses density, selection, repeats, holds, reverse, jumps, pitch, and event span into one perceptual progression. |
-| FRACTURE | Macro | Controls distortion intensity, wetness, resonance, and bounded autonomous motion through one progression. |
-| FILTER MORPH (`fractureCharacter`) | Macro | Retains the stable parameter ID while continuously selecting low, band, notch, and high response territory. |
+| MELT | Macro | Controls automatic slice selection, pitch-preserving stretch depth, slice density, and wetness through one progression. |
+| REVERSE CHANCE | Probability | Sets the independently latched probability that each MELT slice plays backward. |
 | Spectral Draw/Erase/Clear, canvas, Depth, Scan Rate | Essential | A distinct intentional spectral role that does not duplicate the signature macros. |
 | SMEAR | Macro | Collapses grain density, length, pitch range, scatter, stereo behavior, brightness, and wetness into one control. |
 
@@ -55,7 +55,7 @@ Internal-only values include the persisted creative seed and every technical pro
 All creative processing occurs after the mixed sampler voices in this exact order:
 
 1. SCRAMBLE
-2. FRACTURE
+2. MELT
 3. SPECTRAL DRAW
 4. SMEAR
 5. OUTPUT
@@ -66,9 +66,9 @@ Fresh instances load samples and play without enabling creative coloration.
 
 A signature progressive-chaos macro over a bounded rolling buffer. A rising macro edge arms the effect and leaves audio dry until the next shared-grid boundary. Every eligible boundary has a deterministic amount-derived manipulation budget, so randomness chooses the gesture rather than deciding whether the effect exists. One-grid gestures end on enumerated musical boundaries rather than rounded sample counts. Low values touch a small part of each phrase; medium values produce clearly rearranged rhythmic material; high values increase density, pitch/reverse/hold activity, and event span. Freeze-style holds, micro-loops, seam-blended subregions, and octave fragments are internal SCRAMBLE gestures rather than separate effects or controls. Disable transitions use a short bounded fade before exact bypass.
 
-### FRACTURE
+### MELT
 
-A focused self-moving destruction macro. FRACTURE uses true 2x oversampling around the nonlinear and filtering path, a continuously morphed state-variable response, input-envelope response, correlated slow motion, controlled random drift, DC blocking, and bounded output saturation. FRACTURE Amount controls the distortion progression while FILTER MORPH controls low-to-band-to-notch-to-high tonal position, keeping the two public axes perceptually distinct. The latency-compensated dry path remains aligned and plug-in latency remains constant through bypass automation. Increasing Amount must increase both transformation and movement while remaining finite, DC-controlled, and musically legible.
+A focused automatic slice stretcher. A rising MELT edge arms the effect and leaves audio dry until the next shared-grid boundary. MELT captures the preceding grid interval, divides the next interval into two through four automatically selected slices, and renders each through fixed-overlap Hann grains. Each grain reads at normal sample speed while the analysis hop advances more slowly than the synthesis hop, extending time without Scramble-style octave resampling. MELT Amount increases wetness, slice density, grain duration, and a bounded `1.08x` through `4x` stretch range. REVERSE CHANCE is evaluated once per slice and reverses grain direction without changing the selected stretch ratio. Energy-aware overlap normalization, six-millisecond equal-power slice-edge tapers, and an eight-millisecond bypass transition control level and seams; settled zero is sample-identical. Transport discontinuities and grid edits invalidate logical history without clearing or reallocating the prepared ring.
 
 ### SPECTRAL DRAW
 
@@ -85,11 +85,11 @@ A crystalline pitched-grain cloud, not a blur or reverb substitute. Fixed preall
 - Remove per-event Reverse, Retrigger, Skip, Reorder, Bend, and Drop completely.
 - Remove Bit Crush completely.
 - Remove FREEZE as a separate stage and fold its useful repeat/hold/octave behavior into SCRAMBLE.
-- Remove CODEC as a separate stage. The focused FRACTURE redesign also removes the inherited predictive-damage and Rate Reduction sub-effects.
+- Remove CODEC and FRACTURE as separate stages, including their predictive-damage, rate-reduction, distortion, filter-morph, and modulation paths.
 - Remove Start Range, Final Length, public Attack/Release, FRACTURE RATE, and the FRACTURE preset browser.
-- Remove the exposed Seed, SCRAMBLE Chance, Freeze Size/Hold/Chance/Octave Chance, FRACTURE Drive/Frequency/Resonance, and CODEC Amount/Quality controls. Keep the stable `fractureCharacter` parameter ID and present it as FILTER MORPH.
+- Remove the exposed Seed, SCRAMBLE Chance, Freeze Size/Hold/Chance/Octave Chance, every FRACTURE control, and CODEC Amount/Quality controls. `fractureCharacter` and `fractureMix` are retired rather than reinterpreted as MELT.
 - Old state must ignore their parameters and `STEP_MASK`/`TAKE_HISTORY` nodes without disturbing surviving parameters or sources.
-- Migrate useful old Freeze/Scramble/Fracture/Codec intensity into the new macros, then ignore removed entries without disturbing surviving parameters or sources.
+- Migrate useful old Freeze behavior into SCRAMBLE, then ignore removed Fracture/Codec entries without disturbing surviving parameters or sources. MELT starts neutral when an older session is restored because it is a different sound and contract.
 - Persist all surviving parameters, the internal creative seed, source settings, and the Spectral Draw canvas.
 
 ## Delivery boundary

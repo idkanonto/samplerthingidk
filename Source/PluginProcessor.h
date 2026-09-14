@@ -48,13 +48,17 @@ public:
     {
         return scrambleVisualPhase.load(std::memory_order_relaxed);
     }
-    float getFractureVisualMorph() const noexcept
+    float getMeltVisualStretch() const noexcept
     {
-        return fractureVisualMorph.load(std::memory_order_relaxed);
+        return meltVisualStretch.load(std::memory_order_relaxed);
     }
-    float getFractureVisualMotion() const noexcept
+    float getMeltVisualProgress() const noexcept
     {
-        return fractureVisualMotion.load(std::memory_order_relaxed);
+        return meltVisualProgress.load(std::memory_order_relaxed);
+    }
+    uint32_t getMeltVisualFlags() const noexcept
+    {
+        return meltVisualFlags.load(std::memory_order_relaxed);
     }
     float getSmearVisualActivity() const noexcept
     {
@@ -75,7 +79,7 @@ private:
     randomchop::HostTiming readHostTiming() const noexcept;
 
     randomchop::VoicePool voices;
-    randomchop::FractureProcessor fractureProcessor;
+    randomchop::MeltProcessor meltProcessor;
     randomchop::SpectralMaskStore spectralMaskStore;
     randomchop::SpectralDrawProcessor spectralDrawProcessor;
     randomchop::SmearProcessor smearProcessor;
@@ -86,8 +90,9 @@ private:
     std::atomic<uint64_t> internalSeed { 1 };
     std::atomic<uint32_t> scrambleVisualFlags { 0 };
     std::atomic<float> scrambleVisualPhase { 0.0f };
-    std::atomic<float> fractureVisualMorph { 0.0f };
-    std::atomic<float> fractureVisualMotion { 0.0f };
+    std::atomic<float> meltVisualStretch { 0.0f };
+    std::atomic<float> meltVisualProgress { 0.0f };
+    std::atomic<uint32_t> meltVisualFlags { 0 };
     std::atomic<float> smearVisualActivity { 0.0f };
     std::atomic<float> smearVisualGain { 0.0f };
     double currentRate = 44100.0;

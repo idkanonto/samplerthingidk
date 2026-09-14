@@ -11,7 +11,7 @@ status: active
 
 # Realtime Safety Audit
 
-This audit covers creative-logic code head `d129a402b5db309c41428b4a0d1a39003f84fd5b` on [PR #18](https://github.com/idkanonto/samplerthingidk/pull/18), which passed [Windows Release CI run #64](https://github.com/idkanonto/samplerthingidk/actions/runs/34676232538), against [[DSP_NOTES]], and retains the earlier Gate E ownership/lifecycle findings. Source and CI review do not replace an allocator hook, realtime profiler, or DAW stress pass.
+This audit covers MELT code head `90a2ac4340ab0bf87ce73ff598dfe503a22494c2` on [PR #19](https://github.com/idkanonto/samplerthingidk/pull/19), which passed [Windows Release CI run #69](https://github.com/idkanonto/samplerthingidk/actions/runs/34774574912), against [[DSP_NOTES]], and retains the earlier Gate E ownership/lifecycle findings. Source and CI review do not replace an allocator hook, realtime profiler, or DAW stress pass.
 
 ## Audio-thread paths
 
@@ -22,7 +22,7 @@ This audit covers creative-logic code head `d129a402b5db309c41428b4a0d1a39003f84
 | Voice render | Linear interpolation and scalar envelope/length/fade/steal state bounded by the supplied span | No RNG, collection, lock, or mutable source access. The removed per-event FX state is absent. |
 | Host grid | Constant scalar math plus a fixed 4096-entry output array with an explicit truncation flag | No playhead access outside the single block-start read; no heap or UI access. |
 | SCRAMBLE | One bounded sample loop and at most eight fixed slice decisions per activation. Fractional reads wrap inside the selected loop; seam blending adds only bounded duplicate reads. | Two-second stereo history plus fixed origin/offset/increment/loop/wet arrays are allocated in `prepare`; activation copies no audio and takes no lock. |
-| FRACTURE | Two-channel 2x oversampling, adjacent waveshape interpolation, one stable morph filter per channel, envelope/modulation, DC blocking, fixed dry delay, and bounded chunking | Oversampling filters, two prepared block buffers, and dry-delay storage are initialized in `prepare`; callback chunks never exceed prepared capacity and perform no resize. State is scalar or fixed-array. |
+| MELT | Per sample, two channels each render at most five overlapping grains with fixed lookup-window, interpolation, and scalar normalization work. Activation makes at most four slice decisions, 96 energy-probe positions, and 384 interpolated channel reads, independent of tempo or grid length. | Four-second stereo history, four slice records, and the 4096-entry Hann table are allocated/prepared before playback. Captures are ring indices, not audio copies; no callback resize, clearing of the large ring, lock, or variable-length activation scan occurs. |
 | SPECTRAL DRAW | One 1024-point transform per channel every 256 samples, fixed ring scans, bounded bin/mask lookup, frame-gain smoothing, and fixed-array reset on transport discontinuity | Signalsmith FFT work storage and bin-gain arrays are prepared/fixed; four inline immutable mask slots use atomic state transitions. The callback takes no canvas mutex, copy, allocation, or final reclamation. |
 | SMEAR | At most six grain iterations and bounded interpolated reads per sample, plus fixed raw/filtered histories and scalar envelope/window/pan/normalization math | One-second three-band stereo history and six fixed grain records are allocated in `prepare`. Seed changes invalidate logical history without clearing large rings in the callback. |
 

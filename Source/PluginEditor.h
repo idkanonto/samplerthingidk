@@ -56,7 +56,7 @@ private:
 class CreativeVisualizer final : public juce::Component
 {
 public:
-    enum class Kind { scramble, fracture, smear };
+    enum class Kind { scramble, melt, smear };
 
     explicit CreativeVisualizer(Kind visualKind) : kind(visualKind) {}
     void setState(float primaryPercent, float secondaryPercent = 0.0f) noexcept;
@@ -113,21 +113,21 @@ private:
     juce::ComboBox spectralScanRate;
     SpectralCanvasComponent spectralCanvas;
     CreativeVisualizer scrambleVisual { CreativeVisualizer::Kind::scramble };
-    CreativeVisualizer fractureVisual { CreativeVisualizer::Kind::fracture };
+    CreativeVisualizer meltVisual { CreativeVisualizer::Kind::melt };
     CreativeVisualizer smearVisual { CreativeVisualizer::Kind::smear };
     juce::ToggleButton midiPitch { "MIDI Pitch" };
     juce::Slider rootNote, output;
-    juce::Slider scrambleAmount, fractureCharacter, fractureMix, spectralDepth, smearAmount;
+    juce::Slider scrambleAmount, meltAmount, meltReverseChance, spectralDepth, smearAmount;
     juce::Label targetKeyLabel, rootNoteLabel, voiceModeLabel, globalGridLabel,
         outputLabel, scrambleAmountLabel,
-        fractureCharacterLabel, fractureMixLabel, spectralDrawLabel, spectralScanRateLabel,
+        meltAmountLabel, meltReverseChanceLabel, spectralDrawLabel, spectralScanRateLabel,
         spectralDepthLabel, smearAmountLabel;
 
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ComboBoxAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
     std::unique_ptr<SliderAttachment> outputAttachment, rootNoteAttachment,
-        scrambleAmountAttachment, fractureCharacterAttachment, fractureMixAttachment,
+        scrambleAmountAttachment, meltAmountAttachment, meltReverseChanceAttachment,
         spectralDepthAttachment, smearAmountAttachment;
     std::unique_ptr<ComboBoxAttachment> targetKeyAttachment, voiceModeAttachment,
         globalGridAttachment, spectralScanRateAttachment;

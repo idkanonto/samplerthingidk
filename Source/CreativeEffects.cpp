@@ -30,257 +30,329 @@ double wrap(double position, double length) noexcept
 }
 }
 
-FractureProcessor::FilterOutputs FractureProcessor::StateVariableFilter::process(
-    float input, float g, float damping) noexcept
-{
-    const auto denominator = 1.0f + g * (g + damping);
-    const auto a1 = 1.0f / denominator;
-    const auto a2 = g * a1;
-    const auto a3 = g * a2;
-    const auto v3 = input - integrator2;
-    const auto band = a1 * integrator1 + a2 * v3;
-    const auto low = integrator2 + a2 * integrator1 + a3 * v3;
-    integrator1 = sanitise(2.0f * band - integrator1);
-    integrator2 = sanitise(2.0f * low - integrator2);
-    const auto high = input - damping * band - low;
-    return { sanitise(low), sanitise(band), sanitise(high), sanitise(low + high) };
-}
-
-void FractureProcessor::prepare(double newSampleRate, int maximumBlockSize)
-{
-    sampleRate = std::clamp(std::isfinite(newSampleRate) ? newSampleRate : 44100.0,
-                            1000.0, 768000.0);
-    preparedBlockSize = std::max(1, maximumBlockSize);
-    wetBuffer.setSize(2, preparedBlockSize, false, true, false);
-    controlBuffer.setSize(2, preparedBlockSize, false, true, false);
-    oversampling.initProcessing(static_cast<std::size_t>(preparedBlockSize));
-    latencySamples = std::max(0, static_cast<int>(std::llround(
-        oversampling.getLatencyInSamples())));
-    dryDelayBuffer.setSize(2, std::max(1, latencySamples), false, true, false);
-    amountSmoother.reset(sampleRate, 0.010);
-    characterSmoother.reset(sampleRate, 0.020);
-    reset();
-}
-
-void FractureProcessor::reset() noexcept
-{
-    for (auto& filter : mainFilters)
-        filter.reset();
-    dcInput.fill(0.0f);
-    dcOutput.fill(0.0f);
-    oversampling.reset();
-    dryDelayBuffer.clear();
-    dryDelayPosition = 0;
-    amountSmoother.setCurrentAndTargetValue(0.0f);
-    characterSmoother.setCurrentAndTargetValue(0.0f);
-    phaseA = 0.0;
-    phaseB = 0.37;
-    envelope = 0.0f;
-    smoothRandom = 0.0f;
-    randomTarget = 0.0f;
-    lastMotionDepth = 0.0f;
-    lastMorphPosition = 0.0f;
-    lastDriveGain = 1.0f;
-    randomCountdown = 0;
-}
-
-void FractureProcessor::setSeed(uint64_t seed) noexcept
-{
-    random.setSeed(seed ^ 0x6672616374757265ULL);
-    reset();
-}
-
-float FractureProcessor::sanitise(float value) noexcept
+float MeltProcessor::sanitise(float value) noexcept
 {
     return std::isfinite(value) ? std::clamp(value, -64.0f, 64.0f) : 0.0f;
 }
 
-float FractureProcessor::waveshape(float input, float character) noexcept
+void MeltProcessor::prepare(double newSampleRate)
 {
-    const auto position = std::clamp(character, 0.0f, 1.0f) * 3.0f;
-    const auto segment = std::min(2, static_cast<int>(position));
-    const auto fraction = position - static_cast<float>(segment);
-    const auto soft = std::tanh(input);
-    constexpr auto bias = 0.18f;
-    const auto asymmetric = std::tanh(input + bias) - std::tanh(bias);
-    const auto folded = 0.6366197724f * std::asin(std::sin(input * 1.35f));
-    const auto clipped = std::clamp(input, -1.0f, 1.0f);
-    const std::array<float, 4> shapes { soft, asymmetric, folded, clipped };
-    return sanitise(lerp(shapes[static_cast<std::size_t>(segment)],
-                         shapes[static_cast<std::size_t>(segment + 1)], fraction));
+    sampleRate = std::clamp(std::isfinite(newSampleRate) ? newSampleRate : 44100.0,
+                            1.0, 768000.0);
+    history.setSize(2, std::max(2, static_cast<int>(
+        std::ceil(sampleRate * 4.0))), false, true, false);
+    history.clear();
+    for (int index = 0; index < windowTableSize; ++index)
+        hannWindow[static_cast<std::size_t>(index)] = static_cast<float>(
+            0.5 - 0.5 * std::cos(juce::MathConstants<double>::twoPi
+                * static_cast<double>(index)
+                / static_cast<double>(windowTableSize - 1)));
+    edgeFadeFrames = std::max(1, static_cast<int>(std::llround(sampleRate * 0.006)));
+    bypassGain.reset(sampleRate, 0.008);
+    reset();
 }
 
-float FractureProcessor::morphFilter(const FilterOutputs& outputs,
-                                     float position) noexcept
+void MeltProcessor::reset() noexcept
 {
-    position = std::clamp(position, 0.0f, 3.0f);
-    const auto segment = std::min(2, static_cast<int>(position));
-    const auto fraction = position - static_cast<float>(segment);
-    const std::array<float, 4> responses {
-        outputs.low,
-        outputs.band * 1.38f,
-        outputs.notch * 0.94f,
-        outputs.high * 0.88f
-    };
-    return sanitise(lerp(responses[static_cast<std::size_t>(segment)],
-                         responses[static_cast<std::size_t>(segment + 1)], fraction));
+    enabled = false;
+    armed = false;
+    invalidateHistory();
+    activationCount = 0;
+    lastReversedSlices = 0;
+    lastStretchRatio = 1.0f;
+    bypassGain.setCurrentAndTargetValue(0.0f);
 }
 
-void FractureProcessor::process(juce::AudioBuffer<float>& buffer,
-                                FractureSettings settings) noexcept
+void MeltProcessor::endEvent() noexcept
 {
-    if (buffer.getNumChannels() < 1)
-        return;
-    const auto targetAmount = normalisePercent(settings.amount);
-    const auto targetCharacter = normalisePercent(settings.character);
-    amountSmoother.setTargetValue(targetAmount);
-    characterSmoother.setTargetValue(targetCharacter);
-    for (int start = 0; start < buffer.getNumSamples(); start += preparedBlockSize)
-        processChunk(buffer, start,
-                     std::min(preparedBlockSize, buffer.getNumSamples() - start), settings);
-    if (targetAmount <= 0.0f && !amountSmoother.isSmoothing())
-    {
-        lastMotionDepth = 0.0f;
-        lastDriveGain = 1.0f;
-    }
+    captureStart = 0;
+    captureFrames = 0;
+    sliceFrames = 1;
+    sliceCount = 1;
+    eventFrame = 0;
+    eventFrames = 0;
+    eventBoundariesRemaining = 0;
+    grainFrames = 64;
+    synthesisHop = 16;
+    eventWet = 0.0f;
+    recordDuringEvent = false;
+    active = false;
+    armed = enabled;
 }
 
-void FractureProcessor::processChunk(juce::AudioBuffer<float>& buffer,
-                                     int startFrame, int frameCount,
-                                     FractureSettings) noexcept
+void MeltProcessor::invalidateHistory() noexcept
 {
-    if (frameCount <= 0)
-        return;
-    const auto channels = std::min(2, buffer.getNumChannels());
-    for (int frame = 0; frame < frameCount; ++frame)
+    endEvent();
+    writeFrame = 0;
+    validFrames = 0;
+}
+
+void MeltProcessor::setSeed(uint64_t seed) noexcept
+{
+    random.setSeed(seed ^ 0x6d656c742d736c63ULL);
+    enabled = false;
+    armed = false;
+    invalidateHistory();
+    activationCount = 0;
+    lastReversedSlices = 0;
+    lastStretchRatio = 1.0f;
+    bypassGain.setCurrentAndTargetValue(0.0f);
+}
+
+float MeltProcessor::getEventProgress() const noexcept
+{
+    return active && eventFrames > 0
+        ? std::clamp(static_cast<float>(eventFrame) / static_cast<float>(eventFrames),
+                     0.0f, 1.0f)
+        : 0.0f;
+}
+
+uint32_t MeltProcessor::getActiveReverseMask() const noexcept
+{
+    uint32_t mask = 0;
+    if (active)
+        for (int slice = 0; slice < sliceCount; ++slice)
+            if (slices[static_cast<std::size_t>(slice)].reversed)
+                mask |= uint32_t { 1 } << static_cast<uint32_t>(slice);
+    return mask;
+}
+
+void MeltProcessor::configureSlice(int slice, int outputFrames, float amount,
+                                   float reverseChance) noexcept
+{
+    auto& configured = slices[static_cast<std::size_t>(slice)];
+    const auto curve = std::pow(amount, 0.72f);
+    const auto minimumRatio = 1.08 + 0.42 * static_cast<double>(curve);
+    const auto maximumRatio = 1.28 + 2.72 * static_cast<double>(curve);
+    configured.stretchRatio = lerp(static_cast<float>(minimumRatio),
+                                   static_cast<float>(maximumRatio),
+                                   static_cast<float>(random.unit()));
+    const auto desiredSourceFrames = static_cast<int>(std::ceil(
+        static_cast<double>(outputFrames) / configured.stretchRatio)) + grainFrames + 2;
+    configured.sourceFrames = std::clamp(desiredSourceFrames, grainFrames + 2,
+                                         std::max(grainFrames + 2, captureFrames));
+    configured.sourceFrames = std::min(configured.sourceFrames, captureFrames);
+    const auto availableOrigins = std::max(1, captureFrames - configured.sourceFrames + 1);
+    configured.sourceOrigin = static_cast<double>(random.bounded(
+        static_cast<uint32_t>(availableOrigins)));
+    configured.reversed = random.unit() < static_cast<double>(reverseChance);
+    constexpr int energyProbes = 24;
+    double captureEnergy = 0.0;
+    double sourceEnergy = 0.0;
+    for (int probe = 0; probe < energyProbes; ++probe)
     {
-        controlBuffer.setSample(0, frame, amountSmoother.getNextValue());
-        controlBuffer.setSample(1, frame, characterSmoother.getNextValue());
-        const auto left = sanitise(buffer.getSample(0, startFrame + frame));
-        wetBuffer.setSample(0, frame, left);
-        wetBuffer.setSample(1, frame, sanitise(buffer.getSample(
-            std::min(1, channels - 1), startFrame + frame)));
-    }
-
-    auto wetBlock = juce::dsp::AudioBlock<float>(wetBuffer)
-        .getSubBlock(0, static_cast<std::size_t>(frameCount));
-    const auto constantWetBlock = juce::dsp::AudioBlock<const float>(wetBlock);
-    auto oversampledBlock = oversampling.processSamplesUp(constantWetBlock);
-    const auto oversamplingFactor = static_cast<int>(oversampling.getOversamplingFactor());
-    const auto internalRate = sampleRate * static_cast<double>(oversamplingFactor);
-    const auto maximumFrequency = static_cast<float>(sampleRate * 0.44);
-    const auto attackCoefficient = 1.0f - std::exp(-1.0f /
-        static_cast<float>(internalRate * 0.003));
-    const auto releaseCoefficient = 1.0f - std::exp(-1.0f /
-        static_cast<float>(internalRate * 0.075));
-    const auto randomCoefficient = 1.0f - std::exp(-1.0f /
-        static_cast<float>(internalRate * 0.18));
-    const auto dcCoefficient = std::exp(-juce::MathConstants<float>::twoPi
-        * 15.0f / static_cast<float>(internalRate));
-
-    for (std::size_t frame = 0; frame < oversampledBlock.getNumSamples(); ++frame)
-    {
-        const auto controlFrame = std::min(frameCount - 1,
-            static_cast<int>(frame) / oversamplingFactor);
-        const auto amount = controlBuffer.getSample(0, controlFrame);
-        const auto character = controlBuffer.getSample(1, controlFrame);
-        const auto macroCurve = std::pow(amount, 0.82f);
-        const auto motionDepth = std::pow(amount, 1.15f);
-        const auto driveGain = 1.0f + 24.0f * std::pow(amount, 1.35f);
-        const auto driveCompensation = 1.0f
-            / std::sqrt(1.0f + 0.16f * (driveGain - 1.0f));
-        const auto baseFrequency = 260.0f * std::pow(20.0f, character);
-        lastMotionDepth = motionDepth;
-        lastDriveGain = driveGain;
-        float dry[2] {
-            sanitise(oversampledBlock.getChannelPointer(0)[frame]),
-            sanitise(oversampledBlock.getChannelPointer(1)[frame])
-        };
-        const auto inputEnvelope = std::max(std::abs(dry[0]), std::abs(dry[1]));
-        const auto envelopeCoefficient = inputEnvelope > envelope
-            ? attackCoefficient : releaseCoefficient;
-        envelope += envelopeCoefficient * (inputEnvelope - envelope);
-        envelope = std::clamp(envelope, 0.0f, 4.0f);
-        const auto envelopeMotion = std::clamp(envelope * 1.8f, 0.0f, 1.0f);
-
-        if (randomCountdown-- <= 0)
-        {
-            randomTarget = static_cast<float>(random.unit() * 2.0 - 1.0);
-            randomCountdown = std::max(1, static_cast<int>(std::llround(internalRate
-                * (0.72 - 0.30 * amount)
-                * (0.82 + 0.36 * random.unit()))));
-        }
-        smoothRandom += randomCoefficient * (randomTarget - smoothRandom);
-
-        const auto angleA = juce::MathConstants<double>::twoPi * phaseA;
-        const auto angleB = juce::MathConstants<double>::twoPi * phaseB;
-        const auto oscillatorA = static_cast<float>(std::sin(angleA));
-        const auto oscillatorB = static_cast<float>(std::sin(angleB));
-        const auto quadrature = static_cast<float>(std::cos(angleA));
-        const auto slowMotion = 0.56f * oscillatorA + 0.30f * oscillatorB
-            + 0.14f * smoothRandom;
-        const auto crossMotion = 0.54f * quadrature - 0.30f * oscillatorB
-            + 0.16f * (envelopeMotion * 2.0f - 1.0f);
-        const auto frequencyOctaves = motionDepth
-            * ((0.28f + 0.58f * amount) * slowMotion
-               + 0.34f * (envelopeMotion - 0.25f));
-        const auto frequency = std::clamp(baseFrequency * std::pow(2.0f, frequencyOctaves),
-                                          35.0f, maximumFrequency);
-        const auto g = std::clamp(std::tan(juce::MathConstants<float>::pi
-                                          * frequency / static_cast<float>(internalRate)),
-                                  0.00001f, 24.0f);
-        const auto resonance = std::clamp(0.08f + 0.54f * macroCurve
-            + motionDepth * (0.07f * slowMotion + 0.06f * envelopeMotion), 0.0f, 0.82f);
-        const auto damping = std::max(0.28f, 2.0f - 1.72f * std::sqrt(resonance));
-        const auto morphPosition = std::clamp(character * 3.0f
-            + motionDepth * (0.16f * crossMotion
-                             + 0.08f * (envelopeMotion - 0.5f)), 0.0f, 3.0f);
-        lastMorphPosition = morphPosition;
-        const auto animatedShape = std::clamp(0.08f + 0.84f * macroCurve
-            + 0.08f * motionDepth * crossMotion, 0.0f, 1.0f);
-
+        const auto unit = static_cast<double>(probe)
+            / static_cast<double>(energyProbes - 1);
+        const auto captureFrame = unit * static_cast<double>(captureFrames - 1);
+        const auto sourceFrame = configured.sourceOrigin
+            + unit * static_cast<double>(configured.sourceFrames - 1);
         for (int channel = 0; channel < 2; ++channel)
         {
-            const auto animatedDrive = driveGain
-                * (1.0f + 0.10f * motionDepth * crossMotion);
-            const auto shaped = waveshape(dry[channel] * animatedDrive,
-                                          animatedShape) * driveCompensation;
-            const auto tonal = morphFilter(
-                mainFilters[static_cast<std::size_t>(channel)].process(shaped, g, damping),
-                morphPosition);
-            const auto dcBlocked = tonal - dcInput[static_cast<std::size_t>(channel)]
-                + dcCoefficient * dcOutput[static_cast<std::size_t>(channel)];
-            dcInput[static_cast<std::size_t>(channel)] = sanitise(tonal);
-            dcOutput[static_cast<std::size_t>(channel)] = sanitise(dcBlocked);
-            const auto processed = 1.04f * std::tanh(sanitise(dcBlocked) * 1.08f);
-            oversampledBlock.getChannelPointer(static_cast<std::size_t>(channel))[frame]
-                = sanitise(processed);
+            const auto captureSample = static_cast<double>(
+                sanitise(readCaptured(channel, captureFrame)));
+            const auto sourceSample = static_cast<double>(
+                sanitise(readCaptured(channel, sourceFrame)));
+            captureEnergy += captureSample * captureSample;
+            sourceEnergy += sourceSample * sourceSample;
         }
+    }
+    configured.levelGain = std::clamp(static_cast<float>(std::sqrt(
+        (captureEnergy + 1.0e-9) / (sourceEnergy + 1.0e-9))), 0.80f, 1.25f);
+    if (configured.reversed)
+        ++lastReversedSlices;
+    lastStretchRatio = std::max(lastStretchRatio,
+        static_cast<float>(configured.stretchRatio));
+}
 
-        phaseA = wrap(phaseA + (0.07 + 0.55 * amount * amount) / internalRate, 1.0);
-        phaseB = wrap(phaseB + (0.11 + 0.83 * amount) / internalRate, 1.0);
+void MeltProcessor::beginEvent(const GridBoundaries& boundaries, int gridChoice,
+                               float amount, float reverseChance) noexcept
+{
+    if (active || !armed || validFrames < 2 || amount <= 0.0f)
+        return;
+
+    const auto bpm = std::clamp(std::isfinite(boundaries.bpm) ? boundaries.bpm : 120.0,
+                                20.0, 400.0);
+    const auto exactStep = sampleRate * 60.0
+        * HostGrid::quarterNotesPerStep(gridChoice) / bpm;
+    const auto step = std::max(1, static_cast<int>(std::llround(exactStep)));
+    captureFrames = std::min({ step, validFrames, history.getNumSamples() });
+    if (captureFrames < 34)
+        return;
+    captureStart = writeFrame - captureFrames;
+    if (captureStart < 0)
+        captureStart += history.getNumSamples();
+
+    eventFrames = step;
+    eventBoundariesRemaining = 1;
+    recordDuringEvent = eventFrames <= history.getNumSamples() - captureFrames;
+    sliceCount = std::clamp(2 + static_cast<int>(std::floor(amount * 2.99f)),
+                            2, maximumSlices);
+    sliceFrames = std::max(1, (eventFrames + sliceCount - 1) / sliceCount);
+    grainFrames = std::clamp(std::min(
+        static_cast<int>(std::llround(sampleRate * (0.024 + 0.018 * amount))),
+        std::max(32, sliceFrames / 2)), 32, 4096);
+    synthesisHop = std::max(8, grainFrames / 4);
+    eventWet = std::clamp(0.18f + 0.82f * std::pow(amount, 0.66f), 0.0f, 1.0f);
+    lastReversedSlices = 0;
+    lastStretchRatio = 1.0f;
+    for (int slice = 0; slice < sliceCount; ++slice)
+    {
+        const auto outputFrames = std::max(1,
+            std::min(sliceFrames, eventFrames - slice * sliceFrames));
+        configureSlice(slice, outputFrames, amount, reverseChance);
     }
 
-    oversampling.processSamplesDown(wetBlock);
-    for (int frame = 0; frame < frameCount; ++frame)
+    eventFrame = 0;
+    ++activationCount;
+    active = true;
+    armed = false;
+}
+
+float MeltProcessor::readCaptured(int channel, double logicalFrame) const noexcept
+{
+    if (captureFrames < 2 || history.getNumSamples() < 2)
+        return 0.0f;
+    logicalFrame = wrap(logicalFrame, static_cast<double>(captureFrames));
+    const auto first = static_cast<int>(logicalFrame);
+    const auto second = (first + 1) % captureFrames;
+    const auto fraction = static_cast<float>(logicalFrame - first);
+    const auto capacity = history.getNumSamples();
+    const auto firstPhysical = (captureStart + first) % capacity;
+    const auto secondPhysical = (captureStart + second) % capacity;
+    const auto* values = history.getReadPointer(std::clamp(channel, 0, 1));
+    return lerp(values[firstPhysical], values[secondPhysical], fraction);
+}
+
+float MeltProcessor::renderSliceSample(int channel, int slice,
+                                       int localFrame) const noexcept
+{
+    const auto& configured = slices[static_cast<std::size_t>(slice)];
+    const auto analysisHop = static_cast<double>(synthesisHop)
+        / configured.stretchRatio;
+    const auto latestGrain = localFrame / synthesisHop;
+    float sample = 0.0f;
+    float weightSum = 0.0f;
+    float weightSquareSum = 0.0f;
+    for (int grainOffset = 0; grainOffset <= 4; ++grainOffset)
     {
-        const auto amount = controlBuffer.getSample(0, frame);
-        const auto wet = std::pow(amount, 0.78f);
-        for (int channel = 0; channel < channels; ++channel)
+        const auto grain = latestGrain - grainOffset;
+        if (grain < 0)
+            continue;
+        const auto grainFrame = localFrame - grain * synthesisHop;
+        if (grainFrame < 0 || grainFrame >= grainFrames)
+            continue;
+        const auto phase = static_cast<double>(grain) * analysisHop
+            + static_cast<double>(grainFrame);
+        const auto wrapped = wrap(phase, static_cast<double>(configured.sourceFrames));
+        const auto oriented = configured.reversed
+            ? static_cast<double>(configured.sourceFrames - 1) - wrapped : wrapped;
+        const auto windowIndex = std::clamp(static_cast<int>(
+            static_cast<std::int64_t>(grainFrame) * (windowTableSize - 1)
+                / std::max(1, grainFrames - 1)), 0, windowTableSize - 1);
+        const auto window = hannWindow[static_cast<std::size_t>(windowIndex)];
+        sample += window * sanitise(readCaptured(channel,
+            configured.sourceOrigin + oriented));
+        weightSum += window;
+        weightSquareSum += window * window;
+    }
+    if (weightSum <= 0.00001f || weightSquareSum <= 0.0000001f)
+        return 0.0f;
+    // Nearby grains are phase-coherent near 1x but increasingly decorrelated
+    // as the analysis hop slows. Blend amplitude and energy normalization so
+    // deep stretches do not collapse in level without over-boosting mild ones.
+    const auto decorrelation = std::clamp(static_cast<float>(
+        (configured.stretchRatio - 1.0) / 1.5), 0.0f, 1.0f);
+    const auto normaliser = lerp(weightSum, std::sqrt(weightSquareSum),
+                                 decorrelation);
+    return sanitise(configured.levelGain * sample
+                    / std::max(0.00001f, normaliser));
+}
+
+void MeltProcessor::process(juce::AudioBuffer<float>& buffer,
+                            const GridBoundaries& boundaries, int gridChoice,
+                            MeltSettings settings) noexcept
+{
+    if (history.getNumSamples() < 2 || buffer.getNumChannels() < 1)
+        return;
+    if (boundaries.transportDiscontinuity || boundaries.gridChanged)
+        invalidateHistory();
+
+    const auto amount = normalisePercent(settings.amountPercent);
+    const auto reverseChance = normalisePercent(settings.reverseChancePercent);
+    const auto wantsEnabled = amount > 0.0f;
+    if (wantsEnabled && !enabled)
+    {
+        enabled = true;
+        armed = true;
+        bypassGain.setTargetValue(1.0f);
+    }
+    else if (!wantsEnabled && enabled)
+    {
+        enabled = false;
+        armed = false;
+        bypassGain.setTargetValue(0.0f);
+    }
+
+    int boundaryIndex = 0;
+    const auto capacity = history.getNumSamples();
+    const auto channels = std::min(2, buffer.getNumChannels());
+    for (int frame = 0; frame < buffer.getNumSamples(); ++frame)
+    {
+        const auto effectGain = bypassGain.getNextValue();
+        while (boundaryIndex < boundaries.count
+               && boundaries.sampleOffsets[static_cast<std::size_t>(boundaryIndex)] == frame)
         {
-            const auto dry = sanitise(buffer.getSample(channel, startFrame + frame));
-            auto delayedDry = dry;
-            if (latencySamples > 0)
-            {
-                delayedDry = dryDelayBuffer.getSample(channel, dryDelayPosition);
-                dryDelayBuffer.setSample(channel, dryDelayPosition, dry);
-            }
-            const auto processed = sanitise(wetBuffer.getSample(channel, frame));
-            buffer.setSample(channel, startFrame + frame,
-                sanitise(lerp(delayedDry, processed, wet)));
+            if (active && eventBoundariesRemaining > 0
+                && --eventBoundariesRemaining == 0)
+                endEvent();
+            beginEvent(boundaries, gridChoice, amount, reverseChance);
+            ++boundaryIndex;
         }
-        if (latencySamples > 0 && ++dryDelayPosition >= latencySamples)
-            dryDelayPosition = 0;
+
+        const float dry[2] {
+            sanitise(buffer.getSample(0, frame)),
+            sanitise(buffer.getSample(std::min(1, buffer.getNumChannels() - 1), frame))
+        };
+        if (active)
+        {
+            const auto slice = std::min(sliceCount - 1, eventFrame / sliceFrames);
+            const auto localFrame = eventFrame - slice * sliceFrames;
+            const auto activeFrames = std::max(1,
+                std::min(sliceFrames, eventFrames - slice * sliceFrames));
+            const auto localFade = std::min(edgeFadeFrames,
+                                            std::max(1, activeFrames / 3));
+            const auto fadeIn = std::clamp(static_cast<float>(localFrame)
+                                           / static_cast<float>(localFade), 0.0f, 1.0f);
+            const auto fadeOut = std::clamp(static_cast<float>(activeFrames - 1 - localFrame)
+                                            / static_cast<float>(localFade), 0.0f, 1.0f);
+            const auto blend = std::clamp(
+                effectGain * eventWet * std::min(fadeIn, fadeOut), 0.0f, 1.0f);
+            const auto dryGain = std::sqrt(1.0f - blend);
+            const auto wetGain = std::sqrt(blend);
+            for (int channel = 0; channel < channels; ++channel)
+            {
+                const auto stretched = renderSliceSample(channel, slice, localFrame);
+                buffer.setSample(channel, frame, sanitise(
+                    dryGain * dry[channel] + wetGain * stretched));
+            }
+            ++eventFrame;
+            if ((!enabled && !bypassGain.isSmoothing() && effectGain <= 0.0f)
+                || eventFrame >= eventFrames)
+                endEvent();
+        }
+        else
+        {
+            for (int channel = 0; channel < channels; ++channel)
+                buffer.setSample(channel, frame, dry[channel]);
+        }
+
+        if (!active || recordDuringEvent)
+        {
+            history.setSample(0, writeFrame, dry[0]);
+            history.setSample(1, writeFrame, dry[1]);
+            writeFrame = (writeFrame + 1) % capacity;
+            validFrames = std::min(validFrames + 1, capacity);
+        }
     }
 }
 

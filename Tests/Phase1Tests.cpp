@@ -327,27 +327,36 @@ void testRegionsAndVoices()
           "voice rendering propagated hostile audio/envelope state or failed to release");
 }
 
-void testFractureDistortionAndMorph()
+void testMeltStretchAndReverseAxes()
 {
-    randomchop::FractureProcessor lowMorph;
-    randomchop::FractureProcessor highMorph;
-    lowMorph.prepare(48000.0);
-    highMorph.prepare(48000.0);
-    lowMorph.setSeed(77);
-    highMorph.setSeed(77);
-    auto source = makeTemporalInput(4096);
-    auto lowOutput = copyBuffer(source);
-    auto highOutput = copyBuffer(source);
-    lowMorph.process(lowOutput, { 72.0f, 8.0f });
-    highMorph.process(highOutput, { 72.0f, 92.0f });
-    check(lowMorph.getLastDriveGain() > 1.0f
-              && lowMorph.getLastMotionDepth() > 0.0f
-              && lowMorph.getLastMorphPosition() < 1.0f
-              && highMorph.getLastMorphPosition() > 2.0f
-              && !buffersEqual(lowOutput, highOutput)
-              && bufferFiniteAndBounded(lowOutput)
-              && bufferFiniteAndBounded(highOutput),
-          "Fracture distortion/filter morph axes were inactive or indistinguishable");
+    randomchop::GridBoundaries noBoundary;
+    noBoundary.bpm = 120.0;
+    randomchop::GridBoundaries trigger;
+    trigger.bpm = 120.0;
+    trigger.count = 1;
+    trigger.sampleOffsets[0] = 0;
+
+    randomchop::MeltProcessor forward;
+    randomchop::MeltProcessor reverse;
+    forward.prepare(48000.0);
+    reverse.prepare(48000.0);
+    forward.setSeed(77);
+    reverse.setSeed(77);
+    auto historyA = makeTemporalInput(6000);
+    auto historyB = copyBuffer(historyA);
+    forward.process(historyA, noBoundary, 1, { 72.0f, 0.0f });
+    reverse.process(historyB, noBoundary, 1, { 72.0f, 100.0f });
+    auto outputA = makeTemporalInput(6000, 6000);
+    auto outputB = copyBuffer(outputA);
+    forward.process(outputA, trigger, 1, { 72.0f, 0.0f });
+    reverse.process(outputB, trigger, 1, { 72.0f, 100.0f });
+    check(forward.getLastStretchRatio() > 1.0f
+              && forward.getLastReversedSlices() == 0
+              && reverse.getLastReversedSlices() > 0
+              && !buffersEqual(outputA, outputB)
+              && bufferFiniteAndBounded(outputA)
+              && bufferFiniteAndBounded(outputB),
+          "Melt stretch and Reverse Chance axes were inactive or indistinguishable");
 }
 
 void testHostGrid()
@@ -467,18 +476,6 @@ juce::AudioBuffer<float> copyBuffer(const juce::AudioBuffer<float>& source)
     return copy;
 }
 
-juce::AudioBuffer<float> delayedCopy(const juce::AudioBuffer<float>& source, int delay)
-{
-    juce::AudioBuffer<float> delayed(source.getNumChannels(), source.getNumSamples());
-    delayed.clear();
-    delay = std::clamp(delay, 0, source.getNumSamples());
-    for (int channel = 0; channel < source.getNumChannels(); ++channel)
-        if (delay < source.getNumSamples())
-            delayed.copyFrom(channel, delay, source, channel, 0,
-                             source.getNumSamples() - delay);
-    return delayed;
-}
-
 bool buffersEqual(const juce::AudioBuffer<float>& a,
                   const juce::AudioBuffer<float>& b) noexcept
 {
@@ -588,14 +585,21 @@ juce::AudioBuffer<float> renderScramble(float amount,
     return output;
 }
 
-juce::AudioBuffer<float> renderFracture(float amount,
-                                        const juce::AudioBuffer<float>& input)
+juce::AudioBuffer<float> renderMelt(float amount,
+                                   const juce::AudioBuffer<float>& input)
 {
     auto output = copyBuffer(input);
-    randomchop::FractureProcessor processor;
+    randomchop::MeltProcessor processor;
     processor.prepare(48000.0);
-    processor.setSeed(0xf12a);
-    processor.process(output, { amount, 67.0f });
+    processor.setSeed(0x6d31a);
+    randomchop::GridBoundaries boundaries;
+    boundaries.bpm = 120.0;
+    constexpr int gridFrames = 6000;
+    for (int frame = gridFrames;
+         frame < output.getNumSamples() && boundaries.count < 64;
+         frame += gridFrames)
+        boundaries.sampleOffsets[static_cast<std::size_t>(boundaries.count++)] = frame;
+    processor.process(output, boundaries, 1, { amount, 35.0f });
     return output;
 }
 
@@ -631,11 +635,8 @@ void testCreativeMacroProgressionAndRender()
     constexpr int renderFrames = 48000 * 4;
     const auto dry = makeListeningInput(renderFrames, 48000.0);
     std::array<float, levels.size()> scrambleDistance {};
-    std::array<float, levels.size()> fractureDistance {};
+    std::array<float, levels.size()> meltDistance {};
     std::array<float, levels.size()> smearDistance {};
-    randomchop::FractureProcessor fractureLatencyProbe;
-    fractureLatencyProbe.prepare(48000.0);
-    const auto fractureDry = delayedCopy(dry, fractureLatencyProbe.getLatencySamples());
     const auto renderPath = juce::SystemStats::getEnvironmentVariable(
         "RANDOM_CHOP_RENDER_DIR", {});
     const auto renderDirectory = juce::File(renderPath);
@@ -651,31 +652,31 @@ void testCreativeMacroProgressionAndRender()
     {
         const auto level = levels[index];
         const auto scramble = renderScramble(level, dry);
-        const auto fracture = renderFracture(level, dry);
+        const auto melt = renderMelt(level, dry);
         const auto smear = renderSmear(level, dry);
         scrambleDistance[index] = differenceRms(dry, scramble);
-        fractureDistance[index] = differenceRms(fractureDry, fracture);
+        meltDistance[index] = differenceRms(dry, melt);
         smearDistance[index] = differenceRms(dry, smear);
-        check(bufferFiniteAndBounded(scramble) && bufferFiniteAndBounded(fracture)
+        check(bufferFiniteAndBounded(scramble) && bufferFiniteAndBounded(melt)
                   && bufferFiniteAndBounded(smear),
               "a creative macro listening render was invalid or unbounded");
         if (renderPath.isNotEmpty())
         {
             const auto suffix = juce::String(static_cast<int>(level)).paddedLeft('0', 3) + ".wav";
             check(writeListeningWave(renderDirectory.getChildFile("scramble_" + suffix), scramble)
-                      && writeListeningWave(renderDirectory.getChildFile("fracture_" + suffix), fracture)
+                      && writeListeningWave(renderDirectory.getChildFile("melt_" + suffix), melt)
                       && writeListeningWave(renderDirectory.getChildFile("smear_" + suffix), smear),
                   "could not write a creative macro listening render");
         }
     }
 
-    check(scrambleDistance[0] == 0.0f && fractureDistance[0] == 0.0f
+    check(scrambleDistance[0] == 0.0f && meltDistance[0] == 0.0f
               && smearDistance[0] == 0.0f,
           "a flagship macro was not sample-identical at zero");
     check(scrambleDistance[2] > 0.01f && scrambleDistance[4] > scrambleDistance[1],
           "Scramble did not create consistent medium or stronger maximum transformation");
-    check(fractureDistance[2] > 0.01f && fractureDistance[4] > fractureDistance[1],
-          "Fracture did not create a meaningful macro intensity progression");
+    check(meltDistance[2] > 0.01f && meltDistance[4] > meltDistance[1],
+          "Melt did not create a meaningful macro intensity progression");
     check(smearDistance[2] > 0.002f && smearDistance[4] > smearDistance[1]
               && firstDifferenceRms(renderSmear(75.0f, dry))
                     > firstDifferenceRms(dry),
@@ -685,9 +686,9 @@ void testCreativeMacroProgressionAndRender()
               << " | Scramble " << scrambleDistance[0] << ',' << scrambleDistance[1]
               << ',' << scrambleDistance[2] << ',' << scrambleDistance[3]
               << ',' << scrambleDistance[4]
-              << " | Fracture " << fractureDistance[0] << ',' << fractureDistance[1]
-              << ',' << fractureDistance[2] << ',' << fractureDistance[3]
-              << ',' << fractureDistance[4]
+              << " | Melt " << meltDistance[0] << ',' << meltDistance[1]
+              << ',' << meltDistance[2] << ',' << meltDistance[3]
+              << ',' << meltDistance[4]
               << " | Smear " << smearDistance[0] << ',' << smearDistance[1]
               << ',' << smearDistance[2] << ',' << smearDistance[3]
               << ',' << smearDistance[4] << '\n';
@@ -697,15 +698,15 @@ void testFullCreativeChainSafety()
 {
     constexpr double sampleRate = 48000.0;
     randomchop::ScrambleProcessor scramble;
-    randomchop::FractureProcessor fracture;
+    randomchop::MeltProcessor melt;
     randomchop::SpectralDrawProcessor spectral;
     randomchop::SmearProcessor smear;
     scramble.prepare(sampleRate);
-    fracture.prepare(sampleRate);
+    melt.prepare(sampleRate);
     spectral.prepare(sampleRate);
     smear.prepare(sampleRate);
     scramble.setSeed(0x5678);
-    fracture.setSeed(0x9abc);
+    melt.setSeed(0x9abc);
     smear.setSeed(0xdef0);
 
     randomchop::SpectralMaskStore mask;
@@ -742,7 +743,7 @@ void testFullCreativeChainSafety()
             boundaries.sampleOffsets[0] = frames / 2;
         }
         scramble.process(block, boundaries, 2, { 100.0f });
-        fracture.process(block, { 100.0f, 100.0f });
+        melt.process(block, boundaries, 2, { 100.0f, 100.0f });
         spectral.process(block, mask,
             { 100.0f, 3, boundaries.bpm, 0.0, false,
               boundaries.transportDiscontinuity });
@@ -756,33 +757,41 @@ void testFullCreativeChainSafety()
           "the complete global chain became invalid, unbounded, or permanently silent");
 }
 
-void testFractureProcessor()
+void testMeltProcessor()
 {
-    randomchop::FractureProcessor bypass;
+    randomchop::GridBoundaries noBoundary;
+    noBoundary.bpm = 120.0;
+    randomchop::MeltProcessor bypass;
     bypass.prepare(48000.0);
     auto dry = makeTemporalInput(512);
     auto output = copyBuffer(dry);
-    bypass.process(output, { 0.0f, 100.0f });
-    check(bypass.getLatencySamples() >= 0
-              && buffersEqual(delayedCopy(dry, bypass.getLatencySamples()), output),
-          "Fracture 0 did not preserve its fixed latency-compensated dry path");
+    bypass.process(output, noBoundary, 1, { 0.0f, 100.0f });
+    check(buffersEqual(dry, output),
+          "Melt Amount 0 was not sample-identical bypass");
 
-    randomchop::FractureProcessor first;
-    randomchop::FractureProcessor second;
+    randomchop::MeltProcessor first;
+    randomchop::MeltProcessor second;
     first.prepare(48000.0);
     second.prepare(48000.0);
     first.setSeed(991);
     second.setSeed(991);
     auto animatedA = makeTemporalInput(24000);
     auto animatedB = copyBuffer(animatedA);
-    first.process(animatedA, { 72.0f, 63.0f });
-    second.process(animatedB, { 72.0f, 63.0f });
+    randomchop::GridBoundaries boundaries;
+    boundaries.bpm = 120.0;
+    boundaries.count = 3;
+    boundaries.sampleOffsets[0] = 6000;
+    boundaries.sampleOffsets[1] = 12000;
+    boundaries.sampleOffsets[2] = 18000;
+    first.process(animatedA, boundaries, 1, { 72.0f, 100.0f });
+    second.process(animatedB, boundaries, 1, { 72.0f, 100.0f });
     check(buffersEqual(animatedA, animatedB)
-              && first.getLastMotionDepth() > 0.0f
-              && first.getLastDriveGain() > 1.0f,
-          "Fracture distortion/filter motion was not deterministic or active");
+              && first.getActivationCount() == 3
+              && first.getLastStretchRatio() > 1.0f
+              && first.getLastReversedSlices() > 0,
+          "Melt slice stretching was not deterministic or active");
 
-    randomchop::FractureProcessor extreme;
+    randomchop::MeltProcessor extreme;
     extreme.prepare(192000.0);
     juce::AudioBuffer<float> unsafe(2, 2048);
     for (int frame = 0; frame < unsafe.getNumSamples(); ++frame)
@@ -794,19 +803,25 @@ void testFractureProcessor()
         unsafe.setSample(1, frame, value);
     }
     extreme.setSeed(123);
-    extreme.process(unsafe, { 1000.0f, 1000.0f });
+    extreme.process(unsafe, noBoundary, 1, { 1000.0f, 1000.0f });
     check(bufferFiniteAndBounded(unsafe),
-          "Fracture extreme macro state propagated NaN, Inf, or runaway gain");
+          "Melt extreme macro state propagated NaN, Inf, or runaway gain");
 
-    randomchop::FractureProcessor silenceProcessor;
+    randomchop::MeltProcessor silenceProcessor;
     silenceProcessor.prepare(48000.0);
     silenceProcessor.setSeed(321);
     juce::AudioBuffer<float> silence(2, 48000);
     silence.clear();
-    silenceProcessor.process(silence, { 100.0f, 100.0f });
+    randomchop::GridBoundaries silenceBoundaries;
+    silenceBoundaries.bpm = 120.0;
+    silenceBoundaries.count = 3;
+    silenceBoundaries.sampleOffsets[0] = 6000;
+    silenceBoundaries.sampleOffsets[1] = 12000;
+    silenceBoundaries.sampleOffsets[2] = 18000;
+    silenceProcessor.process(silence, silenceBoundaries, 1, { 100.0f, 100.0f });
     check(silence.getMagnitude(0, silence.getNumSamples()) == 0.0f
               && silence.getMagnitude(1, silence.getNumSamples()) == 0.0f,
-          "Fracture generated self-noise or residual DC from silence");
+          "Melt generated self-noise from silence");
 }
 
 void testSmearProcessor()
@@ -1191,9 +1206,12 @@ void testStateMigration()
     state.setProperty("bitDepth", 12.0f, nullptr);
     state.setProperty("freezeChance", 80.0f, nullptr);
     state.setProperty("codecAmount", 70.0f, nullptr);
+    state.setProperty("fractureCharacter", 42.0f, nullptr);
+    state.setProperty("fractureMix", 80.0f, nullptr);
     for (const auto* id : { "output", "randomStart", "reverseChance", "retriggerChance",
                             "stepLength", "bitDepth", "takeSelection", "seed",
-                            "freezeSize", "codecQuality", "fractureDrive", "finalLength",
+                            "freezeSize", "codecQuality", "fractureDrive",
+                            "fractureCharacter", "fractureMix", "finalLength",
                             "attack", "release", "rateReduction" })
     {
         juce::ValueTree parameter("PARAM");
@@ -1210,6 +1228,8 @@ void testStateMigration()
               && !state.hasProperty("bitDepth")
               && !state.hasProperty("freezeChance")
               && !state.hasProperty("codecAmount")
+              && !state.hasProperty("fractureCharacter")
+              && !state.hasProperty("fractureMix")
               && state.getNumChildren() == 1
               && state.getChild(0).getProperty("id").toString() == "output"
               && static_cast<int>(state.getProperty("stateVersion"))
@@ -1218,6 +1238,8 @@ void testStateMigration()
     check(randomchop::isRemovedParameterId("dropChance")
               && randomchop::isRemovedParameterId("freezeSize")
               && randomchop::isRemovedParameterId("codecQuality")
+              && randomchop::isRemovedParameterId("fractureCharacter")
+              && randomchop::isRemovedParameterId("fractureMix")
               && randomchop::isRemovedParameterId("randomStart")
               && randomchop::isRemovedParameterId("finalLength")
               && randomchop::isRemovedParameterId("attack")
@@ -1397,12 +1419,12 @@ int main()
     testSupportedFormatsAndPoolState();
     testWeightedSelectionAndPitch();
     testRegionsAndVoices();
-    testFractureDistortionAndMorph();
+    testMeltStretchAndReverseAxes();
     testHostGrid();
     testFullCreativeChainSafety();
     testCreativeMacroProgressionAndRender();
     testScrambleProcessor();
-    testFractureProcessor();
+    testMeltProcessor();
     testSmearProcessor();
     testSpectralMaskPublicationAndState();
     testSpectralDrawProcessor();
