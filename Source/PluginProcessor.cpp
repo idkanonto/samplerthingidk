@@ -13,7 +13,6 @@ constexpr auto voiceMode = "voiceMode";
 constexpr auto globalGrid = "globalGrid";
 constexpr auto scrambleAmount = "scrambleAmount";
 constexpr auto meltAmount = "meltAmount";
-constexpr auto meltReverseChance = "meltReverseChance";
 constexpr auto spectralDepth = "spectralDepth";
 constexpr auto spectralScanRate = "spectralScanRate";
 constexpr auto smearAmount = "smearAmount";
@@ -58,9 +57,6 @@ RandomChopSamplerAudioProcessor::createParameterLayout()
         juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, "%"));
     layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::meltAmount, "Melt",
         juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, "%"));
-    layout.add(std::make_unique<juce::AudioParameterFloat>(
-        IDs::meltReverseChance, "Melt Reverse Chance",
-        juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 35.0f, "%"));
     layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::spectralDepth, "Spectral Depth",
         juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, "%"));
     layout.add(std::make_unique<juce::AudioParameterChoice>(
@@ -209,8 +205,7 @@ void RandomChopSamplerAudioProcessor::processBlock(
     scrambleVisualPhase.store(scrambleProcessor.getEventProgress(),
                               std::memory_order_relaxed);
     meltProcessor.process(buffer, lastGridBoundaries, gridChoice,
-        { parameters.getRawParameterValue(IDs::meltAmount)->load(),
-          parameters.getRawParameterValue(IDs::meltReverseChance)->load() });
+        { parameters.getRawParameterValue(IDs::meltAmount)->load() });
     const auto meltStretch = std::clamp(
         (meltProcessor.getLastStretchRatio() - 1.0f) / 3.0f, 0.0f, 1.0f);
     const auto meltFlags = meltProcessor.getActiveReverseMask()
@@ -229,7 +224,9 @@ void RandomChopSamplerAudioProcessor::processBlock(
           lastGridBoundaries.transportDiscontinuity });
     smearProcessor.process(buffer,
         { parameters.getRawParameterValue(IDs::smearAmount)->load() });
-    smearVisualActivity.store(static_cast<float>(smearProcessor.getActiveGrainCount()) / 6.0f,
+    smearVisualActivity.store(static_cast<float>(smearProcessor.getActiveGrainCount())
+                                  / static_cast<float>(
+                                      randomchop::SmearProcessor::maximumGrains),
                               std::memory_order_relaxed);
     smearVisualGain.store(smearProcessor.getLastOverlapGain() / 1.10f,
                           std::memory_order_relaxed);
@@ -303,7 +300,6 @@ void RandomChopSamplerAudioProcessor::setStateInformation(const void* data, int 
         ensureParameter(IDs::globalGrid, 1.0f);
         ensureParameter(IDs::scrambleAmount, 0.0f);
         ensureParameter(IDs::meltAmount, 0.0f);
-        ensureParameter(IDs::meltReverseChance, 35.0f);
         ensureParameter(IDs::spectralDepth, 0.0f);
         ensureParameter(IDs::spectralScanRate, 1.0f);
         ensureParameter(IDs::smearAmount, 0.0f);

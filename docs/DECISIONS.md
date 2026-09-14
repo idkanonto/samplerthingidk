@@ -18,10 +18,10 @@ These decisions govern implementation together with [[PRODUCT_SPEC_V2]].
 - Process global creative effects only after voice mixing and only in the fixed [[SIGNAL_CHAIN]] order.
 - Treat CodeRabbit as a second opinion. Compilation, approved behavior, test validity, ownership/lifetime, realtime safety, and packaging findings are actionable; redesign and scope expansion are not authoritative.
 - Keep Signalsmith stretch preparation on one background worker. `0` and `1x` both mean original duration; allow extension only through `4x`.
-- Make SCRAMBLE, MELT, and SMEAR the three focused creative effects. Amount remains a perceptual macro rather than a collection of exposed technical controls; MELT keeps one separate REVERSE CHANCE because reversal probability is the requested performance axis.
+- Make SCRAMBLE, MELT, and SMEAR the three focused one-knob creative effects. Amount remains a perceptual macro rather than a collection of exposed technical controls; MELT reversal probability is an internal amount-derived decision rather than a separate performance axis.
 - Fold useful Freeze repeat/hold/octave gestures into SCRAMBLE and remove Freeze as a headline stage.
-- Remove FRACTURE and replace its chain position with MELT: an original fixed-storage overlap-add slice stretcher with automatic grid slices and independently latched reversal decisions.
-- Replace the old SMEAR blur with a bright, pitched, transient-aware grain cloud.
+- Remove FRACTURE and replace its chain position with MELT: an original fixed-storage overlap-add slice stretcher with automatic grid slices and internally latched reversal decisions.
+- Replace the old SMEAR blur with a bright, pitched, transient-aware grain cloud whose single macro increases fixed-pool density while introducing progressively smaller grains.
 - Keep Spectral Draw and the sampler core intact apart from the required sample-row selection fix and control-label simplification.
 - Keep a persisted internal creative seed for coherent state restore but remove Seed from the producer-facing parameter surface.
 - Implement a real STFT/FFT overlap-add Spectral Draw processor as its own high-risk gate.
@@ -39,6 +39,7 @@ These decisions govern implementation together with [[PRODUCT_SPEC_V2]].
 - Separate FREEZE and CODEC stages.
 - Exposed Seed, SCRAMBLE Chance, Freeze Size/Hold/Chance/Octave Chance, every FRACTURE control, and CODEC Amount/Quality.
 - Start Range, Final Length, public Attack/Release, FRACTURE RATE, and the FRACTURE preset browser. `fractureCharacter` and `fractureMix` are retired in state version 9 and are not mapped onto MELT.
+- Exposed MELT Reverse Chance. `meltReverseChance` is retired in state version 10 and is not mapped onto the one-knob MELT macro.
 
 Legacy state entries for these systems are ignored rather than reinterpreted.
 

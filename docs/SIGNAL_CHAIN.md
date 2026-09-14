@@ -18,7 +18,7 @@ status: approved
 6. Internal click-safe envelope, boundary fade, and voice-steal crossfade.
 7. Mix up to 16 voices.
 8. SCRAMBLE, including repeat/hold/octave gestures.
-9. MELT automatic pitch-preserving slice stretch with per-slice Reverse Chance.
+9. MELT one-knob automatic pitch-preserving slice stretch with internally derived per-slice reversal.
 10. SPECTRAL DRAW.
 11. SMEAR crystalline grain cloud.
 12. Sample-smoothed Output Gain.

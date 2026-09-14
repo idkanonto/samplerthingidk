@@ -16,6 +16,9 @@ implementation-model: gpt-5.6-sol
 > [!note] Historical FRACTURE record
 > The timing, SCRAMBLE, SPECTRAL DRAW, SMEAR, and realtime findings remain useful. FRACTURE-specific implementation guidance was superseded by the accepted MELT replacement in [[PRODUCT_SPEC_V2]], [[DECISIONS]], and [[CURRENT_STATE#Verified MELT replacement]]. Do not reintroduce FRACTURE from this historical review.
 
+> [!note] Superseded SMEAR capacity boundary
+> The six-grain ceiling documented below was the earlier baseline. The later accepted one-knob density/size decision uses sixteen fixed preallocated records so higher Amount values can introduce progressively more and smaller grains. The overlap-energy and filtered-history findings still apply.
+
 ## Start here
 
 The review findings below were implemented on PR #18 without expanding the approved public surface. The implementation preserves fixed storage, stable surviving parameter IDs, immutable source ownership, and deferred non-realtime reclamation. Exact Windows CI, artifact, and merge evidence belongs in [[CURRENT_STATE]] and [[TEST_MATRIX]].
@@ -160,7 +163,7 @@ Account for oversampler latency in the internal dry/wet mix and host-reported to
 
 ## SMEAR
 
-Keep six fixed grains, safe read-behind history, Hann windows, restricted musical intervals, transient suppression, bright emphasis, and bounded feedback.
+Historical baseline: keep six fixed grains, safe read-behind history, Hann windows, restricted musical intervals, transient suppression, bright emphasis, and bounded feedback.
 
 ### M1 — instantaneous grain count introduces gain steps
 
@@ -168,7 +171,7 @@ Keep six fixed grains, safe read-behind history, Hann windows, restricted musica
 
 Normalization is `0.96 / sqrt(activeGrains)`. A newborn grain is counted while its Hann window is zero, so the existing texture jumps down despite receiving no new signal. Three to four grains changes gain from 0.554256 to 0.48, a 13.4% step. Grain retirement produces the reverse problem.
 
-**Implementation:** use smoothly varying gain based on expected overlap or a smoothed overlap-energy estimate with a safe floor and ceiling. A calibrated constant overlap gain is a simpler candidate. Do not divide directly by instantaneous window energy in a way that cancels the individual grain fade near silence. Preserve headroom before brightness/feedback and avoid increasing the six-grain limit.
+**Historical implementation direction:** use smoothly varying gain based on expected overlap or a smoothed overlap-energy estimate with a safe floor and ceiling. A calibrated constant overlap gain is a simpler candidate. Do not divide directly by instantaneous window energy in a way that cancels the individual grain fade near silence. Preserve headroom before brightness/feedback. The original six-grain limit was later superseded by the fixed sixteen-record density/size decision above.
 
 **Acceptance:** controlled constant-tone grains with known birth/death times show no count-induced gain discontinuity. Verify sparse/dense overlap, startup, shutdown, and the nonlinear output path. Compare against the current normalization on an identical schedule.
 
