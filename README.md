@@ -6,9 +6,11 @@ The visible product name intentionally contains `.dll`; the Windows plug-in is s
 
 ## Build with GitHub Actions
 
-Run **Build Windows VST3** in the repository Actions tab. The workflow configures a pinned JUCE 8.0.13/Signalsmith build, builds Release VST3, Standalone, and tests, runs CTest, verifies the bundle and executable, and uploads **recompiler-dll-Windows-VST3** plus deterministic creative-effect listening renders.
+Run **Build Windows VST3** in the repository Actions tab. The workflow configures a pinned JUCE 8.0.13/Signalsmith build, builds Release VST3, Standalone, tests, and `recompiler-dll-Windows-Setup.exe`, runs CTest, silently install/uninstall-tests the package, and uploads **recompiler-dll-Windows-Installer**, the raw **recompiler-dll-Windows-VST3** fallback, and deterministic creative-effect listening renders.
 
-Extract the artifact and copy the complete `recompiler.dll.vst3` directory to `C:\Program Files\Common Files\VST3\`, then rescan plug-ins in the DAW.
+For normal Windows installation, download **recompiler-dll-Windows-Installer**, extract the artifact, and run `recompiler-dll-Windows-Setup.exe` as administrator. It installs the complete plug-in bundle to `C:\Program Files\Common Files\VST3\recompiler.dll.vst3`, installs the Standalone app under `C:\Program Files\recompiler.dll\`, and creates an uninstaller. Rescan plug-ins in the DAW after setup. The installer is not code-signed yet, so Windows may show a SmartScreen warning.
+
+For a manual/portable install, extract **recompiler-dll-Windows-VST3** and copy the complete `recompiler.dll.vst3` directory to `C:\Program Files\Common Files\VST3\`.
 
 ## Optional local build
 

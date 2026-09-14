@@ -99,6 +99,107 @@ jobs:
           $module | ForEach-Object { Write-Host "Module: $($_.FullName) ($($_.Length) bytes)" }
           Write-Host "Standalone: $standalone ($((Get-Item -LiteralPath $standalone).Length) bytes)"
 
+      - name: Build Windows installer
+        shell: pwsh
+        run: |
+          $projectText = Get-Content -Raw -LiteralPath (Join-Path $env:GITHUB_WORKSPACE 'CMakeLists.txt')
+          $versionMatch = [regex]::Match($projectText, 'project\(RandomChopSampler VERSION ([0-9]+\.[0-9]+\.[0-9]+)')
+          if (-not $versionMatch.Success) {
+            throw 'Could not read the installer version from CMakeLists.txt.'
+          }
+
+          $compiler = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path -LiteralPath $compiler -PathType Leaf)) {
+            throw "Inno Setup compiler was not found: $compiler"
+          }
+
+          $definition = "/DAppVersion=$($versionMatch.Groups[1].Value)"
+          $script = Join-Path $env:GITHUB_WORKSPACE 'installer\recompiler.iss'
+          & $compiler $definition $script
+          if ($LASTEXITCODE -ne 0) {
+            throw "Inno Setup failed with exit code $LASTEXITCODE."
+          }
+
+      - name: Verify Windows installer
+        shell: pwsh
+        run: |
+          $setup = Join-Path $env:GITHUB_WORKSPACE 'build\installer\recompiler-dll-Windows-Setup.exe'
+          if (-not (Test-Path -LiteralPath $setup -PathType Leaf) -or
+              (Get-Item -LiteralPath $setup).Length -eq 0) {
+            throw "Expected installer was not produced: $setup"
+          }
+
+          $sourcePlugin = Join-Path $env:GITHUB_WORKSPACE 'build\RandomChopSampler_artefacts\Release\VST3\recompiler.dll.vst3'
+          $sourceStandalone = Join-Path $env:GITHUB_WORKSPACE 'build\RandomChopSampler_artefacts\Release\Standalone\recompiler.dll.exe'
+          $installedPlugin = Join-Path $env:CommonProgramFiles 'VST3\recompiler.dll.vst3'
+          $installedRoot = Join-Path $env:ProgramFiles 'recompiler.dll'
+          $installedStandalone = Join-Path $installedRoot 'recompiler.dll.exe'
+
+          if ((Test-Path -LiteralPath $installedPlugin) -or
+              (Test-Path -LiteralPath $installedRoot)) {
+            throw 'Disposable runner unexpectedly contains a previous recompiler.dll installation.'
+          }
+
+          $install = Start-Process -FilePath $setup `
+            -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/MERGETASKS=!desktopicon' `
+            -Wait -PassThru -WindowStyle Hidden
+          if ($install.ExitCode -ne 0) {
+            throw "Installer exited with code $($install.ExitCode)."
+          }
+
+          foreach ($sourceFile in Get-ChildItem -LiteralPath $sourcePlugin -Recurse -File) {
+            $relativePath = [System.IO.Path]::GetRelativePath($sourcePlugin, $sourceFile.FullName)
+            $installedFile = Join-Path $installedPlugin $relativePath
+            if (-not (Test-Path -LiteralPath $installedFile -PathType Leaf)) {
+              throw "Installer omitted VST3 bundle file: $relativePath"
+            }
+            $sourceHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $sourceFile.FullName).Hash
+            $installedHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $installedFile).Hash
+            if ($sourceHash -ne $installedHash) {
+              throw "Installed VST3 bundle file differs from the build: $relativePath"
+            }
+          }
+
+          if (-not (Test-Path -LiteralPath $installedStandalone -PathType Leaf)) {
+            throw 'Installer omitted the Standalone executable.'
+          }
+          $sourceStandaloneHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $sourceStandalone).Hash
+          $installedStandaloneHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $installedStandalone).Hash
+          if ($sourceStandaloneHash -ne $installedStandaloneHash) {
+            throw 'Installed Standalone executable differs from the build.'
+          }
+
+          $uninstaller = Join-Path $installedRoot 'unins000.exe'
+          if (-not (Test-Path -LiteralPath $uninstaller -PathType Leaf)) {
+            throw 'Installer did not create an uninstaller.'
+          }
+
+          $uninstall = Start-Process -FilePath $uninstaller `
+            -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' `
+            -Wait -PassThru -WindowStyle Hidden
+          if ($uninstall.ExitCode -ne 0) {
+            throw "Uninstaller exited with code $($uninstall.ExitCode)."
+          }
+
+          for ($attempt = 0; $attempt -lt 20; ++$attempt) {
+            if (-not (Test-Path -LiteralPath $installedPlugin) -and
+                -not (Test-Path -LiteralPath $installedStandalone)) {
+              break
+            }
+            Start-Sleep -Milliseconds 250
+          }
+          if ((Test-Path -LiteralPath $installedPlugin) -or
+              (Test-Path -LiteralPath $installedStandalone)) {
+            throw 'Uninstaller left installed recompiler.dll files behind.'
+          }
+
+          $hash = Get-FileHash -Algorithm SHA256 -LiteralPath $setup
+          $checksum = Join-Path (Split-Path -Parent $setup) 'recompiler-dll-Windows-Setup.exe.sha256'
+          "$($hash.Hash.ToLowerInvariant())  $([System.IO.Path]::GetFileName($setup))" |
+            Set-Content -LiteralPath $checksum -Encoding ascii -NoNewline
+          Write-Host "Installer: $setup ($((Get-Item -LiteralPath $setup).Length) bytes)"
+          Write-Host "Installer SHA256: $($hash.Hash.ToLowerInvariant())"
+
       - name: Upload VST3
         uses: actions/upload-artifact@v7
         with:
@@ -106,6 +207,16 @@ jobs:
           # Upload the parent so the downloaded archive preserves the required
           # top-level "recompiler.dll.vst3" bundle directory.
           path: build/RandomChopSampler_artefacts/Release/VST3
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: recompiler-dll-Windows-Installer
+          path: |
+            build/installer/recompiler-dll-Windows-Setup.exe
+            build/installer/recompiler-dll-Windows-Setup.exe.sha256
           if-no-files-found: error
           retention-days: 30
 
