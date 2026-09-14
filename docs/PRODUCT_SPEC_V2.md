@@ -43,8 +43,7 @@ This specification supersedes the earlier Random Chop Sampler V2 feature plan. I
 | POLY/MONO, Global Grid | Essential | Voice policy and the musical timing framework used by SCRAMBLE/MELT/Spectral Draw. |
 | Output | Essential | Final gain with a short sample-time ramp for automation safety. |
 | SCRAMBLE | Macro | Collapses density, selection, repeats, holds, reverse, jumps, pitch, and event span into one perceptual progression. |
-| MELT | Macro | Controls automatic slice selection, pitch-preserving stretch depth, slice density, and wetness through one progression. |
-| REVERSE CHANCE | Probability | Sets the independently latched probability that each MELT slice plays backward. |
+| MELT | Macro | Controls automatic slice selection, pitch-preserving stretch depth, slice density, internally derived reversal probability, and wetness through one progression. |
 | Spectral Draw/Erase/Clear, canvas, Depth, Scan Rate | Essential | A distinct intentional spectral role that does not duplicate the signature macros. |
 | SMEAR | Macro | Collapses grain density, length, pitch range, scatter, stereo behavior, brightness, and wetness into one control. |
 
@@ -68,7 +67,7 @@ A signature progressive-chaos macro over a bounded rolling buffer. A rising macr
 
 ### MELT
 
-A focused automatic slice stretcher. A rising MELT edge arms the effect and leaves audio dry until the next shared-grid boundary. MELT captures the preceding grid interval, divides the next interval into two through four automatically selected slices, and renders each through fixed-overlap Hann grains. Each grain reads at normal sample speed while the analysis hop advances more slowly than the synthesis hop, extending time without Scramble-style octave resampling. MELT Amount increases wetness, slice density, grain duration, and a bounded `1.08x` through `4x` stretch range. REVERSE CHANCE is evaluated once per slice and reverses grain direction without changing the selected stretch ratio. Energy-aware overlap normalization, six-millisecond equal-power slice-edge tapers, and an eight-millisecond bypass transition control level and seams; settled zero is sample-identical. Transport discontinuities and grid edits invalidate logical history without clearing or reallocating the prepared ring.
+A focused one-knob automatic slice stretcher. A rising MELT edge arms the effect and leaves audio dry until the next shared-grid boundary. MELT captures the preceding grid interval, divides the next interval into two through four automatically selected slices, and renders each through fixed-overlap Hann grains. Each grain reads at normal sample speed while the analysis hop advances more slowly than the synthesis hop, extending time without Scramble-style octave resampling. MELT Amount increases wetness, slice density, grain duration, a bounded `1.08x` through `4x` stretch range, and an internally derived chance that each slice reverses without changing its stretch ratio. Energy-aware overlap normalization, six-millisecond equal-power slice-edge tapers, and an eight-millisecond bypass transition control level and seams; settled zero is sample-identical. Transport discontinuities and grid edits invalidate logical history without clearing or reallocating the prepared ring.
 
 ### SPECTRAL DRAW
 
@@ -76,7 +75,7 @@ A real STFT/FFT overlap-add processor. The persistent canvas scans horizontally 
 
 ### SMEAR
 
-A crystalline pitched-grain cloud, not a blur or reverb substitute. Fixed preallocated grains read safely behind the write head, use tapered windows, scatter, musically selected pitch intervals, lifetime-relative pitch/pan orbits, stereo placement, bright residual emphasis, and transient-aware wet suppression. Faster readers select preallocated progressively filtered history, and overlap energy is smoothed before gain normalization. The single SMEAR macro moves from subtle texture to an obvious icy fragmented layer; disable transitions fade briefly and settled zero is sample-identical.
+A crystalline pitched-grain cloud, not a blur or reverb substitute. A fixed preallocated pool reads safely behind the write head, uses tapered windows, scatter, musically selected pitch intervals, lifetime-relative pitch/pan orbits, stereo placement, bright residual emphasis, and transient-aware wet suppression. The single SMEAR macro progressively raises the target overlap while introducing a broader population of shorter grains, moving from a few long fragments to a crowded field of fine icy particles. Faster readers select preallocated progressively filtered history, and overlap energy is smoothed before gain normalization. Disable transitions fade briefly and settled zero is sample-identical.
 
 ## Removed systems and state compatibility
 
@@ -88,6 +87,7 @@ A crystalline pitched-grain cloud, not a blur or reverb substitute. Fixed preall
 - Remove CODEC and FRACTURE as separate stages, including their predictive-damage, rate-reduction, distortion, filter-morph, and modulation paths.
 - Remove Start Range, Final Length, public Attack/Release, FRACTURE RATE, and the FRACTURE preset browser.
 - Remove the exposed Seed, SCRAMBLE Chance, Freeze Size/Hold/Chance/Octave Chance, every FRACTURE control, and CODEC Amount/Quality controls. `fractureCharacter` and `fractureMix` are retired rather than reinterpreted as MELT.
+- Remove the exposed MELT Reverse Chance. `meltReverseChance` is retired rather than mapped onto the new one-knob macro; reversal remains an internal amount-derived slice decision.
 - Old state must ignore their parameters and `STEP_MASK`/`TAKE_HISTORY` nodes without disturbing surviving parameters or sources.
 - Migrate useful old Freeze behavior into SCRAMBLE, then ignore removed Fracture/Codec entries without disturbing surviving parameters or sources. MELT starts neutral when an older session is restored because it is a different sound and contract.
 - Persist all surviving parameters, the internal creative seed, source settings, and the Spectral Draw canvas.

@@ -27,8 +27,8 @@ The target name remains `RandomChopSampler` to preserve build continuity; the ho
 - Target Key, optional MIDI pitch with musically named root note, POLY/MONO, and smoothed Output. Random source/start behavior is always part of the instrument; reproducibility uses a persisted internal seed rather than a technical Seed control.
 - Host-derived 1/8, 1/16, or 1/32 global grid with stable block-edge ownership and a safe 120 BPM fallback.
 - Signature SCRAMBLE macro with next-boundary arming, a consistent per-grid manipulation budget, bounded rearrangement, seam-blended micro-holds/repeats, reverse, jumps, and integrated pitched fragments.
-- MELT automatic slice stretcher with pitch-preserving overlap-add grains, amount-scaled `1.08x`–`4x` expansion, and independently latched per-slice Reverse Chance.
-- SMEAR is a six-grain, pitched, scattered, stereo crystalline texture with lifetime-relative motion, ratio-selected filtered history, overlap-energy gain control, and transient-aware wet control rather than a blur stage.
+- MELT is one automatic slice-stretch macro with pitch-preserving overlap-add grains, amount-scaled `1.08x`–`4x` expansion, and internally latched per-slice reversal.
+- SMEAR is a pitched, scattered stereo crystalline texture whose single macro introduces progressively more and smaller grains, with lifetime-relative motion, ratio-selected filtered history, overlap-energy gain control, and transient-aware wet control rather than a blur stage.
 - Real global SPECTRAL DRAW with a persistent 128×64 attenuation canvas, Draw/Erase/Clear tools, four tempo-derived scan rates, Depth, and reported 1024-sample latency.
 - The former standalone FREEZE, CODEC, and FRACTURE stages, FRACTURE controls/presets, Start Range, Final Length, public Attack/Release, Take History, Step Mask, per-event Reverse/Retrigger/Skip/Reorder/Bend/Drop, and Bit Crush systems are removed. Useful Freeze gestures are absorbed into SCRAMBLE; retired Fracture state is ignored safely rather than reinterpreted as MELT.
 

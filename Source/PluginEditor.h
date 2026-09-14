@@ -59,7 +59,7 @@ public:
     enum class Kind { scramble, melt, smear };
 
     explicit CreativeVisualizer(Kind visualKind) : kind(visualKind) {}
-    void setState(float primaryPercent, float secondaryPercent = 0.0f) noexcept;
+    void setState(float primaryPercent) noexcept;
     void setTelemetry(float first, float second = 0.0f,
                       uint32_t flags = 0) noexcept;
     void advance() noexcept;
@@ -68,7 +68,6 @@ public:
 private:
     Kind kind;
     float primary = 0.0f;
-    float secondary = 0.0f;
     float phase = 0.0f;
     float telemetryFirst = 0.0f;
     float telemetrySecond = 0.0f;
@@ -117,17 +116,17 @@ private:
     CreativeVisualizer smearVisual { CreativeVisualizer::Kind::smear };
     juce::ToggleButton midiPitch { "MIDI Pitch" };
     juce::Slider rootNote, output;
-    juce::Slider scrambleAmount, meltAmount, meltReverseChance, spectralDepth, smearAmount;
+    juce::Slider scrambleAmount, meltAmount, spectralDepth, smearAmount;
     juce::Label targetKeyLabel, rootNoteLabel, voiceModeLabel, globalGridLabel,
         outputLabel, scrambleAmountLabel,
-        meltAmountLabel, meltReverseChanceLabel, spectralDrawLabel, spectralScanRateLabel,
+        meltAmountLabel, spectralDrawLabel, spectralScanRateLabel,
         spectralDepthLabel, smearAmountLabel;
 
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ComboBoxAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
     std::unique_ptr<SliderAttachment> outputAttachment, rootNoteAttachment,
-        scrambleAmountAttachment, meltAmountAttachment, meltReverseChanceAttachment,
+        scrambleAmountAttachment, meltAmountAttachment,
         spectralDepthAttachment, smearAmountAttachment;
     std::unique_ptr<ComboBoxAttachment> targetKeyAttachment, voiceModeAttachment,
         globalGridAttachment, spectralScanRateAttachment;

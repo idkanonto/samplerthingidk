@@ -11,6 +11,7 @@ date: 2026-09-08
 # Targeted Redesign Plan
 
 > [!note] Historical plan
+> The six-grain SMEAR ceiling and six-streak visualizer below were later superseded by the accepted one-knob density/size progression in [[PRODUCT_SPEC_V2]] and [[DECISIONS]].
 > This plan records the now-superseded FRACTURE redesign. The accepted current replacement is MELT; follow [[PRODUCT_SPEC_V2]], [[DECISIONS]], and [[CURRENT_STATE#Verified MELT replacement]] rather than implementing FRACTURE material below.
 
 This pass follows hands-on feedback after the creative-logic release. It supersedes the affected control and FRACTURE decisions in [[PRODUCT_SPEC_V2]] while preserving the sampler, realtime, and state-compatibility contracts.

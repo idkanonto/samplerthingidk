@@ -310,17 +310,13 @@ void SpectralCanvasComponent::paint(juce::Graphics& g)
     g.drawRect(bounds, 1);
 }
 
-void CreativeVisualizer::setState(float primaryPercent, float secondaryPercent) noexcept
+void CreativeVisualizer::setState(float primaryPercent) noexcept
 {
     const auto nextPrimary = std::clamp(std::isfinite(primaryPercent)
         ? primaryPercent * 0.01f : 0.0f, 0.0f, 1.0f);
-    const auto nextSecondary = std::clamp(std::isfinite(secondaryPercent)
-        ? secondaryPercent * 0.01f : 0.0f, 0.0f, 1.0f);
-    if (std::abs(nextPrimary - primary) > 0.0001f
-        || std::abs(nextSecondary - secondary) > 0.0001f)
+    if (std::abs(nextPrimary - primary) > 0.0001f)
     {
         primary = nextPrimary;
-        secondary = nextSecondary;
         repaint();
     }
 }
@@ -433,8 +429,10 @@ void CreativeVisualizer::paint(juce::Graphics& g)
         return;
     }
 
+    constexpr int maximumVisualGrains = randomchop::SmearProcessor::maximumGrains;
     const auto visibleGrains = std::clamp(static_cast<int>(std::ceil(
-        telemetryFirst * 6.0f)), 0, 6);
+        telemetryFirst * static_cast<float>(maximumVisualGrains))),
+        0, maximumVisualGrains);
     for (int index = 0; index < visibleGrains; ++index)
     {
         const auto orbit = std::fmod(phase * (0.55f + index * 0.07f)
@@ -442,14 +440,16 @@ void CreativeVisualizer::paint(juce::Graphics& g)
         const auto x = inner.getX() + orbit * inner.getWidth();
         const auto y = inner.getCentreY() + std::sin((orbit + index * 0.21f)
             * juce::MathConstants<float>::twoPi) * inner.getHeight() * 0.30f * primary;
-        const auto length = 5.0f + primary * (8.0f + index * 1.4f)
-            * (0.55f + 0.45f * telemetrySecond);
+        const auto lengthVariation = 0.72f + 0.28f
+            * std::fmod(static_cast<float>(index) * 0.618f, 1.0f);
+        const auto length = (10.0f - 6.5f * primary) * lengthVariation
+            * (0.72f + 0.28f * telemetrySecond);
         g.setColour(juce::Colour(0xff67e8f9).withAlpha(0.18f + 0.62f * primary));
         g.drawLine(x - length, y + length * 0.35f, x + length, y - length * 0.35f,
                    1.0f + 1.2f * primary);
         g.setColour(juce::Colour(0xfff0f9ff).withAlpha(0.28f + 0.66f * primary));
-        g.fillEllipse(x - 1.5f - primary, y - 1.5f - primary,
-                      3.0f + 2.0f * primary, 3.0f + 2.0f * primary);
+        const auto radius = 1.8f - 0.7f * primary;
+        g.fillEllipse(x - radius, y - radius, radius * 2.0f, radius * 2.0f);
     }
 }
 
@@ -631,7 +631,6 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     configureKnob(rootNote, rootNoteLabel, "ROOT NOTE");
     configureKnob(scrambleAmount, scrambleAmountLabel, "SCRAMBLE");
     configureKnob(meltAmount, meltAmountLabel, "MELT");
-    configureKnob(meltReverseChance, meltReverseChanceLabel, "REVERSE CHANCE");
     configureLinearControl(spectralDepth, spectralDepthLabel, "SPECTRAL DEPTH");
     configureKnob(smearAmount, smearAmountLabel, "SMEAR");
     rootNote.setSliderStyle(juce::Slider::LinearHorizontal);
@@ -657,8 +656,6 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
         p.parameters, "scrambleAmount", scrambleAmount);
     meltAmountAttachment = std::make_unique<SliderAttachment>(
         p.parameters, "meltAmount", meltAmount);
-    meltReverseChanceAttachment = std::make_unique<SliderAttachment>(
-        p.parameters, "meltReverseChance", meltReverseChance);
     spectralDepthAttachment = std::make_unique<SliderAttachment>(
         p.parameters, "spectralDepth", spectralDepth);
     smearAmountAttachment = std::make_unique<SliderAttachment>(
@@ -794,15 +791,12 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     globalGridLabel.setBounds(gridCell.removeFromLeft(100));
     globalGrid.setBounds(gridCell.reduced(2, 3));
 
-    auto scrambleCell = takeEqualCell(creativeControls, 5);
+    auto scrambleCell = takeEqualCell(creativeControls, 4);
     scrambleAmountLabel.setBounds(scrambleCell.removeFromTop(scaledHeight(16)));
     scrambleAmount.setBounds(scrambleCell.reduced(2));
-    auto meltCell = takeEqualCell(creativeControls, 4);
+    auto meltCell = takeEqualCell(creativeControls, 3);
     meltAmountLabel.setBounds(meltCell.removeFromTop(scaledHeight(16)));
     meltAmount.setBounds(meltCell.reduced(2));
-    auto reverseCell = takeEqualCell(creativeControls, 3);
-    meltReverseChanceLabel.setBounds(reverseCell.removeFromTop(scaledHeight(16)));
-    meltReverseChance.setBounds(reverseCell.reduced(2));
     auto smearCell = takeEqualCell(creativeControls, 2);
     smearAmountLabel.setBounds(smearCell.removeFromTop(scaledHeight(16)));
     smearAmount.setBounds(smearCell.reduced(2));
@@ -991,8 +985,7 @@ void RandomChopSamplerAudioProcessorEditor::timerCallback()
         return 0.0f;
     };
     scrambleVisual.setState(readParameter("scrambleAmount"));
-    meltVisual.setState(readParameter("meltAmount"),
-                        readParameter("meltReverseChance"));
+    meltVisual.setState(readParameter("meltAmount"));
     smearVisual.setState(readParameter("smearAmount"));
     scrambleVisual.setTelemetry(processor.getScrambleVisualPhase(), 0.0f,
                                 processor.getScrambleVisualFlags());

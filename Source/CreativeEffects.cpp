@@ -117,8 +117,7 @@ uint32_t MeltProcessor::getActiveReverseMask() const noexcept
     return mask;
 }
 
-void MeltProcessor::configureSlice(int slice, int outputFrames, float amount,
-                                   float reverseChance) noexcept
+void MeltProcessor::configureSlice(int slice, int outputFrames, float amount) noexcept
 {
     auto& configured = slices[static_cast<std::size_t>(slice)];
     const auto curve = std::pow(amount, 0.72f);
@@ -135,6 +134,7 @@ void MeltProcessor::configureSlice(int slice, int outputFrames, float amount,
     const auto availableOrigins = std::max(1, captureFrames - configured.sourceFrames + 1);
     configured.sourceOrigin = static_cast<double>(random.bounded(
         static_cast<uint32_t>(availableOrigins)));
+    const auto reverseChance = 0.08f + 0.52f * std::pow(amount, 0.90f);
     configured.reversed = random.unit() < static_cast<double>(reverseChance);
     constexpr int energyProbes = 24;
     double captureEnergy = 0.0;
@@ -165,7 +165,7 @@ void MeltProcessor::configureSlice(int slice, int outputFrames, float amount,
 }
 
 void MeltProcessor::beginEvent(const GridBoundaries& boundaries, int gridChoice,
-                               float amount, float reverseChance) noexcept
+                               float amount) noexcept
 {
     if (active || !armed || validFrames < 2 || amount <= 0.0f)
         return;
@@ -199,7 +199,7 @@ void MeltProcessor::beginEvent(const GridBoundaries& boundaries, int gridChoice,
     {
         const auto outputFrames = std::max(1,
             std::min(sliceFrames, eventFrames - slice * sliceFrames));
-        configureSlice(slice, outputFrames, amount, reverseChance);
+        configureSlice(slice, outputFrames, amount);
     }
 
     eventFrame = 0;
@@ -278,7 +278,6 @@ void MeltProcessor::process(juce::AudioBuffer<float>& buffer,
         invalidateHistory();
 
     const auto amount = normalisePercent(settings.amountPercent);
-    const auto reverseChance = normalisePercent(settings.reverseChancePercent);
     const auto wantsEnabled = amount > 0.0f;
     if (wantsEnabled && !enabled)
     {
@@ -305,7 +304,7 @@ void MeltProcessor::process(juce::AudioBuffer<float>& buffer,
             if (active && eventBoundariesRemaining > 0
                 && --eventBoundariesRemaining == 0)
                 endEvent();
-            beginEvent(boundaries, gridChoice, amount, reverseChance);
+            beginEvent(boundaries, gridChoice, amount);
             ++boundaryIndex;
         }
 
@@ -366,6 +365,15 @@ void SmearProcessor::prepare(double newSampleRate)
     highBandDelayBuffer.setSize(2, frames, false, true, false);
     mediumFilterCoefficient = 1.0f - std::exp(-juce::MathConstants<float>::twoPi * 0.22f);
     highFilterCoefficient = 1.0f - std::exp(-juce::MathConstants<float>::twoPi * 0.10f);
+    for (int index = 0; index < modulationTableSize; ++index)
+    {
+        const auto phase = static_cast<double>(index)
+            / static_cast<double>(modulationTableSize);
+        sineTable[static_cast<std::size_t>(index)] = static_cast<float>(
+            std::sin(juce::MathConstants<double>::twoPi * phase));
+        hannTable[static_cast<std::size_t>(index)] = static_cast<float>(
+            0.5 - 0.5 * std::cos(juce::MathConstants<double>::twoPi * phase));
+    }
     amountSmoother.reset(sampleRate, 0.010);
     reset();
 }
@@ -398,6 +406,9 @@ void SmearProcessor::resetRealtimeState() noexcept
     writePosition = 0;
     validFrames = 0;
     grainCountdown = 0;
+    activeGrainCount = 0;
+    peakActiveGrainCount = 0;
+    lastGrainLengthFrames = 0;
 }
 
 void SmearProcessor::setSeed(uint64_t seed) noexcept
@@ -432,6 +443,26 @@ float SmearProcessor::readDelay(int channel, double position,
                 source->getSample(channel, second), fraction);
 }
 
+float SmearProcessor::lookupSine(float phase) const noexcept
+{
+    const auto wrapped = static_cast<float>(wrap(static_cast<double>(phase), 1.0));
+    const auto scaled = wrapped * static_cast<float>(modulationTableSize);
+    const auto first = std::clamp(static_cast<int>(scaled), 0, modulationTableSize - 1);
+    const auto second = (first + 1) % modulationTableSize;
+    return lerp(sineTable[static_cast<std::size_t>(first)],
+                sineTable[static_cast<std::size_t>(second)], scaled - first);
+}
+
+float SmearProcessor::lookupWindow(float phase) const noexcept
+{
+    const auto wrapped = static_cast<float>(wrap(static_cast<double>(phase), 1.0));
+    const auto scaled = wrapped * static_cast<float>(modulationTableSize);
+    const auto first = std::clamp(static_cast<int>(scaled), 0, modulationTableSize - 1);
+    const auto second = (first + 1) % modulationTableSize;
+    return lerp(hannTable[static_cast<std::size_t>(first)],
+                hannTable[static_cast<std::size_t>(second)], scaled - first);
+}
+
 void SmearProcessor::startGrain(float amount) noexcept
 {
     Grain* destination = nullptr;
@@ -446,10 +477,18 @@ void SmearProcessor::startGrain(float amount) noexcept
     if (destination == nullptr)
         return;
 
-    const auto lengthSeconds = 0.070 - 0.040 * static_cast<double>(amount)
-        + 0.012 * (random.unit() - 0.5);
+    const auto shortestSeconds = 0.060 - 0.052 * static_cast<double>(amount);
+    const auto longestSeconds = 0.100 - 0.070 * static_cast<double>(amount);
+    const auto shortBiasExponent = 2.40 - 1.80 * static_cast<double>(amount);
+    const auto shortness = std::pow(random.unit(), shortBiasExponent);
+    const auto lengthSeconds = longestSeconds
+        + (shortestSeconds - longestSeconds) * shortness;
+    const auto minimumLength = std::max(16,
+        static_cast<int>(std::llround(sampleRate * 0.006)));
     const auto length = std::clamp(static_cast<int>(std::llround(sampleRate * lengthSeconds)),
-                                   16, std::max(16, delayBuffer.getNumSamples() / 4));
+                                   minimumLength,
+                                   std::max(minimumLength,
+                                            delayBuffer.getNumSamples() / 4));
     const auto selector = random.unit();
     int semitones = 12;
     if (selector < 0.12 * (1.0 - amount))
@@ -486,15 +525,8 @@ void SmearProcessor::startGrain(float amount) noexcept
     destination->age = 0;
     destination->length = length;
     destination->active = true;
-}
-
-int SmearProcessor::getActiveGrainCount() const noexcept
-{
-    int count = 0;
-    for (const auto& grain : grains)
-        if (grain.active)
-            ++count;
-    return count;
+    lastGrainLengthFrames = length;
+    ++activeGrainCount;
 }
 
 void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
@@ -513,6 +545,7 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
         / static_cast<float>(sampleRate * 0.004));
     const auto feedbackCoefficient = 1.0f - std::exp(-1.0f
         / static_cast<float>(sampleRate * 0.000105));
+    peakActiveGrainCount = activeGrainCount;
 
     for (int frame = 0; frame < buffer.getNumSamples(); ++frame)
     {
@@ -557,12 +590,19 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
 
         if (amount > 0.0f && grainCountdown-- <= 0)
         {
-            startGrain(amount);
-            const auto nominalLength = sampleRate * (0.070 - 0.040 * amount);
+            const auto densityCurve = std::pow(amount, 0.90f);
+            const auto targetGrains = std::clamp(2 + static_cast<int>(std::llround(
+                static_cast<double>(maximumGrains - 2) * densityCurve)),
+                2, maximumGrains);
+            if (activeGrainCount < targetGrains)
+                startGrain(amount);
+            peakActiveGrainCount = std::max(peakActiveGrainCount, activeGrainCount);
+            const auto nominalLength = sampleRate
+                * (0.088 - 0.072 * std::pow(static_cast<double>(amount), 0.85));
             const auto pulse = 0.90f + 0.10f * std::sin(
                 juce::MathConstants<float>::twoPi * motionPhase);
-            grainCountdown = std::max(1, static_cast<int>(std::llround(nominalLength
-                * (0.52 - 0.27 * amount)
+            grainCountdown = std::max(1, static_cast<int>(std::llround(
+                nominalLength / static_cast<double>(targetGrains)
                 * pulse * (0.86 + 0.28 * random.unit()))));
         }
 
@@ -574,12 +614,9 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
                 continue;
             const auto phase = static_cast<float>(grain.age)
                 / static_cast<float>(std::max(1, grain.length));
-            const auto window = 0.5f - 0.5f * std::cos(
-                juce::MathConstants<float>::twoPi * phase);
-            const auto pitchOrbit = std::sin(juce::MathConstants<float>::twoPi
-                                             * grain.pitchPhase);
-            const auto panOrbit = std::sin(juce::MathConstants<float>::twoPi
-                                           * grain.panPhase);
+            const auto window = lookupWindow(phase);
+            const auto pitchOrbit = lookupSine(grain.pitchPhase);
+            const auto panOrbit = lookupSine(grain.panPhase);
             const auto movingPan = std::clamp(grain.pan + panOrbitDepth * panOrbit,
                                               -1.0f, 1.0f);
             const auto increment = grain.increment * std::pow(2.0,
@@ -600,7 +637,10 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
             grain.panPhase = static_cast<float>(wrap(
                 grain.panPhase + grain.panRate, 1.0));
             if (++grain.age >= grain.length)
+            {
                 grain.active = false;
+                activeGrainCount = std::max(0, activeGrainCount - 1);
+            }
         }
 
         const auto inputEnvelope = std::max(std::abs(dry[0]), std::abs(dry[1]));
@@ -643,6 +683,9 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
         for (auto& grain : grains)
             grain.active = false;
         grainCountdown = 0;
+        activeGrainCount = 0;
+        peakActiveGrainCount = 0;
+        lastGrainLengthFrames = 0;
         feedbackState.fill(0.0f);
         overlapEnergy = 0.0f;
         lastOverlapGain = 0.0f;

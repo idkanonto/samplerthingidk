@@ -11,7 +11,6 @@ namespace randomchop
 struct MeltSettings final
 {
     float amountPercent = 0.0f;
-    float reverseChancePercent = 0.0f;
 };
 
 class MeltProcessor final
@@ -44,10 +43,8 @@ private:
     };
 
     static float sanitise(float value) noexcept;
-    void beginEvent(const GridBoundaries&, int gridChoice, float amount,
-                    float reverseChance) noexcept;
-    void configureSlice(int slice, int outputFrames, float amount,
-                        float reverseChance) noexcept;
+    void beginEvent(const GridBoundaries&, int gridChoice, float amount) noexcept;
+    void configureSlice(int slice, int outputFrames, float amount) noexcept;
     float readCaptured(int channel, double logicalFrame) const noexcept;
     float renderSliceSample(int channel, int slice, int localFrame) const noexcept;
     void endEvent() noexcept;
@@ -89,17 +86,21 @@ struct SmearSettings
 class SmearProcessor final
 {
 public:
+    static constexpr int maximumGrains = 16;
+
     void prepare(double newSampleRate);
     void reset() noexcept;
     void setSeed(uint64_t seed) noexcept;
     void process(juce::AudioBuffer<float>& buffer, SmearSettings settings) noexcept;
 
-    int getActiveGrainCount() const noexcept;
+    int getActiveGrainCount() const noexcept { return activeGrainCount; }
+    int getPeakActiveGrainCount() const noexcept { return peakActiveGrainCount; }
+    int getLastGrainLengthFrames() const noexcept { return lastGrainLengthFrames; }
     float getLastMotionAmount() const noexcept { return lastMotionAmount; }
     float getLastOverlapGain() const noexcept { return lastOverlapGain; }
 
 private:
-    static constexpr int maximumGrains = 6;
+    static constexpr int modulationTableSize = 2048;
     struct Grain
     {
         double readPosition = 0.0;
@@ -117,6 +118,8 @@ private:
 
     static float sanitise(float value) noexcept;
     float readDelay(int channel, double position, double increment) const noexcept;
+    float lookupSine(float phase) const noexcept;
+    float lookupWindow(float phase) const noexcept;
     void startGrain(float amount) noexcept;
     void resetRealtimeState() noexcept;
 
@@ -124,6 +127,8 @@ private:
     juce::AudioBuffer<float> mediumBandDelayBuffer;
     juce::AudioBuffer<float> highBandDelayBuffer;
     std::array<Grain, maximumGrains> grains;
+    std::array<float, modulationTableSize> sineTable {};
+    std::array<float, modulationTableSize> hannTable {};
     std::array<float, 2> lowState { 0.0f, 0.0f };
     std::array<float, 2> feedbackState { 0.0f, 0.0f };
     std::array<std::array<float, 4>, 2> mediumFilterState {};
@@ -142,6 +147,9 @@ private:
     int writePosition = 0;
     int validFrames = 0;
     int grainCountdown = 0;
+    int activeGrainCount = 0;
+    int peakActiveGrainCount = 0;
+    int lastGrainLengthFrames = 0;
 };
 }
 

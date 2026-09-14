@@ -327,7 +327,7 @@ void testRegionsAndVoices()
           "voice rendering propagated hostile audio/envelope state or failed to release");
 }
 
-void testMeltStretchAndReverseAxes()
+void testMeltSingleMacroProgression()
 {
     randomchop::GridBoundaries noBoundary;
     noBoundary.bpm = 120.0;
@@ -336,27 +336,36 @@ void testMeltStretchAndReverseAxes()
     trigger.count = 1;
     trigger.sampleOffsets[0] = 0;
 
-    randomchop::MeltProcessor forward;
-    randomchop::MeltProcessor reverse;
-    forward.prepare(48000.0);
-    reverse.prepare(48000.0);
-    forward.setSeed(77);
-    reverse.setSeed(77);
-    auto historyA = makeTemporalInput(6000);
-    auto historyB = copyBuffer(historyA);
-    forward.process(historyA, noBoundary, 1, { 72.0f, 0.0f });
-    reverse.process(historyB, noBoundary, 1, { 72.0f, 100.0f });
-    auto outputA = makeTemporalInput(6000, 6000);
-    auto outputB = copyBuffer(outputA);
-    forward.process(outputA, trigger, 1, { 72.0f, 0.0f });
-    reverse.process(outputB, trigger, 1, { 72.0f, 100.0f });
-    check(forward.getLastStretchRatio() > 1.0f
-              && forward.getLastReversedSlices() == 0
-              && reverse.getLastReversedSlices() > 0
-              && !buffersEqual(outputA, outputB)
-              && bufferFiniteAndBounded(outputA)
-              && bufferFiniteAndBounded(outputB),
-          "Melt stretch and Reverse Chance axes were inactive or indistinguishable");
+    randomchop::MeltProcessor low;
+    randomchop::MeltProcessor highA;
+    randomchop::MeltProcessor highB;
+    low.prepare(48000.0);
+    highA.prepare(48000.0);
+    highB.prepare(48000.0);
+    low.setSeed(77);
+    highA.setSeed(77);
+    highB.setSeed(77);
+    auto lowHistory = makeTemporalInput(6000);
+    auto highHistoryA = copyBuffer(lowHistory);
+    auto highHistoryB = copyBuffer(lowHistory);
+    low.process(lowHistory, noBoundary, 1, { 5.0f });
+    highA.process(highHistoryA, noBoundary, 1, { 72.0f });
+    highB.process(highHistoryB, noBoundary, 1, { 72.0f });
+    auto lowOutput = makeTemporalInput(6000, 6000);
+    auto highOutputA = copyBuffer(lowOutput);
+    auto highOutputB = copyBuffer(lowOutput);
+    low.process(lowOutput, trigger, 1, { 5.0f });
+    highA.process(highOutputA, trigger, 1, { 72.0f });
+    highB.process(highOutputB, trigger, 1, { 72.0f });
+    check(low.getLastStretchRatio() > 1.0f
+              && highA.getLastStretchRatio() > low.getLastStretchRatio()
+              && low.getLastReversedSlices() == 0
+              && highA.getLastReversedSlices() > 0
+              && buffersEqual(highOutputA, highOutputB)
+              && !buffersEqual(lowOutput, highOutputA)
+              && bufferFiniteAndBounded(lowOutput)
+              && bufferFiniteAndBounded(highOutputA),
+          "Melt's single macro did not progress stretch/reversal deterministically");
 }
 
 void testHostGrid()
@@ -599,7 +608,7 @@ juce::AudioBuffer<float> renderMelt(float amount,
          frame < output.getNumSamples() && boundaries.count < 64;
          frame += gridFrames)
         boundaries.sampleOffsets[static_cast<std::size_t>(boundaries.count++)] = frame;
-    processor.process(output, boundaries, 1, { amount, 35.0f });
+    processor.process(output, boundaries, 1, { amount });
     return output;
 }
 
@@ -743,7 +752,7 @@ void testFullCreativeChainSafety()
             boundaries.sampleOffsets[0] = frames / 2;
         }
         scramble.process(block, boundaries, 2, { 100.0f });
-        melt.process(block, boundaries, 2, { 100.0f, 100.0f });
+        melt.process(block, boundaries, 2, { 100.0f });
         spectral.process(block, mask,
             { 100.0f, 3, boundaries.bpm, 0.0, false,
               boundaries.transportDiscontinuity });
@@ -765,7 +774,7 @@ void testMeltProcessor()
     bypass.prepare(48000.0);
     auto dry = makeTemporalInput(512);
     auto output = copyBuffer(dry);
-    bypass.process(output, noBoundary, 1, { 0.0f, 100.0f });
+    bypass.process(output, noBoundary, 1, { 0.0f });
     check(buffersEqual(dry, output),
           "Melt Amount 0 was not sample-identical bypass");
 
@@ -783,8 +792,8 @@ void testMeltProcessor()
     boundaries.sampleOffsets[0] = 6000;
     boundaries.sampleOffsets[1] = 12000;
     boundaries.sampleOffsets[2] = 18000;
-    first.process(animatedA, boundaries, 1, { 72.0f, 100.0f });
-    second.process(animatedB, boundaries, 1, { 72.0f, 100.0f });
+    first.process(animatedA, boundaries, 1, { 72.0f });
+    second.process(animatedB, boundaries, 1, { 72.0f });
     check(buffersEqual(animatedA, animatedB)
               && first.getActivationCount() == 3
               && first.getLastStretchRatio() > 1.0f
@@ -803,7 +812,7 @@ void testMeltProcessor()
         unsafe.setSample(1, frame, value);
     }
     extreme.setSeed(123);
-    extreme.process(unsafe, noBoundary, 1, { 1000.0f, 1000.0f });
+    extreme.process(unsafe, noBoundary, 1, { 1000.0f });
     check(bufferFiniteAndBounded(unsafe),
           "Melt extreme macro state propagated NaN, Inf, or runaway gain");
 
@@ -818,7 +827,7 @@ void testMeltProcessor()
     silenceBoundaries.sampleOffsets[0] = 6000;
     silenceBoundaries.sampleOffsets[1] = 12000;
     silenceBoundaries.sampleOffsets[2] = 18000;
-    silenceProcessor.process(silence, silenceBoundaries, 1, { 100.0f, 100.0f });
+    silenceProcessor.process(silence, silenceBoundaries, 1, { 100.0f });
     check(silence.getMagnitude(0, silence.getNumSamples()) == 0.0f
               && silence.getMagnitude(1, silence.getNumSamples()) == 0.0f,
           "Melt generated self-noise from silence");
@@ -864,6 +873,24 @@ void testSmearProcessor()
     deterministicB.process(sameB, { 75.0f });
     check(buffersEqual(sameA, sameB),
           "Smear crystal-grain scheduling was not deterministic for a restored seed");
+
+    randomchop::SmearProcessor sparse;
+    randomchop::SmearProcessor dense;
+    sparse.prepare(48000.0);
+    dense.prepare(48000.0);
+    sparse.setSeed(913);
+    dense.setSeed(913);
+    auto sparseInput = makeTemporalInput(96000);
+    auto denseInput = copyBuffer(sparseInput);
+    sparse.process(sparseInput, { 20.0f });
+    dense.process(denseInput, { 100.0f });
+    check(dense.getPeakActiveGrainCount() > sparse.getPeakActiveGrainCount()
+              && dense.getPeakActiveGrainCount() >= 12
+              && dense.getLastGrainLengthFrames() > 0
+              && dense.getLastGrainLengthFrames() < sparse.getLastGrainLengthFrames()
+              && bufferFiniteAndBounded(sparseInput)
+              && bufferFiniteAndBounded(denseInput),
+          "Smear Amount did not introduce a denser cloud of smaller grains");
 
     juce::AudioBuffer<float> unsafe(2, 256);
     unsafe.clear();
@@ -1208,11 +1235,12 @@ void testStateMigration()
     state.setProperty("codecAmount", 70.0f, nullptr);
     state.setProperty("fractureCharacter", 42.0f, nullptr);
     state.setProperty("fractureMix", 80.0f, nullptr);
+    state.setProperty("meltReverseChance", 88.0f, nullptr);
     for (const auto* id : { "output", "randomStart", "reverseChance", "retriggerChance",
                             "stepLength", "bitDepth", "takeSelection", "seed",
                             "freezeSize", "codecQuality", "fractureDrive",
                             "fractureCharacter", "fractureMix", "finalLength",
-                            "attack", "release", "rateReduction" })
+                            "attack", "release", "rateReduction", "meltReverseChance" })
     {
         juce::ValueTree parameter("PARAM");
         parameter.setProperty("id", id, nullptr);
@@ -1230,6 +1258,7 @@ void testStateMigration()
               && !state.hasProperty("codecAmount")
               && !state.hasProperty("fractureCharacter")
               && !state.hasProperty("fractureMix")
+              && !state.hasProperty("meltReverseChance")
               && state.getNumChildren() == 1
               && state.getChild(0).getProperty("id").toString() == "output"
               && static_cast<int>(state.getProperty("stateVersion"))
@@ -1245,6 +1274,7 @@ void testStateMigration()
               && randomchop::isRemovedParameterId("attack")
               && randomchop::isRemovedParameterId("release")
               && randomchop::isRemovedParameterId("rateReduction")
+              && randomchop::isRemovedParameterId("meltReverseChance")
               && !randomchop::isRemovedParameterId("output"),
           "legacy parameter allow/deny boundary changed");
 }
@@ -1419,7 +1449,7 @@ int main()
     testSupportedFormatsAndPoolState();
     testWeightedSelectionAndPitch();
     testRegionsAndVoices();
-    testMeltStretchAndReverseAxes();
+    testMeltSingleMacroProgression();
     testHostGrid();
     testFullCreativeChainSafety();
     testCreativeMacroProgressionAndRender();
