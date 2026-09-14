@@ -29,6 +29,7 @@ These decisions govern implementation together with [[PRODUCT_SPEC_V2]].
 - Treat grid-division edits separately from transport discontinuities: re-grid SCRAMBLE, but do not clear Spectral Draw's latency/history path for a UI timing edit.
 - Report only Spectral Draw's fixed 1024-sample latency; MELT adds no host latency.
 - Publish only bounded scalar creative telemetry from the callback; visualizers paint live DSP state on the message thread and never inspect audio buffers.
+- Publish every passing Windows build as a self-contained `recompiler-dll-Windows-Setup.exe` installer that preserves the complete VST3 bundle, installs the Standalone app, and provides an uninstaller. Keep the raw VST3 artifact as a fallback. The installer must be install/uninstall-tested on the disposable CI runner before upload.
 
 ## Removed
 

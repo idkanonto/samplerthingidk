@@ -94,4 +94,4 @@ A crystalline pitched-grain cloud, not a blur or reverb substitute. A fixed prea
 
 ## Delivery boundary
 
-This creative-quality pass changes sound design and control semantics without adding unrelated features or beginning a visual-art-direction redesign. Completion requires Windows compilation/CTest, deterministic listening renders, fixed-latency and boundary-partition checks, artifact inspection, review disposition, DAW listening guidance, and a green post-merge `main`.
+This creative-quality pass changes sound design and control semantics without adding unrelated features or beginning a visual-art-direction redesign. Passing Windows builds ship a self-contained installer executable containing the complete VST3 bundle and Standalone app, plus a raw VST3 fallback artifact. Completion requires Windows compilation/CTest, deterministic listening renders, fixed-latency and boundary-partition checks, silent installer install/uninstall verification, artifact inspection, DAW listening guidance, and a green post-merge `main`.
