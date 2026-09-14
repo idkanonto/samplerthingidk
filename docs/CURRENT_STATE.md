@@ -6,12 +6,12 @@ tags:
   - implementation
   - current-state
 status: active
-verified: 2026-09-13
+verified: 2026-09-14
 ---
 
 # Current Implementation State
 
-The MELT code head `90a2ac4340ab0bf87ce73ff598dfe503a22494c2` on [PR #19](https://github.com/idkanonto/samplerthingidk/pull/19) passed [Windows Release CI run #69](https://github.com/idkanonto/samplerthingidk/actions/runs/34774574912). The final verified section below is authoritative for this branch and supersedes the historical Gate B/C, FRACTURE, and earlier targeted-redesign internals. The verified pre-rework baseline and prior creative-quality evidence remain in history; they are not the current implementation contract.
+The single-macro MELT/dynamic SMEAR code head `a18375061de91b2fcd1f2f10641ac40a12778487` on [PR #20](https://github.com/idkanonto/samplerthingidk/pull/20) passed [Windows Release CI run #72](https://github.com/idkanonto/samplerthingidk/actions/runs/34800123449). The final verified section below is authoritative for this branch and supersedes the historical Gate B/C, FRACTURE, earlier targeted-redesign internals, and the two-control MELT/six-grain SMEAR baseline. Earlier verified evidence remains in history; it is not the current implementation contract.
 
 Gate E PR #15 passed [Windows Release CI run #51](https://github.com/idkanonto/samplerthingidk/actions/runs/34164215738) at code head `027c57b8c0c30bf5450042de64f006c1c9e92fb0`. CTest passed 1/1 in 0.13 seconds. Artifact `10033734310` had GitHub SHA-256 `73cfed01c3e2cd781bd7ada26a185797fedad33751a994838ee3c3ca22ff9b3f`; the workflow verified the complete bundle, required notices, and the non-empty 7,465,472-byte Windows module at `recompiler.dll.vst3/Contents/x86_64-win/recompiler.dll.vst3`. Documentation-only successors and the squash-merged `main` remain subject to the same exact-head workflow gate.
 
@@ -96,7 +96,7 @@ Gate E PR #15 passed [Windows Release CI run #51](https://github.com/idkanonto/s
 - Artifact `10291988433` (`recompiler-dll-Windows-VST3`, 3,280,376 bytes) has GitHub SHA-256 `482ff60db63a117c864eb7282f2b10be29dc5aa8ddb600012d4bef5e6c7a883c`. Listening artifact `10292008315` has SHA-256 `e354decf9a90ce279f20d73413d9da754c09901497965afd7926e0c8816486b5`.
 - CodeRabbit auto-skipped the updated PR because the repository is below its automatic-review threshold. It supplied no finding; compilation, focused regression tests, source/realtime review, artifact verification, and the required post-merge `main` run remain the approval evidence.
 
-## Verified MELT replacement
+## Historical MELT replacement baseline (superseded internally)
 
 - The global chain is now `SCRAMBLE -> MELT -> SPECTRAL DRAW -> SMEAR -> OUTPUT`. FRACTURE DSP, latency, controls, editor attachments, visualizer, and active state are removed; the host reports only Spectral Draw's fixed 1024-sample latency.
 - MELT arms on a nonzero Amount edge and begins at the next shared-grid boundary. It references the previous grid interval inside a prepared four-second stereo ring, automatically creates two through four slices, and renders each with four-way-overlap Hann grains whose slower analysis hop produces `1.08x`–`4x` pitch-preserving expansion. REVERSE CHANCE is independently clamped and latched once per slice; both channels share timing, region, ratio, and direction.
@@ -107,6 +107,16 @@ Gate E PR #15 passed [Windows Release CI run #51](https://github.com/idkanonto/s
 - Artifact `10323415507` (`recompiler-dll-Windows-VST3`, 3,249,432 bytes) has GitHub and independently downloaded SHA-256 `15fde813f21de94716ef322e8eff5d7f14e520d88bf9b3e4fb40f12343358717`. Listening artifact `10323305671` has matching SHA-256 `c45cbb9fb45d555e946b0dea3cd6a73c32e31ef6baa59552d7f06f81eebdbb8b` and contains exactly 16 WAVs.
 - MELT controlled-render difference RMS was `0/0.1129920/0.1391314/0.1674489/0.2230484` at Amount `0/25/50/75/100`; zero was sample-identical and transformation rose monotonically. Output RMS was `0.2214279/0.1889629/0.1847518/0.1777822/0.1722324`, with maximum peak `0.9107683` in active renders and no non-finite samples. These are objective guards, not a substitute for DAW listening.
 - CodeRabbit auto-skipped PR #19 because the repository is below its automatic-review threshold and produced no review or inline threads. It remains an unavailable second opinion, not an approval authority.
+
+## Verified single-macro MELT and dynamic SMEAR
+
+- The compact editor exposes one MELT Amount control. `meltReverseChance` is retired from the active parameter layout, editor, and DSP interface; state version 10 explicitly ignores that removed ID instead of reinterpreting old values. MELT Amount now derives a bounded per-slice reverse probability internally while retaining automatic 2–4-slice pitch-preserving expansion, deterministic stereo-coherent decisions, next-grid arming, and exact settled bypass.
+- SMEAR retains prepared fixed storage and deterministic scheduling but expands its bounded pool from six to sixteen records. Amount raises the target active population from about 2 to 16 while contracting the generated grain-length range from approximately 60–100 ms toward 8–30 ms, with an increasing short-grain bias. Existing grains finish naturally when Amount is lowered.
+- Prepared 2048-point sine and Hann tables replace repeated per-grain window/pan oscillator trigonometry. Safe read-behind, three-band history selection, pitch choices, transient-aware wet suppression, overlap-energy normalization, cross-block persistence, hostile-value bounds, and the 10 ms exact-bypass transition remain intact. The editor visualizer scales to sixteen activity marks and makes them smaller as Amount rises.
+- Run #72 compiled the Release VST3, Standalone, and tests at code head `a18375061de91b2fcd1f2f10641ac40a12778487`; CTest passed 1/1 in 1.51 seconds (1.57 seconds total). All 16 deterministic 24-bit stereo 48 kHz listening renders were non-empty. The workflow verified the complete bundle, required notices, a 7,460,352-byte Windows module at `recompiler.dll.vst3/Contents/x86_64-win/recompiler.dll.vst3`, and a 7,511,040-byte Standalone.
+- Artifact `10330783094` (`recompiler-dll-Windows-VST3`, 3,248,778 bytes) has GitHub and independently downloaded SHA-256 `be87a0ba8b1440763ea8fc75e8bb543551dcc001c6e3bc32f24d8bd99527bed2`. Listening artifact `10330997194` (18,127,383 bytes) has matching SHA-256 `6bb0f6348c6e6a5dc514e14325cd9887538626b1aa6775471d7807e2f4583c30` and contains exactly 16 WAVs.
+- SMEAR controlled-render difference RMS was `0/0.0200878/0.0295956/0.0422752/0.0508241` at Amount `0/25/50/75/100`; its above-5 kHz energy share rose monotonically from `0.004699` to `0.008135`, zero was sample-identical, every sample was finite, and the maximum rendered peak was `0.948338`. Focused tests additionally verified that maximum active grains increase with Amount, dense operation reaches at least twelve simultaneous grains, and the last dense grain is shorter than the sparse comparison. These are objective guards, not a substitute for DAW listening.
+- CodeRabbit had not produced a review or inline thread after the checks settled. Per project policy it is treated as an optional second opinion; compilation, focused regression tests, source/realtime review, artifact verification, and the required post-merge `main` run are the approval evidence.
 
 ## Remaining external verification
 
