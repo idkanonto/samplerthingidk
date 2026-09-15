@@ -11,7 +11,16 @@ verified: 2026-09-15
 
 # Current Implementation State
 
-The straightforward-sampler head `3dfbc5d55c717275d44ffb6798388d28bb3abbed` on [PR #22](https://github.com/idkanonto/samplerthingidk/pull/22) passed [Windows Release CI run #79](https://github.com/idkanonto/samplerthingidk/actions/runs/34983220916). CTest passed 1/1 in 1.54 seconds, all 16 deterministic listening renders were non-empty, and the workflow verified both the Standalone and complete VST3 bundle. This head is the authoritative current behavior and delivery contract; the later sections retain historical evidence only.
+The complete XP-editor head `1742a2d45832f9816d6a94054e60634805b676c9` on [PR #24](https://github.com/idkanonto/samplerthingidk/pull/24) passed [Windows Release CI run #85](https://github.com/idkanonto/samplerthingidk/actions/runs/35026852505). The workflow compiled the VST3, Standalone, and tests, passed CTest and deterministic listening-render verification, and verified the raw VST3 bundle. Artifact `10419677775` is 3,211,855 bytes with matching GitHub/downloaded SHA-256 `7d5c0f2330ba4cf70473b8fe4c418eab1207cfa7731ac116f7bd1b10d0967ec0`; it contains the top-level `recompiler.dll.vst3` bundle and a non-empty 7,375,872-byte module at `Contents/x86_64-win/recompiler.dll.vst3`.
+
+## Verified complete XP editor
+
+- The full editor—not only its information popup—uses a reusable code-native Windows XP visual system across the application bar, source counter, sample browser, source waveform and markers, source controls, global harmony/voice strip, creative-effect cards, Spectral Draw display, Output, buttons, toggles, combo boxes, sliders, and rotary controls.
+- The compact responsive layout remains 880×600 by default and supports the existing 760×520 through 1180×820 range. At the default size it keeps six sample rows visible and reserves the lower half for dedicated SCRAMBLE, MELT, SMEAR, SPECTRAL DRAW, and OUTPUT cards.
+- The far-right header keeps the source counter beside an XP-style information icon. The icon opens the requested themed modal containing `test` and a Close button.
+- This is an editor-only redesign. The sampler controls, parameter IDs, attachments, state compatibility, DSP chain, immutable source ownership, and realtime-audio behavior are unchanged.
+
+The straightforward-sampler head `3dfbc5d55c717275d44ffb6798388d28bb3abbed` on [PR #22](https://github.com/idkanonto/samplerthingidk/pull/22) passed [Windows Release CI run #79](https://github.com/idkanonto/samplerthingidk/actions/runs/34983220916). CTest passed 1/1 in 1.54 seconds, all 16 deterministic listening renders were non-empty, and the workflow verified both the Standalone and complete VST3 bundle. It remains the authoritative behavior baseline; the later sections retain historical evidence only.
 
 ## Verified straightforward sampler workflow
 
