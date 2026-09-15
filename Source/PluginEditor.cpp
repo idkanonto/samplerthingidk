@@ -532,7 +532,6 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     spectralDrawLabel.setText("SPECTRAL DRAW", juce::dontSendNotification);
     midiPitch.setTooltip("Off keeps every trigger in Play In Key; on follows MIDI notes for chords");
     voiceMode.setTooltip("POLY overlaps held notes; MONO cuts the previous voice");
-    spectralCanvas.setTooltip("Drag to draw; Reset clears the canvas");
     voiceModeLabel.setJustificationType(juce::Justification::centredLeft);
     for (auto* label : { &sourceKeyLabel, &sourceTransposeLabel, &sourceFineTuneLabel,
                          &sourceGainLabel, &targetKeyLabel, &voiceModeLabel,
