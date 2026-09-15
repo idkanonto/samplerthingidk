@@ -62,6 +62,8 @@ XpLookAndFeel::XpLookAndFeel()
     setColour(juce::Slider::textBoxTextColourId, juce::Colour(xpInk));
     setColour(juce::Slider::textBoxBackgroundColourId, juce::Colour(0xfff8fbff));
     setColour(juce::Slider::textBoxOutlineColourId, juce::Colour(0xff7693b3));
+    setColour(juce::Slider::trackColourId, juce::Colour(0xff1686e4));
+    setColour(juce::Slider::thumbColourId, juce::Colour(0xffdcecf9));
     setColour(juce::PopupMenu::backgroundColourId, juce::Colour(0xfff7fbff));
     setColour(juce::PopupMenu::textColourId, juce::Colour(xpInk));
     setColour(juce::PopupMenu::highlightedBackgroundColourId, juce::Colour(0xff2f91ee));
@@ -871,7 +873,7 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     list.setColour(juce::ListBox::backgroundColourId, juce::Colour(0xfff5f8fc));
     list.setColour(juce::ListBox::outlineColourId, juce::Colour(0xff7896b5));
     list.setOutlineThickness(1);
-    list.setRowHeight(30);
+    list.setRowHeight(25);
     list.setTooltip("Drop WAV, AIFF, MP3, or FLAC files here");
 
     for (int index = 0; index < static_cast<int>(randomchop::tonicNames.size()); ++index)
@@ -1111,7 +1113,7 @@ void RandomChopSamplerAudioProcessorEditor::resized()
                                         juce::roundToInt(area.getHeight() * 0.43f));
     auto topRow = area.removeFromTop(topHeight);
     area.removeFromTop(gap);
-    auto globalRow = area.removeFromTop(scaled(60));
+    auto globalRow = area.removeFromTop(68);
     area.removeFromTop(gap);
     auto bottomRow = area;
 
@@ -1119,7 +1121,7 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     topRow.removeFromLeft(gap);
     sourcePanelBounds = topRow;
 
-    auto sampleContent = samplePanelBounds.reduced(7).withTrimmedTop(scaled(25));
+    auto sampleContent = samplePanelBounds.reduced(7).withTrimmedTop(25);
     sampleDropBounds = sampleContent.removeFromBottom(scaled(43)).reduced(2, 4);
     list.setBounds(sampleContent.reduced(1));
 
@@ -1142,7 +1144,7 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     sourceGain.setBounds(gainCell.reduced(0, 1));
 
     globalPanelBounds = globalRow;
-    auto globalContent = globalPanelBounds.reduced(8).withTrimmedTop(scaled(25));
+    auto globalContent = globalPanelBounds.reduced(8).withTrimmedTop(25);
     const auto globalCellWidth = globalContent.getWidth() / 3;
     auto targetCell = globalContent.removeFromLeft(globalCellWidth).reduced(4, 1);
     targetKeyLabel.setBounds(targetCell.removeFromLeft(78));
@@ -1169,7 +1171,7 @@ void RandomChopSamplerAudioProcessorEditor::resized()
                                         juce::Slider& slider, CreativeVisualizer& visual)
     {
         label.setBounds(0, 0, 0, 0);
-        auto content = panel.reduced(7).withTrimmedTop(scaled(25));
+        auto content = panel.reduced(7).withTrimmedTop(25);
         auto knobArea = content.removeFromTop(juce::jmin(scaled(91), content.getHeight() / 2));
         slider.setBounds(knobArea.withSizeKeepingCentre(juce::jmin(104, knobArea.getWidth()),
                                                         knobArea.getHeight()));
@@ -1180,7 +1182,7 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     layoutEffect(smearPanelBounds, smearAmountLabel, smearAmount, smearVisual);
 
     spectralDrawLabel.setBounds(0, 0, 0, 0);
-    auto spectralContent = spectralPanelBounds.reduced(7).withTrimmedTop(scaled(25));
+    auto spectralContent = spectralPanelBounds.reduced(7).withTrimmedTop(25);
     auto spectralTools = spectralContent.removeFromBottom(scaled(55));
     spectralCanvas.setBounds(spectralContent.reduced(1, 2));
     auto depthArea = spectralTools.reduced(4, 3);
@@ -1189,7 +1191,7 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     spectralDepth.setBounds(depthArea.reduced(2, 0));
 
     outputLabel.setBounds(0, 0, 0, 0);
-    auto outputContent = outputPanelBounds.reduced(7).withTrimmedTop(scaled(25));
+    auto outputContent = outputPanelBounds.reduced(7).withTrimmedTop(25);
     output.setBounds(outputContent.withSizeKeepingCentre(
         juce::jmin(105, outputContent.getWidth()), juce::jmin(125, outputContent.getHeight())));
 
