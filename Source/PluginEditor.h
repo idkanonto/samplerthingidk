@@ -72,6 +72,27 @@ private:
     uint32_t telemetryFlags = 0;
 };
 
+class XpInfoButton final : public juce::Button
+{
+public:
+    XpInfoButton() : juce::Button("Information") {}
+    void paintButton(juce::Graphics&, bool isMouseOverButton,
+                     bool isButtonDown) override;
+};
+
+class XpInfoPanel final : public juce::Component
+{
+public:
+    XpInfoPanel();
+    void paint(juce::Graphics&) override;
+    void resized() override;
+
+    std::function<void()> onClose;
+
+private:
+    juce::TextButton closeButton { "Close" };
+};
+
 class RandomChopSamplerAudioProcessorEditor final : public juce::AudioProcessorEditor,
     public juce::FileDragAndDropTarget, private juce::ListBoxModel, private juce::Timer
 {
@@ -96,6 +117,8 @@ private:
 
     RandomChopSamplerAudioProcessor& processor;
     juce::Label title, status;
+    XpInfoButton infoButton;
+    XpInfoPanel infoPanel;
     juce::ListBox list { "Samples", this };
     SourceWaveformComponent waveform;
     juce::ComboBox sourceKey;

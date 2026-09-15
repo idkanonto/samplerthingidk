@@ -453,6 +453,79 @@ void CreativeVisualizer::paint(juce::Graphics& g)
     }
 }
 
+void XpInfoButton::paintButton(juce::Graphics& g, bool isMouseOverButton,
+                               bool isButtonDown)
+{
+    auto bounds = getLocalBounds().toFloat().reduced(2.0f);
+    const auto top = isButtonDown ? juce::Colour(0xff0b62c7)
+                                  : (isMouseOverButton ? juce::Colour(0xff69b9ff)
+                                                       : juce::Colour(0xff3b98ee));
+    const auto bottom = isButtonDown ? juce::Colour(0xff43a8ff)
+                                     : juce::Colour(0xff0754b5);
+    g.setGradientFill(juce::ColourGradient(top, bounds.getCentreX(), bounds.getY(),
+                                           bottom, bounds.getCentreX(), bounds.getBottom(),
+                                           false));
+    g.fillEllipse(bounds);
+    g.setColour(juce::Colours::white.withAlpha(0.95f));
+    g.drawEllipse(bounds.reduced(0.75f), 1.5f);
+    g.setFont(juce::Font(17.0f, juce::Font::bold));
+    g.drawText("i", bounds.toNearestInt().translated(0, -1),
+               juce::Justification::centred, false);
+}
+
+XpInfoPanel::XpInfoPanel()
+{
+    setOpaque(true);
+    addAndMakeVisible(closeButton);
+    closeButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xffe8eef8));
+    closeButton.setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xffd5e8ff));
+    closeButton.setColour(juce::TextButton::textColourOffId, juce::Colour(0xff15295a));
+    closeButton.onClick = [this]
+    {
+        if (onClose)
+            onClose();
+    };
+}
+
+void XpInfoPanel::paint(juce::Graphics& g)
+{
+    const auto bounds = getLocalBounds().toFloat();
+    g.fillAll(juce::Colour(0xffece9d8));
+    g.setColour(juce::Colour(0xff003c9d));
+    g.drawRect(bounds, 3.0f);
+
+    auto titleBar = bounds.reduced(3.0f).removeFromTop(31.0f);
+    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff0a70e8), titleBar.getX(),
+                                           titleBar.getY(), juce::Colour(0xff0751bb),
+                                           titleBar.getRight(), titleBar.getY(), false));
+    g.fillRect(titleBar);
+    g.setColour(juce::Colours::white);
+    g.setFont(juce::Font(15.0f, juce::Font::bold));
+    g.drawText("Information", titleBar.reduced(10.0f, 0.0f).toNearestInt(),
+               juce::Justification::centredLeft, false);
+
+    auto icon = juce::Rectangle<float>(25.0f, 58.0f, 42.0f, 42.0f);
+    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff70c4ff), icon.getCentreX(),
+                                           icon.getY(), juce::Colour(0xff0756bc),
+                                           icon.getCentreX(), icon.getBottom(), false));
+    g.fillEllipse(icon);
+    g.setColour(juce::Colours::white);
+    g.drawEllipse(icon.reduced(1.0f), 2.0f);
+    g.setFont(juce::Font(27.0f, juce::Font::bold));
+    g.drawText("i", icon.toNearestInt().translated(0, -2),
+               juce::Justification::centred, false);
+
+    g.setColour(juce::Colour(0xff111111));
+    g.setFont(15.0f);
+    g.drawText("test", 84, 61, getWidth() - 104, 36,
+               juce::Justification::centredLeft, false);
+}
+
+void XpInfoPanel::resized()
+{
+    closeButton.setBounds(getWidth() - 104, getHeight() - 44, 84, 25);
+}
+
 namespace
 {
 class SourceRowControls final : public juce::Component
@@ -493,8 +566,9 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     title.setFont(juce::Font(24.0f, juce::Font::bold));
     title.setColour(juce::Label::textColourId, juce::Colour(0xfff2f2f5));
     status.setColour(juce::Label::textColourId, juce::Colour(0xffa9acb7));
+    status.setJustificationType(juce::Justification::centredRight);
 
-    juce::Component* components[] = { &title, &status, &list, &waveform, &sourceKey,
+    juce::Component* components[] = { &title, &status, &infoButton, &list, &waveform, &sourceKey,
         &sourceTranspose, &sourceFineTune, &sourceGain,
         &sourceKeyLabel,
         &sourceTransposeLabel, &sourceFineTuneLabel, &sourceGainLabel,
@@ -503,6 +577,13 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
         &spectralDrawLabel, &spectralResetButton, &spectralCanvas,
         &scrambleVisual, &meltVisual, &smearVisual };
     for (auto* component : components) addAndMakeVisible(component);
+    addChildComponent(infoPanel);
+    infoButton.onClick = [this]
+    {
+        infoPanel.setVisible(true);
+        infoPanel.toFront(true);
+    };
+    infoPanel.onClose = [this] { infoPanel.setVisible(false); };
     list.setColour(juce::ListBox::backgroundColourId, juce::Colour(0xff191b21));
     list.setRowHeight(28);
     list.setTooltip("Drop WAV, AIFF, MP3, or FLAC files here");
@@ -665,8 +746,9 @@ void RandomChopSamplerAudioProcessorEditor::resized()
 
     auto area = getLocalBounds().reduced(12);
     auto header = area.removeFromTop(scaledHeight(32));
-    title.setBounds(header.removeFromLeft(260));
-    status.setBounds(header);
+    infoButton.setBounds(header.removeFromRight(scaledHeight(30)).reduced(2));
+    status.setBounds(header.removeFromRight(190));
+    title.setBounds(header);
 
     auto creativeControls = area.removeFromBottom(scaledHeight(62));
     auto effectVisuals = area.removeFromBottom(scaledHeight(74));
@@ -726,6 +808,10 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     spectralDepthLabel.setBounds(depthArea.removeFromLeft(105));
     spectralDepth.setBounds(depthArea);
     spectralCanvas.setBounds(spectralArea.reduced(2));
+
+    const auto dialogWidth = juce::jmin(350, getWidth() - 48);
+    const auto dialogHeight = juce::jmin(180, getHeight() - 48);
+    infoPanel.setBounds(getLocalBounds().withSizeKeepingCentre(dialogWidth, dialogHeight));
 }
 
 bool RandomChopSamplerAudioProcessorEditor::isInterestedInFileDrag(const juce::StringArray& files)
@@ -859,7 +945,7 @@ void RandomChopSamplerAudioProcessorEditor::timerCallback()
     if (processor.samples.getSnapshot() != displayPool)
         refresh();
     const int count = processor.samples.size();
-    auto message = juce::String(count).paddedLeft('0', 2) + " / 20 sources";
+    auto message = juce::String(count).paddedLeft('0', 2) + " / 20 SOURCES";
     if (processor.triggeredWhileEmpty.load(std::memory_order_relaxed))
         message = "No enabled playable sources";
     else if (transientMessage.isNotEmpty())
