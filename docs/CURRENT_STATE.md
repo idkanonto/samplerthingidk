@@ -6,12 +6,22 @@ tags:
   - implementation
   - current-state
 status: active
-verified: 2026-09-14
+verified: 2026-09-15
 ---
 
 # Current Implementation State
 
-The Windows-installer delivery head `894e08f9fda8095975d55abf0d284b4777af88e0` on [PR #21](https://github.com/idkanonto/samplerthingidk/pull/21) passed [Windows Release CI run #75](https://github.com/idkanonto/samplerthingidk/actions/runs/34874101513). The latest verified sections below are authoritative for current behavior and delivery packaging; they supersede the historical Gate B/C, FRACTURE, earlier targeted-redesign internals, and the two-control MELT/six-grain SMEAR baseline. Earlier verified evidence remains in history; it is not the current implementation contract.
+The straightforward-sampler head `3dfbc5d55c717275d44ffb6798388d28bb3abbed` on [PR #22](https://github.com/idkanonto/samplerthingidk/pull/22) passed [Windows Release CI run #79](https://github.com/idkanonto/samplerthingidk/actions/runs/34983220916). CTest passed 1/1 in 1.54 seconds, all 16 deterministic listening renders were non-empty, and the workflow verified both the Standalone and complete VST3 bundle. This head is the authoritative current behavior and delivery contract; the later sections retain historical evidence only.
+
+## Verified straightforward sampler workflow
+
+- Loading is drag-and-drop only. The pool keeps individual On/Remove actions and stable row selection; Add Samples, Clear All, Enable All, and Disable All are absent.
+- Every enabled playable source has equal selection probability. Per-source Weight and manual Stretch are removed from runtime, UI, and rewritten session state; source audio is prepared directly as immutable playback data.
+- Per-source Start/End, Source Key, Transpose, Fine Tune, and Gain remain. Global harmony is reduced to Play In Key plus Chords; Chords derives a central MIDI root from Play In Key. POLY/MONO is a two-position switch.
+- Global Grid is automatic, choosing 1/8, 1/16, or 1/32 nearest a 125 ms musical slice. Spectral Draw scanning automatically chooses a 2/4/8/16-quarter cycle nearest two seconds. Neither technical timing selector is exposed.
+- Spectral Draw uses direct drawing and one Reset action. The editor opens at 880×600 and resizes from 760×520 through 1180×820.
+- State version 11 removes retired Root MIDI Note, Global Grid, and Spectral Scan Rate IDs without reinterpreting them. The active sampler/effect parameters, source identity, canvas state, immutable snapshots, and deferred non-realtime reclamation remain compatible.
+- Future delivery is the raw VST3 artifact, not a rebuilt unsigned installer. Artifact `10403061289` is 3,198,770 bytes with GitHub and independently matched SHA-256 `6df7215f101346c1af89a06c5ac12012947d168a44b1ec7e1f2b63e2a48f48a0`. It contains the top-level `recompiler.dll.vst3` bundle and a non-empty 7,342,592-byte module at `Contents/x86_64-win/recompiler.dll.vst3`.
 
 Gate E PR #15 passed [Windows Release CI run #51](https://github.com/idkanonto/samplerthingidk/actions/runs/34164215738) at code head `027c57b8c0c30bf5450042de64f006c1c9e92fb0`. CTest passed 1/1 in 0.13 seconds. Artifact `10033734310` had GitHub SHA-256 `73cfed01c3e2cd781bd7ada26a185797fedad33751a994838ee3c3ca22ff9b3f`; the workflow verified the complete bundle, required notices, and the non-empty 7,465,472-byte Windows module at `recompiler.dll.vst3/Contents/x86_64-win/recompiler.dll.vst3`. Documentation-only successors and the squash-merged `main` remain subject to the same exact-head workflow gate.
 

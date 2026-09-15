@@ -16,16 +16,16 @@ status: active
 - Preallocate global-effect buffers in `prepareToPlay`. Bound every scan by the block size, source limit, voice count, grid capacity, or explicit DSP buffer capacity.
 - Make bypass values transparent and keep fresh-instance creative processing neutral.
 
-## Sampler and stretch
+## Sampler playback
 
 - Sources decode fully into RAM on control/state paths. Waveform peaks are immutable.
-- `0` and `1x` Stretch both reuse decoded PCM. Ratios above one through `4x` run through pinned Signalsmith Stretch on one worker.
-- Jobs carry source runtime identity and monotonically increasing revision. Queued work coalesces; stale/removed results do not publish.
-- Voices retain immutable prepared data and use linear interpolation, per-source Gain, bounded internal attack/release, a 3 ms region fade, and a 3 ms steal tail.
+- Decoded PCM is published directly through immutable prepared handles. There is no manual source-stretch job or worker; MELT is the only time-expansion system.
+- Every enabled playable source receives equal selection probability. Voices retain their exact immutable prepared handle and use linear interpolation, per-source Gain, bounded internal attack/release, a 3 ms region fade, and a 3 ms steal tail.
 
 ## Host grid
 
 - Grid units are 0.5, 0.25, or 0.125 quarter notes for 1/8, 1/16, or 1/32.
+- The active division is selected automatically by host tempo using logarithmic distance to a 125 ms target. No user-facing Global Grid parameter remains.
 - A playing host with finite positive BPM and finite PPQ is authoritative. Half-sample ownership and consistent nearest-sample rounding emit each ideal musical boundary exactly once across adjacent blocks.
 - Expected PPQ continuity is computed from the previous block's rate and BPM. A seek, loop, incompatible transport jump, or clock-source transition marks a transport discontinuity; a division edit sets a separate grid-change flag.
 - Missing or stopped host transport uses the same ownership convention with a continuous sample countdown at the latest valid BPM, initially 120. Grid output is a fixed 4096-entry array, reports truncation, and cannot allocate.
@@ -51,7 +51,7 @@ status: active
 
 ## Public implementation research
 
-- Signalsmith Stretch (MIT) remains the only externally integrated DSP dependency. Its license and notice are already packaged; this pass did not copy additional Signalsmith code.
+- The pinned Signalsmith dependency supplies the MIT-licensed Signalsmith Linear FFT used by Spectral Draw. Its license and notice are packaged; the removed manual source-stretch path no longer calls Signalsmith Stretch.
 - Mutable Instruments Clouds (MIT) was studied for preallocated capture/history organization, a bounded multi-grain pool, tapered per-grain envelopes, and treating density as an overlap meta-control. No Clouds source was copied or added as a dependency.
 - DaisySP (MIT) granular-player and decimator implementations were studied for phase-offset overlap, prepared envelope tables, bounded playback, and deterministic rate-hold structure. The shipped implementations are original and no DaisySP source was copied.
 - Signalsmith DSP (MIT) was studied as a compact realtime-DSP reference; it was not needed as a dependency.
@@ -63,7 +63,7 @@ status: active
 - The stage always feeds its STFT history. Depth and bypass mix use 20 ms sample-time smoothing, while bin targets move between successive transform frames. Depth 0 settles to the exact 1024-sample delayed dry path, so automation can enter or leave the spectral path without an unprimed or block-step switch.
 - The 128×64 canvas is attenuation-only. Scanner/time and square-root-mapped frequency coordinates use bilinear interpolation; a full mask at maximum Depth reaches zero gain without positive or unbounded spectral gain.
 - A fixed four-slot publication store keeps canonical canvas mutation/encoding behind a message/state-thread mutex. The callback atomically acquires one immutable published slot for the block and never takes that mutex or copies the canvas.
-- Host PPQ aligns scanner phase for 2/4/8/16-quarter-note cycles. Finite fallback BPM advances phase when host PPQ is unavailable. Transport discontinuity clears only fixed processor arrays and scalar indices; a grid-division edit does not reset the STFT or dry delay.
+- Host PPQ aligns scanner phase for an automatically chosen 2/4/8/16-quarter-note cycle nearest two seconds at the current tempo. Finite fallback BPM advances phase when host PPQ is unavailable. Transport discontinuity clears only fixed processor arrays and scalar indices; an automatic grid-division change does not reset the STFT or dry delay.
 
 ## Removed DSP
 
