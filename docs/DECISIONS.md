@@ -30,6 +30,7 @@ These decisions govern implementation together with [[PRODUCT_SPEC_V2]].
 - Report only Spectral Draw's fixed 1024-sample latency; MELT adds no host latency.
 - Publish only bounded scalar creative telemetry from the callback; visualizers paint live DSP state on the message thread and never inspect audio buffers.
 - Publish future Windows test builds as a raw complete VST3 bundle. Do not rebuild or replace the already published unsigned installer, and do not create new unsigned installer executables.
+- Use a complete code-native early-2000s Windows XP visual system: bright blue application bar, silver beveled panels, pale-blue controls, navy waveform/effect displays, metallic macro knobs, and a responsive compact layout. The information dialog is an addition to this shared editor theme rather than the only themed surface.
 
 ## Removed
 
@@ -51,5 +52,4 @@ Legacy state entries for these systems are ignored rather than reinterpreted.
 
 ## Deferred
 
-- Final visual redesign and art direction.
 - Any feature not named in [[PRODUCT_SPEC_V2]].
