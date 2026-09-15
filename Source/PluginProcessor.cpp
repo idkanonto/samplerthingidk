@@ -8,13 +8,10 @@ namespace IDs
 constexpr auto output = "output";
 constexpr auto targetKey = "targetKey";
 constexpr auto midiPitch = "midiPitch";
-constexpr auto rootNote = "rootNote";
 constexpr auto voiceMode = "voiceMode";
-constexpr auto globalGrid = "globalGrid";
 constexpr auto scrambleAmount = "scrambleAmount";
 constexpr auto meltAmount = "meltAmount";
 constexpr auto spectralDepth = "spectralDepth";
-constexpr auto spectralScanRate = "spectralScanRate";
 constexpr auto smearAmount = "smearAmount";
 }
 
@@ -44,14 +41,10 @@ RandomChopSamplerAudioProcessor::createParameterLayout()
     for (const auto* name : randomchop::tonicNames)
         tonicChoices.add(name);
     layout.add(std::make_unique<juce::AudioParameterChoice>(
-        IDs::targetKey, "Target Key", tonicChoices, randomchop::noTonic));
-    layout.add(std::make_unique<juce::AudioParameterBool>(IDs::midiPitch, "MIDI Pitch", false));
-    layout.add(std::make_unique<juce::AudioParameterInt>(
-        IDs::rootNote, "Root MIDI Note", 0, 127, 72));
+        IDs::targetKey, "Play In Key", tonicChoices, randomchop::noTonic));
+    layout.add(std::make_unique<juce::AudioParameterBool>(IDs::midiPitch, "Chords", false));
     layout.add(std::make_unique<juce::AudioParameterChoice>(
         IDs::voiceMode, "Voice Mode", juce::StringArray { "POLY", "MONO" }, 0));
-    layout.add(std::make_unique<juce::AudioParameterChoice>(
-        IDs::globalGrid, "Global Grid", juce::StringArray { "1/8", "1/16", "1/32" }, 1));
     layout.add(std::make_unique<juce::AudioParameterFloat>(
         IDs::scrambleAmount, "Scramble",
         juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, "%"));
@@ -59,9 +52,6 @@ RandomChopSamplerAudioProcessor::createParameterLayout()
         juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, "%"));
     layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::spectralDepth, "Spectral Depth",
         juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, "%"));
-    layout.add(std::make_unique<juce::AudioParameterChoice>(
-        IDs::spectralScanRate, "Spectral Scan Rate",
-        juce::StringArray { "2 beats", "1 bar", "2 bars", "4 bars" }, 1));
     layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::smearAmount, "Smear",
         juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, "%"));
     return layout;
@@ -99,7 +89,7 @@ bool RandomChopSamplerAudioProcessor::isBusesLayoutSupported(const BusesLayout& 
 void RandomChopSamplerAudioProcessor::noteOn(int note, float velocity) noexcept
 {
     const auto pool = samples.getSnapshot();
-    const auto selected = randomchop::chooseWeightedSource(*pool, random);
+    const auto selected = randomchop::chooseSource(*pool, random);
     if (selected < 0)
     {
         triggeredWhileEmpty.store(true, std::memory_order_relaxed);
@@ -114,11 +104,11 @@ void RandomChopSamplerAudioProcessor::noteOn(int note, float velocity) noexcept
     const auto start = randomchop::resolveRandomStart(
         region, prepared->sampleRate, 1.0, random.unit());
     const auto targetKey = static_cast<int>(parameters.getRawParameterValue(IDs::targetKey)->load());
-    const auto midiPitch = parameters.getRawParameterValue(IDs::midiPitch)->load() >= 0.5f;
-    const auto rootNote = static_cast<int>(parameters.getRawParameterValue(IDs::rootNote)->load());
+    const auto chords = parameters.getRawParameterValue(IDs::midiPitch)->load() >= 0.5f;
+    const auto rootNote = randomchop::chordRootMidiNote(targetKey);
     const auto pitchSemitones = randomchop::totalPitchSemitones(
         source->settings.sourceKey, targetKey, source->settings.transposeSemitones,
-        source->settings.fineTuneCents, midiPitch, note, rootNote);
+        source->settings.fineTuneCents, chords, note, rootNote);
     const auto pitchRatio = randomchop::pitchRatioForSemitones(pitchSemitones);
     const auto mode = parameters.getRawParameterValue(IDs::voiceMode)->load() >= 0.5f
         ? randomchop::VoiceMode::mono : randomchop::VoiceMode::poly;
@@ -174,8 +164,8 @@ void RandomChopSamplerAudioProcessor::processBlock(
     }
 
     const auto hostTiming = readHostTiming();
-    const auto gridChoice = static_cast<int>(
-        parameters.getRawParameterValue(IDs::globalGrid)->load());
+    const auto timingBpm = hostTiming.hasBpm ? hostTiming.bpm : lastGridBoundaries.bpm;
+    const auto gridChoice = randomchop::HostGrid::automaticDivisionChoice(timingBpm);
     lastGridBoundaries = hostGrid.process(
         currentRate, buffer.getNumSamples(), gridChoice, hostTiming);
 
@@ -217,7 +207,7 @@ void RandomChopSamplerAudioProcessor::processBlock(
     meltVisualFlags.store(meltFlags, std::memory_order_relaxed);
     spectralDrawProcessor.process(buffer, spectralMaskStore,
         { parameters.getRawParameterValue(IDs::spectralDepth)->load(),
-          static_cast<int>(parameters.getRawParameterValue(IDs::spectralScanRate)->load()),
+          randomchop::SpectralDrawProcessor::automaticCycleChoice(lastGridBoundaries.bpm),
           lastGridBoundaries.bpm,
           hostTiming.ppq,
           lastGridBoundaries.usedHostClock && hostTiming.hasPpq,
@@ -297,11 +287,9 @@ void RandomChopSamplerAudioProcessor::setStateInformation(const void* data, int 
             if (!state.hasProperty(id))
                 state.setProperty(id, value, nullptr);
         };
-        ensureParameter(IDs::globalGrid, 1.0f);
         ensureParameter(IDs::scrambleAmount, 0.0f);
         ensureParameter(IDs::meltAmount, 0.0f);
         ensureParameter(IDs::spectralDepth, 0.0f);
-        ensureParameter(IDs::spectralScanRate, 1.0f);
         ensureParameter(IDs::smearAmount, 0.0f);
         parameters.replaceState(state);
         samples.restoreState(files);

@@ -247,7 +247,7 @@ void SpectralCanvasComponent::applyBrush(juce::Point<int> cell) noexcept
              ++column)
             canvas[static_cast<std::size_t>(
                 row * randomchop::SpectralMaskStore::canvasWidth + column)]
-                = eraseMode ? 0.0f : 1.0f;
+                = 1.0f;
 }
 
 void SpectralCanvasComponent::applyLine(juce::Point<int> from, juce::Point<int> to)
@@ -487,57 +487,38 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     : AudioProcessorEditor(&p), processor(p)
 {
     setResizable(true, true);
-    setResizeLimits(840, 640, 1280, 960);
-    setSize(940, 680);
+    setResizeLimits(760, 520, 1180, 820);
+    setSize(880, 600);
     title.setText("recompiler.dll", juce::dontSendNotification);
     title.setFont(juce::Font(24.0f, juce::Font::bold));
     title.setColour(juce::Label::textColourId, juce::Colour(0xfff2f2f5));
     status.setColour(juce::Label::textColourId, juce::Colour(0xffa9acb7));
 
-    juce::Component* components[] = { &title, &status, &addButton, &clearButton,
-        &enableAllButton, &disableAllButton, &list, &waveform, &sourceKey,
-        &sourceTranspose, &sourceFineTune, &sourceGain, &sourceWeight, &sourceStretch,
+    juce::Component* components[] = { &title, &status, &list, &waveform, &sourceKey,
+        &sourceTranspose, &sourceFineTune, &sourceGain,
         &sourceKeyLabel,
-        &sourceTransposeLabel, &sourceFineTuneLabel, &sourceGainLabel, &sourceWeightLabel,
-        &sourceStretchLabel, &targetKey, &targetKeyLabel, &midiPitch,
-        &voiceMode, &voiceModeLabel, &globalGrid, &globalGridLabel,
-        &spectralDrawLabel, &spectralDrawButton, &spectralEraseButton,
-        &spectralClearButton, &spectralScanRateLabel, &spectralScanRate, &spectralCanvas,
+        &sourceTransposeLabel, &sourceFineTuneLabel, &sourceGainLabel,
+        &targetKey, &targetKeyLabel, &midiPitch,
+        &voiceMode, &voiceModeLabel,
+        &spectralDrawLabel, &spectralResetButton, &spectralCanvas,
         &scrambleVisual, &meltVisual, &smearVisual };
     for (auto* component : components) addAndMakeVisible(component);
     list.setColour(juce::ListBox::backgroundColourId, juce::Colour(0xff191b21));
     list.setRowHeight(28);
+    list.setTooltip("Drop WAV, AIFF, MP3, or FLAC files here");
 
     for (int index = 0; index < static_cast<int>(randomchop::tonicNames.size()); ++index)
     {
         sourceKey.addItem(randomchop::tonicNames[static_cast<size_t>(index)], index + 1);
         targetKey.addItem(randomchop::tonicNames[static_cast<size_t>(index)], index + 1);
     }
-    voiceMode.addItem("POLY", 1);
-    voiceMode.addItem("MONO", 2);
-    globalGrid.addItem("1/8", 1);
-    globalGrid.addItem("1/16", 2);
-    globalGrid.addItem("1/32", 3);
-    for (const auto& name : juce::StringArray { "2 beats", "1 bar", "2 bars", "4 bars" })
-        spectralScanRate.addItem(name, spectralScanRate.getNumItems() + 1);
     sourceTranspose.setRange(-24.0, 24.0, 1.0);
     sourceTranspose.setTextValueSuffix(" st");
     sourceFineTune.setRange(-100.0, 100.0, 1.0);
     sourceFineTune.setTextValueSuffix(" cents");
     sourceGain.setRange(-60.0, 12.0, 0.1);
     sourceGain.setTextValueSuffix(" dB");
-    sourceWeight.setRange(0.01, 10.0, 0.01);
-    sourceStretch.setRange(0.0, 4.0, 0.01);
-    sourceStretch.textFromValueFunction = [](double value)
-    {
-        return value < 1.0 ? juce::String("OFF") : juce::String(value, 2) + " x";
-    };
-    sourceStretch.valueFromTextFunction = [](const juce::String& text)
-    {
-        return text.trim().equalsIgnoreCase("OFF") ? 0.0 : text.getDoubleValue();
-    };
-    for (auto* slider : { &sourceTranspose, &sourceFineTune, &sourceGain, &sourceWeight,
-                          &sourceStretch })
+    for (auto* slider : { &sourceTranspose, &sourceFineTune, &sourceGain })
     {
         slider->setSliderStyle(juce::Slider::LinearHorizontal);
         slider->setTextBoxStyle(juce::Slider::TextBoxRight, false, 84, 22);
@@ -546,27 +527,18 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     sourceTransposeLabel.setText("TRANSPOSE", juce::dontSendNotification);
     sourceFineTuneLabel.setText("FINE TUNE", juce::dontSendNotification);
     sourceGainLabel.setText("SELECTED GAIN", juce::dontSendNotification);
-    sourceWeightLabel.setText("SELECTION WEIGHT", juce::dontSendNotification);
-    sourceStretchLabel.setText("STRETCH", juce::dontSendNotification);
-    targetKeyLabel.setText("TARGET KEY", juce::dontSendNotification);
-    voiceModeLabel.setText("VOICE MODE", juce::dontSendNotification);
-    globalGridLabel.setText("GLOBAL GRID", juce::dontSendNotification);
+    targetKeyLabel.setText("PLAY IN KEY", juce::dontSendNotification);
+    voiceModeLabel.setText("VOICES", juce::dontSendNotification);
     spectralDrawLabel.setText("SPECTRAL DRAW", juce::dontSendNotification);
-    spectralScanRateLabel.setText("SCAN RATE", juce::dontSendNotification);
+    midiPitch.setTooltip("Off keeps every trigger in Play In Key; on follows MIDI notes for chords");
+    voiceMode.setTooltip("POLY overlaps held notes; MONO cuts the previous voice");
+    spectralCanvas.setTooltip("Drag to draw; Reset clears the canvas");
     voiceModeLabel.setJustificationType(juce::Justification::centredLeft);
     for (auto* label : { &sourceKeyLabel, &sourceTransposeLabel, &sourceFineTuneLabel,
-                         &sourceGainLabel, &sourceWeightLabel, &sourceStretchLabel,
-                         &targetKeyLabel, &voiceModeLabel, &globalGridLabel, &spectralDrawLabel,
-                         &spectralScanRateLabel })
+                         &sourceGainLabel, &targetKeyLabel, &voiceModeLabel,
+                         &spectralDrawLabel })
         label->setColour(juce::Label::textColourId, juce::Colour(0xffc8cad1));
-    spectralDrawButton.setClickingTogglesState(true);
-    spectralEraseButton.setClickingTogglesState(true);
-    spectralDrawButton.setRadioGroupId(3001);
-    spectralEraseButton.setRadioGroupId(3001);
-    spectralDrawButton.setToggleState(true, juce::dontSendNotification);
-    spectralDrawButton.onClick = [this] { spectralCanvas.setEraseMode(false); };
-    spectralEraseButton.onClick = [this] { spectralCanvas.setEraseMode(true); };
-    spectralClearButton.onClick = [this] { spectralCanvas.clearCanvas(); };
+    spectralResetButton.onClick = [this] { spectralCanvas.clearCanvas(); };
     spectralCanvas.setCanvas(processor.getSpectralCanvas());
     lastSpectralCanvasGeneration = processor.getSpectralCanvasGeneration();
     spectralCanvas.onCanvasChanged = [this](const SpectralCanvasComponent::Canvas& canvas)
@@ -600,20 +572,6 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
         if (selectedSourceId.isNotEmpty()) processor.samples.updateSettings(selectedSourceId,
             [this](SampleSettings& s) { s.gainDb = static_cast<float>(sourceGain.getValue()); });
     };
-    sourceWeight.onValueChange = [this]
-    {
-        if (selectedSourceId.isNotEmpty()) processor.samples.updateSettings(selectedSourceId,
-            [this](SampleSettings& s) { s.selectionWeight = static_cast<float>(sourceWeight.getValue()); });
-    };
-    sourceStretch.onValueChange = [this]
-    {
-        if (selectedSourceId.isNotEmpty()) processor.samples.updateSettings(selectedSourceId,
-            [this](SampleSettings& s)
-            {
-                s.stretchRatio = static_cast<float>(sourceStretch.getValue());
-            });
-        refresh();
-    };
     waveform.onRegionChanged = [this](double start, double end)
     {
         if (selectedSourceId.isEmpty())
@@ -628,30 +586,15 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     };
 
     configureKnob(output, outputLabel, "OUTPUT");
-    configureKnob(rootNote, rootNoteLabel, "ROOT NOTE");
     configureKnob(scrambleAmount, scrambleAmountLabel, "SCRAMBLE");
     configureKnob(meltAmount, meltAmountLabel, "MELT");
     configureLinearControl(spectralDepth, spectralDepthLabel, "SPECTRAL DEPTH");
     configureKnob(smearAmount, smearAmountLabel, "SMEAR");
-    rootNote.setSliderStyle(juce::Slider::LinearHorizontal);
-    rootNote.setTextBoxStyle(juce::Slider::TextBoxRight, false, 62, 22);
-    rootNote.textFromValueFunction = [](double value)
-    {
-        return juce::String(randomchop::midiNoteName(juce::roundToInt(value)));
-    };
-    rootNote.valueFromTextFunction = [](const juce::String& text)
-    {
-        return static_cast<double>(randomchop::midiNoteFromName(text.toStdString(), 72));
-    };
     outputAttachment = std::make_unique<SliderAttachment>(p.parameters, "output", output);
-    rootNoteAttachment = std::make_unique<SliderAttachment>(p.parameters, "rootNote", rootNote);
     targetKeyAttachment = std::make_unique<ComboBoxAttachment>(p.parameters, "targetKey", targetKey);
-    voiceModeAttachment = std::make_unique<ComboBoxAttachment>(p.parameters, "voiceMode", voiceMode);
-    globalGridAttachment = std::make_unique<ComboBoxAttachment>(
-        p.parameters, "globalGrid", globalGrid);
-    spectralScanRateAttachment = std::make_unique<ComboBoxAttachment>(
-        p.parameters, "spectralScanRate", spectralScanRate);
+    voiceModeAttachment = std::make_unique<ButtonAttachment>(p.parameters, "voiceMode", voiceMode);
     midiPitchAttachment = std::make_unique<ButtonAttachment>(p.parameters, "midiPitch", midiPitch);
+    voiceMode.setButtonText(voiceMode.getToggleState() ? "MONO" : "POLY");
     scrambleAmountAttachment = std::make_unique<SliderAttachment>(
         p.parameters, "scrambleAmount", scrambleAmount);
     meltAmountAttachment = std::make_unique<SliderAttachment>(
@@ -661,23 +604,6 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     smearAmountAttachment = std::make_unique<SliderAttachment>(
         p.parameters, "smearAmount", smearAmount);
 
-    addButton.onClick = [this]
-    {
-        chooser = std::make_unique<juce::FileChooser>("Choose audio files", juce::File(),
-                                                       "*.wav;*.aif;*.aiff;*.mp3;*.flac");
-        chooser->launchAsync(juce::FileBrowserComponent::openMode
-                           | juce::FileBrowserComponent::canSelectFiles
-                           | juce::FileBrowserComponent::canSelectMultipleItems,
-            [this](const juce::FileChooser& fc)
-            {
-                juce::StringArray paths;
-                for (const auto& file : fc.getResults()) paths.add(file.getFullPathName());
-                addFiles(paths);
-            });
-    };
-    clearButton.onClick = [this] { processor.samples.clear(); refresh(); };
-    enableAllButton.onClick = [this] { processor.samples.setAllEnabled(true); refresh(); };
-    disableAllButton.onClick = [this] { processor.samples.setAllEnabled(false); refresh(); };
     refresh();
     startTimerHz(20);
 }
@@ -727,8 +653,8 @@ void RandomChopSamplerAudioProcessorEditor::paint(juce::Graphics& g)
 
 void RandomChopSamplerAudioProcessorEditor::resized()
 {
-    const auto verticalScale = juce::jlimit(0.9f, 1.15f,
-        static_cast<float>(getHeight()) / 680.0f);
+    const auto verticalScale = juce::jlimit(0.86f, 1.2f,
+        static_cast<float>(getHeight()) / 600.0f);
     const auto scaledHeight = [verticalScale](int height)
     {
         return juce::jmax(1, juce::roundToInt(static_cast<float>(height) * verticalScale));
@@ -742,29 +668,16 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     auto header = area.removeFromTop(scaledHeight(32));
     title.setBounds(header.removeFromLeft(260));
     status.setBounds(header);
-    auto toolbar = area.removeFromTop(scaledHeight(30));
-    addButton.setBounds(takeEqualCell(toolbar, 4));
-    clearButton.setBounds(takeEqualCell(toolbar, 3));
-    enableAllButton.setBounds(takeEqualCell(toolbar, 2));
-    disableAllButton.setBounds(toolbar.reduced(2));
 
     auto creativeControls = area.removeFromBottom(scaledHeight(62));
     auto effectVisuals = area.removeFromBottom(scaledHeight(74));
-    auto timingControls = area.removeFromBottom(scaledHeight(28));
     auto globalPitchControls = area.removeFromBottom(scaledHeight(34));
     auto sourcePitchControls = area.removeFromBottom(scaledHeight(34));
     auto sourceControls = area.removeFromBottom(scaledHeight(34));
     auto waveformArea = area.removeFromBottom(scaledHeight(76));
 
-    auto gainCell = takeEqualCell(sourceControls, 3);
-    sourceGainLabel.setBounds(gainCell.removeFromLeft(110));
-    sourceGain.setBounds(gainCell);
-    auto weightCell = takeEqualCell(sourceControls, 2);
-    sourceWeightLabel.setBounds(weightCell.removeFromLeft(125));
-    sourceWeight.setBounds(weightCell);
-    auto stretchCell = sourceControls.reduced(2);
-    sourceStretchLabel.setBounds(stretchCell.removeFromLeft(80));
-    sourceStretch.setBounds(stretchCell);
+    sourceGainLabel.setBounds(sourceControls.removeFromLeft(110));
+    sourceGain.setBounds(sourceControls.reduced(2));
 
     auto sourceKeyCell = takeEqualCell(sourcePitchControls, 3);
     sourceKeyLabel.setBounds(sourceKeyCell.removeFromLeft(92));
@@ -776,20 +689,13 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     sourceFineTuneLabel.setBounds(fineTuneCell.removeFromLeft(92));
     sourceFineTune.setBounds(fineTuneCell);
 
-    auto targetCell = takeEqualCell(globalPitchControls, 4);
-    targetKeyLabel.setBounds(targetCell.removeFromLeft(90));
+    auto targetCell = takeEqualCell(globalPitchControls, 3);
+    targetKeyLabel.setBounds(targetCell.removeFromLeft(92));
     targetKey.setBounds(targetCell.reduced(2, 4));
-    midiPitch.setBounds(takeEqualCell(globalPitchControls, 3));
-    auto rootCell = takeEqualCell(globalPitchControls, 2);
-    rootNoteLabel.setBounds(rootCell.removeFromLeft(105));
-    rootNote.setBounds(rootCell);
+    midiPitch.setBounds(takeEqualCell(globalPitchControls, 2));
     auto voiceCell = globalPitchControls.reduced(2);
-    voiceModeLabel.setBounds(voiceCell.removeFromLeft(88));
-    voiceMode.setBounds(voiceCell.reduced(2, 4));
-
-    auto gridCell = timingControls.removeFromLeft(300).reduced(2);
-    globalGridLabel.setBounds(gridCell.removeFromLeft(100));
-    globalGrid.setBounds(gridCell.reduced(2, 3));
+    voiceModeLabel.setBounds(voiceCell.removeFromLeft(72));
+    voiceMode.setBounds(voiceCell.reduced(2));
 
     auto scrambleCell = takeEqualCell(creativeControls, 4);
     scrambleAmountLabel.setBounds(scrambleCell.removeFromTop(scaledHeight(16)));
@@ -815,12 +721,8 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     list.setBounds(listArea);
     auto spectralArea = listAndSpectral.reduced(2);
     auto spectralTools = spectralArea.removeFromTop(scaledHeight(26));
-    spectralDrawLabel.setBounds(spectralTools.removeFromLeft(88));
-    spectralDrawButton.setBounds(spectralTools.removeFromLeft(48).reduced(2));
-    spectralEraseButton.setBounds(spectralTools.removeFromLeft(48).reduced(2));
-    spectralClearButton.setBounds(spectralTools.removeFromLeft(48).reduced(2));
-    spectralScanRateLabel.setBounds(spectralTools.removeFromLeft(58));
-    spectralScanRate.setBounds(spectralTools.reduced(2, 3));
+    spectralDrawLabel.setBounds(spectralTools.removeFromLeft(120));
+    spectralResetButton.setBounds(spectralTools.removeFromRight(64).reduced(2));
     auto depthArea = spectralArea.removeFromTop(scaledHeight(28)).reduced(2);
     spectralDepthLabel.setBounds(depthArea.removeFromLeft(105));
     spectralDepth.setBounds(depthArea);
@@ -872,9 +774,6 @@ void RandomChopSamplerAudioProcessorEditor::refresh()
         sourceFineTune.setValue(selectedSource->settings.fineTuneCents,
                                 juce::dontSendNotification);
         sourceGain.setValue(selectedSource->settings.gainDb, juce::dontSendNotification);
-        sourceWeight.setValue(selectedSource->settings.selectionWeight, juce::dontSendNotification);
-        sourceStretch.setValue(selectedSource->settings.stretchRatio,
-                               juce::dontSendNotification);
         waveform.setSource(selectedSource);
     }
     else
@@ -901,9 +800,7 @@ void RandomChopSamplerAudioProcessorEditor::paintListBoxItem(int row, juce::Grap
                        : (recent ? juce::Colour(0xff29233a) : juce::Colour(0xff191b21)));
     g.setColour(source->settings.missing ? juce::Colour(0xffff8a8a) : juce::Colour(0xffe3e4e8));
     const auto suffix = source->settings.missing ? juce::String("  [MISSING]")
-        : (source->stretchPending ? juce::String("  [STRETCHING]")
-                                  : (source->stretchFailed ? juce::String("  [STRETCH FAILED]")
-                                                           : juce::String()));
+                                                 : juce::String();
     g.drawText(juce::String(row + 1).paddedLeft('0', 2) + ".  "
                    + source->settings.displayName + suffix,
                10, 0, width - 155, height, juce::Justification::centredLeft, true);
@@ -953,8 +850,6 @@ void RandomChopSamplerAudioProcessorEditor::selectedRowsChanged(int row)
         sourceTranspose.setValue(settings.transposeSemitones, juce::dontSendNotification);
         sourceFineTune.setValue(settings.fineTuneCents, juce::dontSendNotification);
         sourceGain.setValue(settings.gainDb, juce::dontSendNotification);
-        sourceWeight.setValue(settings.selectionWeight, juce::dontSendNotification);
-        sourceStretch.setValue(settings.stretchRatio, juce::dontSendNotification);
         waveform.setSource((*displayPool)[static_cast<size_t>(row)]);
     }
 }
@@ -971,6 +866,7 @@ void RandomChopSamplerAudioProcessorEditor::timerCallback()
     else if (transientMessage.isNotEmpty())
         message += " — " + transientMessage;
     status.setText(message, juce::dontSendNotification);
+    voiceMode.setButtonText(voiceMode.getToggleState() ? "MONO" : "POLY");
     const auto canvasGeneration = processor.getSpectralCanvasGeneration();
     if (canvasGeneration != lastSpectralCanvasGeneration)
     {

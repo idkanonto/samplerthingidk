@@ -5,11 +5,11 @@
 
 namespace randomchop
 {
-inline constexpr int currentStateVersion = 10;
+inline constexpr int currentStateVersion = 11;
 
 inline bool isRemovedParameterId(const juce::String& id) noexcept
 {
-    constexpr std::array<const char*, 31> removed {
+    constexpr std::array<const char*, 34> removed {
         "reverseChance", "retriggerChance", "retriggerSize", "retriggerCount",
         "skipChance", "reorderChance", "bendChance", "dropChance",
         "stepLength", "bitDepth", "takeSelection",
@@ -18,7 +18,7 @@ inline bool isRemovedParameterId(const juce::String& id) noexcept
         "fractureFilterMorph", "fractureFrequency", "fractureResonance",
         "codecAmount", "codecQuality", "fractureCharacter", "fractureMix",
         "randomStart", "finalLength", "attack", "release", "rateReduction",
-        "meltReverseChance"
+        "meltReverseChance", "rootNote", "globalGrid", "spectralScanRate"
     };
     for (const auto* candidate : removed)
         if (id == candidate)

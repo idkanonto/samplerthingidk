@@ -16,18 +16,17 @@ This specification supersedes the earlier Random Chop Sampler V2 feature plan. I
 
 - The host-visible product is `recompiler.dll`, packaged as a valid VST3 bundle.
 - Load at most 20 WAV, AIFF/AIF, MP3, or FLAC sources.
-- Each MIDI Note On selects an enabled, non-missing source by Weight and chooses a legal random start inside its manual Start/End region.
-- Source controls are enabled state, Start, End, Source Key, Transpose, Fine Tune, pitch-preserving Stretch, Gain, and Weight.
-- Stretch uses `0 = OFF/original`; `1x` is also original; active duration multipliers are `>1x` through `4x`. Legacy values below 1x restore as original.
-- Preserve global Target Key, optional MIDI pitch with musically named root note, Output, and fixed 16-voice POLY/MONO playback.
+- Each MIDI Note On selects an enabled, non-missing source with equal probability and chooses a legal random start inside its manual Start/End region.
+- Source controls are enabled state, Start, End, Source Key, Transpose, Fine Tune, and Gain.
+- Preserve global Play In Key, a Chords toggle, Output, and fixed 16-voice POLY/MONO playback. Chords off keeps triggers in Play In Key; Chords on follows incoming MIDI notes relative to an automatically derived central root.
 - Random source selection and a legal random start across the manual source region are core instrument behavior. Click-safe attack/release are bounded implementation details rather than public controls.
 - A persisted internal random seed keeps a restored session coherent without exposing a technical Seed control in the producer workflow.
 - The editor-selected source is independent of the most recently randomly triggered source.
-- Prepared source audio is immutable. Stretch runs outside realtime; active voices retain their exact version; final reclamation is deferred to a non-realtime path.
+- Prepared source audio is immutable; active voices retain their exact version and final reclamation is deferred to a non-realtime path.
 
 ## Global timing
 
-- Global creative events use one shared grid: 1/8, 1/16 by default, or 1/32.
+- Global creative events use one hidden shared grid selected automatically from 1/8, 1/16, or 1/32 to keep slices near 125 ms while remaining tempo-synchronized.
 - Read BPM and PPQ from the host playhead once per audio block.
 - When usable host timing is absent or transport is stopped, use a stable internal clock at the latest valid BPM or 120 BPM initially.
 - Decisions must remain deterministic and bounded across tempo changes, seeks, loops, transport transitions, arbitrary block sizes, and offline rendering.
@@ -36,15 +35,15 @@ This specification supersedes the earlier Random Chop Sampler V2 feature plan. I
 
 | Surface | Classification | Reason |
 |---|---|---|
-| Add, Clear, Enable All, Disable All, per-source On/Remove, and row selection | Essential | Direct sample-pool management and editing target. |
+| Drag-and-drop, per-source On/Remove, and row selection | Essential | Minimal sample-pool management and editing target. |
 | Waveform Start/End | Essential | Defines the playable source region and legal random-start range. |
-| Source Key, Transpose, Fine Tune, Gain, Weight, Stretch | Essential | Source preparation, harmonic placement, balance, selection probability, and duration. |
-| Target Key, MIDI Pitch, Root MIDI Note | Essential | Global/manual harmonic behavior and keyboard tracking. |
-| POLY/MONO, Global Grid | Essential | Voice policy and the musical timing framework used by SCRAMBLE/MELT/Spectral Draw. |
+| Source Key, Transpose, Fine Tune, Gain | Essential | Source preparation, harmonic placement, correction, and balance. |
+| Play In Key, Chords | Essential | Straightforward harmonic normalization and optional keyboard tracking. |
+| POLY/MONO | Essential | Voice overlap policy presented as one two-position switch. |
 | Output | Essential | Final gain with a short sample-time ramp for automation safety. |
 | SCRAMBLE | Macro | Collapses density, selection, repeats, holds, reverse, jumps, pitch, and event span into one perceptual progression. |
 | MELT | Macro | Controls automatic slice selection, pitch-preserving stretch depth, slice density, internally derived reversal probability, and wetness through one progression. |
-| Spectral Draw/Erase/Clear, canvas, Depth, Scan Rate | Essential | A distinct intentional spectral role that does not duplicate the signature macros. |
+| Spectral canvas, Reset, Depth | Essential | Dragging draws; timing is automatic and one Reset action clears the canvas. |
 | SMEAR | Macro | Collapses grain density, length, pitch range, scatter, stereo behavior, brightness, and wetness into one control. |
 
 Internal-only values include the persisted creative seed and every technical probability, buffer size, fade time, modulation phase/depth, cutoff, resonance, grain, filtered-history, and transient-suppression setting.
@@ -71,7 +70,7 @@ A focused one-knob automatic slice stretcher. A rising MELT edge arms the effect
 
 ### SPECTRAL DRAW
 
-A real STFT/FFT overlap-add processor. The persistent canvas scans horizontally through time and maps vertically to frequency. User operations are Draw, Erase, Clear, Scan Rate, and Depth. Mask publication must be safe for realtime consumption. Report plug-in latency if required by the implementation.
+A real STFT/FFT overlap-add processor. The persistent canvas scans horizontally through time and maps vertically to frequency. Dragging draws, Reset clears the canvas, and Depth controls intensity. A hidden tempo-derived 2-beat/1/2/4-bar choice keeps the scan near two seconds. Mask publication must be safe for realtime consumption. Report plug-in latency if required by the implementation.
 
 ### SMEAR
 
@@ -88,10 +87,15 @@ A crystalline pitched-grain cloud, not a blur or reverb substitute. A fixed prea
 - Remove Start Range, Final Length, public Attack/Release, FRACTURE RATE, and the FRACTURE preset browser.
 - Remove the exposed Seed, SCRAMBLE Chance, Freeze Size/Hold/Chance/Octave Chance, every FRACTURE control, and CODEC Amount/Quality controls. `fractureCharacter` and `fractureMix` are retired rather than reinterpreted as MELT.
 - Remove the exposed MELT Reverse Chance. `meltReverseChance` is retired rather than mapped onto the new one-knob macro; reversal remains an internal amount-derived slice decision.
+- Remove Selection Weight and manual per-source Stretch. Old source properties are ignored rather than reinterpreted.
+- Remove Add Samples, Clear All, Enable All, and Disable All; loading is drag-and-drop and source actions are individual.
+- Remove Root MIDI Note, Global Grid, and Spectral Scan Rate. Retire those parameter IDs rather than mapping old values onto surviving controls.
+- Remove separate Spectral Draw/Erase modes and keep only direct drawing plus Reset.
+- Do not add a Loop/One-shot mode.
 - Old state must ignore their parameters and `STEP_MASK`/`TAKE_HISTORY` nodes without disturbing surviving parameters or sources.
 - Migrate useful old Freeze behavior into SCRAMBLE, then ignore removed Fracture/Codec entries without disturbing surviving parameters or sources. MELT starts neutral when an older session is restored because it is a different sound and contract.
 - Persist all surviving parameters, the internal creative seed, source settings, and the Spectral Draw canvas.
 
 ## Delivery boundary
 
-This creative-quality pass changes sound design and control semantics without adding unrelated features or beginning a visual-art-direction redesign. Passing Windows builds ship a self-contained installer executable containing the complete VST3 bundle and Standalone app, plus a raw VST3 fallback artifact. Completion requires Windows compilation/CTest, deterministic listening renders, fixed-latency and boundary-partition checks, silent installer install/uninstall verification, artifact inspection, DAW listening guidance, and a green post-merge `main`.
+This pass simplifies control semantics without adding unrelated features. Future passing Windows builds ship the raw complete VST3 bundle rather than a new unsigned installer executable. Completion requires Windows compilation/CTest, deterministic listening renders, fixed-latency and boundary-partition checks, artifact inspection, DAW listening guidance, and a green post-merge `main`.

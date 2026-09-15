@@ -5,6 +5,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 
 namespace randomchop
 {
@@ -34,6 +35,25 @@ struct GridBoundaries final
 class HostGrid final
 {
 public:
+    static int automaticDivisionChoice(double bpm) noexcept
+    {
+        bpm = std::clamp(std::isfinite(bpm) ? bpm : 120.0, 20.0, 400.0);
+        constexpr double targetSeconds = 0.125;
+        int bestChoice = 1;
+        auto bestDistance = std::numeric_limits<double>::max();
+        for (int choice = 0; choice < 3; ++choice)
+        {
+            const auto duration = 60.0 * quarterNotesPerStep(choice) / bpm;
+            const auto distance = std::abs(std::log(duration / targetSeconds));
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestChoice = choice;
+            }
+        }
+        return bestChoice;
+    }
+
     static constexpr double quarterNotesPerStep(int choice) noexcept
     {
         constexpr std::array<double, 3> lengths { 0.5, 0.25, 0.125 };

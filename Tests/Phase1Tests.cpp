@@ -51,7 +51,17 @@ juce::File makeAudioFixture(juce::AudioFormat& format, const juce::String& suffi
     return file;
 }
 
-SampleManager::SamplePtr makeSource(float weight, bool enabled = true, bool missing = false)
+PreparedSamplePtr makePrepared(
+    const std::shared_ptr<const juce::AudioBuffer<float>>& audio,
+    double sampleRate)
+{
+    auto prepared = std::make_shared<PreparedSampleData>();
+    prepared->audio = audio;
+    prepared->sampleRate = sampleRate;
+    return prepared;
+}
+
+SampleManager::SamplePtr makeSource(bool enabled = true, bool missing = false)
 {
     auto audio = std::make_shared<juce::AudioBuffer<float>>(1, 64);
     audio->clear();
@@ -59,9 +69,8 @@ SampleManager::SamplePtr makeSource(float weight, bool enabled = true, bool miss
     source->settings.id = juce::Uuid().toString();
     source->settings.enabled = enabled;
     source->settings.missing = missing;
-    source->settings.selectionWeight = weight;
     source->audio = audio;
-    source->prepared = randomchop::prepareStretch(audio, 44100.0, 0.0f, 0);
+    source->prepared = makePrepared(audio, 44100.0);
     return source;
 }
 
@@ -70,7 +79,7 @@ PreparedSamplePtr makeVoiceSample(float value, int frames = 1024)
     auto audio = std::make_shared<juce::AudioBuffer<float>>(1, frames);
     for (int frame = 0; frame < frames; ++frame)
         audio->setSample(0, frame, value);
-    return randomchop::prepareStretch(audio, 1000.0, 0.0f, 0);
+    return makePrepared(audio, 1000.0);
 }
 
 bool bufferFiniteAndBounded(const juce::AudioBuffer<float>& buffer) noexcept;
@@ -149,8 +158,6 @@ void testSupportedFormatsAndPoolState()
             settings.gainDb = -7.5f;
             settings.transposeSemitones = -12;
             settings.fineTuneCents = 37.0f;
-            settings.selectionWeight = 3.25f;
-            settings.stretchRatio = 1.0f;
         });
         const auto changed = manager.getSnapshot()->front();
         check(changed->settings.id == id && changed->runtimeId == runtimeId,
@@ -160,20 +167,16 @@ void testSupportedFormatsAndPoolState()
                   && changed->settings.sourceKey == 8
                   && changed->settings.gainDb == -7.5f
                   && changed->settings.transposeSemitones == -12
-                  && changed->settings.fineTuneCents == 37.0f
-                  && changed->settings.selectionWeight == 3.25f
-                  && changed->settings.stretchRatio == 1.0f,
+                   && changed->settings.fineTuneCents == 37.0f,
               "source controls were not preserved in the snapshot");
 
         manager.updateSettings(id, [](SampleSettings& settings)
         {
             settings.gainDb = std::numeric_limits<float>::quiet_NaN();
-            settings.selectionWeight = std::numeric_limits<float>::infinity();
         });
         const auto sanitised = manager.getSnapshot()->front();
-        check(sanitised->settings.gainDb == 0.0f
-                  && sanitised->settings.selectionWeight == 1.0f,
-              "hostile per-source Gain or Weight escaped finite state bounds");
+        check(sanitised->settings.gainDb == 0.0f,
+              "hostile per-source Gain escaped finite state bounds");
 
         const auto state = manager.createState();
         SampleManager restored;
@@ -188,56 +191,60 @@ void testSupportedFormatsAndPoolState()
         hostileSource.setProperty("path", file.getFullPathName(), nullptr);
         hostileSource.setProperty("gain", std::numeric_limits<float>::quiet_NaN(), nullptr);
         hostileSource.setProperty("weight", std::numeric_limits<float>::infinity(), nullptr);
+        hostileSource.setProperty("stretch", 4.0f, nullptr);
         hostileState.appendChild(hostileSource, nullptr);
         SampleManager hostileRestore;
         const auto hostileErrors = hostileRestore.restoreState(hostileState);
         const auto hostileSnapshot = hostileRestore.getSnapshot();
         check(hostileErrors.empty() && !hostileSnapshot->empty()
-                  && hostileSnapshot->front()->settings.gainDb == 0.0f
-                  && hostileSnapshot->front()->settings.selectionWeight == 1.0f,
-              "hostile persisted Gain or Weight escaped finite restore bounds");
-        restored.setAllEnabled(true);
-        restored.clear();
-        check(restored.size() == 0, "enable-all or clear changed pool semantics");
+                   && hostileSnapshot->front()->settings.gainDb == 0.0f,
+              "hostile persisted Gain escaped finite restore bounds");
+        const auto rewritten = hostileRestore.createState().getChild(0);
+        check(!rewritten.hasProperty("weight") && !rewritten.hasProperty("stretch"),
+              "retired Weight or Stretch state was written back into a session");
+        const auto restoredId = restored.getSnapshot()->front()->settings.id;
+        const auto heldPrepared = restored.getSnapshot()->front()->prepared;
+        const auto heldFrames = heldPrepared != nullptr && heldPrepared->audio != nullptr
+            ? heldPrepared->audio->getNumSamples() : 0;
+        restored.remove(restoredId);
+        restored.collectGarbage();
+        check(restored.size() == SampleManager::maximumSamples - 1,
+              "individual source removal changed pool semantics");
+        check(heldPrepared != nullptr && heldPrepared->audio != nullptr
+                  && heldPrepared->audio->getNumSamples() == heldFrames && heldFrames > 0,
+              "removing a source reclaimed immutable audio still held by an active consumer");
     }
     check(file.deleteFile(), "could not remove WAV fixture");
 }
 
-void testWeightedSelectionAndPitch()
+void testEqualSelectionAndPitch()
 {
-    SampleManager::Pool pool { makeSource(1.0f), makeSource(9.0f),
-                               makeSource(100.0f, false), makeSource(100.0f, true, true) };
+    SampleManager::Pool pool { makeSource(), makeSource(),
+                               makeSource(false), makeSource(true, true) };
     RandomizationEngine random;
     random.setSeed(123456);
     int first = 0;
     int second = 0;
     for (int iteration = 0; iteration < 10000; ++iteration)
     {
-        const auto selected = randomchop::chooseWeightedSource(pool, random);
+        const auto selected = randomchop::chooseSource(pool, random);
         first += selected == 0 ? 1 : 0;
         second += selected == 1 ? 1 : 0;
         check(selected == 0 || selected == 1,
-              "weighted selection chose disabled or missing source");
+              "equal selection chose disabled or missing source");
     }
-    check(second > first * 7 && second < first * 11,
-          "weighted selection no longer follows source weights");
-    SampleManager::Pool empty { makeSource(1.0f, false) };
-    check(randomchop::chooseWeightedSource(empty, random) == -1,
+    check(first > 4500 && first < 5500 && second > 4500 && second < 5500,
+          "enabled sources no longer receive approximately equal selection probability");
+    SampleManager::Pool empty { makeSource(false) };
+    check(randomchop::chooseSource(empty, random) == -1,
           "empty playable pool did not return the silent sentinel");
-    SampleManager::Pool hostileWeights {
-        makeSource(std::numeric_limits<float>::quiet_NaN()),
-        makeSource(std::numeric_limits<float>::infinity())
-    };
-    bool hostileWeightsSafe = true;
-    for (int iteration = 0; iteration < 128; ++iteration)
-    {
-        const auto selected = randomchop::chooseWeightedSource(hostileWeights, random);
-        hostileWeightsSafe = hostileWeightsSafe && (selected == 0 || selected == 1);
-    }
-    check(hostileWeightsSafe, "non-finite Weight poisoned realtime source selection");
 
     check(randomchop::shortestTonicCorrection(1, 12) == -1,
           "tonic correction no longer uses shortest direction");
+    check(randomchop::chordRootMidiNote(1) == 72
+              && randomchop::chordRootMidiNote(12) == 71
+              && randomchop::chordRootMidiNote(0) == 72,
+          "automatic Chords root no longer follows Play In Key near the central octave");
     check(std::abs(randomchop::totalPitchSemitones(
         1, 12, 12, 50.0f, true, 84, 72) - 23.5) < 0.000001,
         "combined source, key, tuning, and MIDI pitch calculation changed");
@@ -267,7 +274,7 @@ void testRegionsAndVoices()
     auto audio = std::make_shared<juce::AudioBuffer<float>>(1, 24);
     for (int frame = 0; frame < 24; ++frame)
         audio->setSample(0, frame, frame >= 3 && frame <= 20 ? 0.5f : 100.0f);
-    const auto prepared = randomchop::prepareStretch(audio, 1000.0, 0.0f, 0);
+    const auto prepared = makePrepared(audio, 1000.0);
     RandomSamplerVoice voice;
     voice.prepare(1000.0);
     voice.start(prepared, 60, 1.0f, 3.0, region, 1.0,
@@ -375,6 +382,12 @@ void testHostGrid()
               && randomchop::HostGrid::quarterNotesPerStep(2) == 0.125
               && randomchop::HostGrid::quarterNotesPerStep(99) == 0.25,
           "host-grid division mapping changed");
+    check(randomchop::HostGrid::automaticDivisionChoice(60.0) == 2
+              && randomchop::HostGrid::automaticDivisionChoice(120.0) == 1
+              && randomchop::HostGrid::automaticDivisionChoice(240.0) == 0
+              && randomchop::HostGrid::automaticDivisionChoice(
+                     std::numeric_limits<double>::quiet_NaN()) == 1,
+          "automatic host-grid choice no longer keeps creative slices near 125 ms");
 
     randomchop::HostGrid grid;
     randomchop::HostTiming host { 120.0, 0.0, true, true, true };
@@ -952,6 +965,12 @@ void testSpectralDrawProcessor()
               && randomchop::SpectralDrawProcessor::cycleQuarterNotes(3) == 16.0
               && randomchop::SpectralDrawProcessor::cycleQuarterNotes(99) == 4.0,
           "Spectral latency or scan-rate mapping changed");
+    check(randomchop::SpectralDrawProcessor::automaticCycleChoice(60.0) == 0
+              && randomchop::SpectralDrawProcessor::automaticCycleChoice(120.0) == 1
+              && randomchop::SpectralDrawProcessor::automaticCycleChoice(240.0) == 2
+              && randomchop::SpectralDrawProcessor::automaticCycleChoice(
+                     std::numeric_limits<double>::infinity()) == 1,
+          "automatic Spectral cycle no longer stays near two seconds");
 
     randomchop::SpectralMaskStore emptyMask;
     randomchop::SpectralDrawProcessor bypass;
@@ -1236,11 +1255,15 @@ void testStateMigration()
     state.setProperty("fractureCharacter", 42.0f, nullptr);
     state.setProperty("fractureMix", 80.0f, nullptr);
     state.setProperty("meltReverseChance", 88.0f, nullptr);
+    state.setProperty("rootNote", 72, nullptr);
+    state.setProperty("globalGrid", 2, nullptr);
+    state.setProperty("spectralScanRate", 3, nullptr);
     for (const auto* id : { "output", "randomStart", "reverseChance", "retriggerChance",
                             "stepLength", "bitDepth", "takeSelection", "seed",
                             "freezeSize", "codecQuality", "fractureDrive",
                             "fractureCharacter", "fractureMix", "finalLength",
-                            "attack", "release", "rateReduction", "meltReverseChance" })
+                            "attack", "release", "rateReduction", "meltReverseChance",
+                            "rootNote", "globalGrid", "spectralScanRate" })
     {
         juce::ValueTree parameter("PARAM");
         parameter.setProperty("id", id, nullptr);
@@ -1257,8 +1280,11 @@ void testStateMigration()
               && !state.hasProperty("freezeChance")
               && !state.hasProperty("codecAmount")
               && !state.hasProperty("fractureCharacter")
-              && !state.hasProperty("fractureMix")
-              && !state.hasProperty("meltReverseChance")
+               && !state.hasProperty("fractureMix")
+               && !state.hasProperty("meltReverseChance")
+               && !state.hasProperty("rootNote")
+               && !state.hasProperty("globalGrid")
+               && !state.hasProperty("spectralScanRate")
               && state.getNumChildren() == 1
               && state.getChild(0).getProperty("id").toString() == "output"
               && static_cast<int>(state.getProperty("stateVersion"))
@@ -1273,181 +1299,21 @@ void testStateMigration()
               && randomchop::isRemovedParameterId("finalLength")
               && randomchop::isRemovedParameterId("attack")
               && randomchop::isRemovedParameterId("release")
-              && randomchop::isRemovedParameterId("rateReduction")
-              && randomchop::isRemovedParameterId("meltReverseChance")
+               && randomchop::isRemovedParameterId("rateReduction")
+               && randomchop::isRemovedParameterId("meltReverseChance")
+               && randomchop::isRemovedParameterId("rootNote")
+               && randomchop::isRemovedParameterId("globalGrid")
+               && randomchop::isRemovedParameterId("spectralScanRate")
               && !randomchop::isRemovedParameterId("output"),
           "legacy parameter allow/deny boundary changed");
 }
 
-void testStretchSemanticsAndPublication()
-{
-    check(randomchop::clampStretchRatio(0.0f) == 0.0f
-              && randomchop::clampStretchRatio(0.5f) == 0.0f
-              && randomchop::clampStretchRatio(1.0f) == 1.0f
-              && randomchop::clampStretchRatio(5.0f) == 4.0f
-              && randomchop::clampStretchRatio(
-                     std::numeric_limits<float>::quiet_NaN()) == 0.0f,
-          "stretch OFF/original/1x-4x bounds changed");
-
-    auto audio = std::make_shared<juce::AudioBuffer<float>>(1, 2048);
-    for (int frame = 0; frame < audio->getNumSamples(); ++frame)
-        audio->setSample(0, frame, std::sin(static_cast<float>(frame) * 0.05f));
-    const auto off = randomchop::prepareStretch(audio, 48000.0, 0.0f, 1);
-    const auto unity = randomchop::prepareStretch(audio, 48000.0, 1.0f, 2);
-    const auto four = randomchop::prepareStretch(audio, 48000.0, 4.0f, 3);
-    check(off != nullptr && unity != nullptr && off->audio == audio && unity->audio == audio,
-          "OFF and 1x stretch no longer reuse original audio");
-    check(four != nullptr && four->audio->getNumSamples() == 8192
-              && four->stretchRatio == 4.0f,
-          "4x background stretch preparation changed duration");
-
-    juce::WavAudioFormat wav;
-    const auto file = makeAudioFixture(wav, ".wav");
-    if (!file.existsAsFile())
-    {
-        check(false, "could not create stretch publication fixture");
-        return;
-    }
-    {
-        SampleManager manager([](const auto& decoded, double sampleRate,
-                                 float ratio, uint64_t revision)
-        {
-            auto result = std::make_shared<PreparedSampleData>();
-            result->sampleRate = sampleRate;
-            result->revision = revision;
-            result->stretchRatio = ratio;
-            auto output = std::make_shared<juce::AudioBuffer<float>>(
-                decoded->getNumChannels(), static_cast<int>(decoded->getNumSamples() * ratio));
-            output->clear();
-            result->audio = output;
-            return PreparedSamplePtr(result);
-        });
-        juce::StringArray paths { file.getFullPathName() };
-        check(manager.addFiles(paths).empty(), "stretch publication fixture did not load");
-        const auto initial = manager.getSnapshot();
-        const auto id = initial->front()->settings.id;
-        const auto oldPrepared = initial->front()->prepared;
-        manager.updateSettings(id, [](SampleSettings& settings) { settings.stretchRatio = 4.0f; });
-        std::shared_ptr<const SampleManager::Pool> current;
-        for (int attempt = 0; attempt < 300; ++attempt)
-        {
-            current = manager.getSnapshot();
-            if (!current->front()->stretchPending)
-                break;
-            juce::Thread::sleep(5);
-        }
-        check(current != nullptr && !current->front()->stretchPending
-                  && current->front()->prepared->revision == 1
-                  && current->front()->prepared->stretchRatio == 4.0f,
-              "background stretch result was not atomically published");
-        check(oldPrepared != current->front()->prepared,
-              "stretch publication mutated prepared data in place");
-    }
-    check(file.deleteFile(), "could not remove stretch publication fixture");
-}
-
-void testStretchStaleJobsAndRemoval()
-{
-    juce::WavAudioFormat wav;
-    const auto file = makeAudioFixture(wav, ".wav");
-    check(file.existsAsFile(), "could not create stale-stretch fixture");
-    if (!file.existsAsFile())
-        return;
-
-    std::atomic<int> callCount { 0 };
-    std::atomic<int> blockedCall { 1 };
-    std::atomic<bool> allowBlockedCall { false };
-    const auto waitUntil = [](const auto& predicate)
-    {
-        for (int attempt = 0; attempt < 400; ++attempt)
-        {
-            if (predicate())
-                return true;
-            juce::Thread::sleep(5);
-        }
-        return predicate();
-    };
-
-    {
-        SampleManager manager([&](const auto& decoded, double sampleRate,
-                                  float ratio, uint64_t revision)
-        {
-            const auto call = callCount.fetch_add(1) + 1;
-            while (call == blockedCall.load() && !allowBlockedCall.load())
-                juce::Thread::sleep(1);
-            auto result = std::make_shared<PreparedSampleData>();
-            result->sampleRate = sampleRate;
-            result->revision = revision;
-            result->stretchRatio = ratio;
-            const auto frames = std::max(2, static_cast<int>(std::llround(
-                static_cast<double>(decoded->getNumSamples()) * ratio)));
-            auto output = std::make_shared<juce::AudioBuffer<float>>(
-                decoded->getNumChannels(), frames);
-            output->clear();
-            result->audio = std::move(output);
-            return PreparedSamplePtr(result);
-        });
-        const juce::StringArray paths { file.getFullPathName() };
-        const auto errors = manager.addFiles(paths);
-        check(errors.empty() && manager.size() == 1,
-              "stale-stretch fixture did not load");
-        if (manager.size() == 1)
-        {
-            const auto id = manager.getSnapshot()->front()->settings.id;
-            manager.updateSettings(id, [](SampleSettings& settings)
-            {
-                settings.stretchRatio = 2.0f;
-            });
-            const auto firstStarted = waitUntil([&] { return callCount.load() >= 1; });
-            check(firstStarted, "first stretch revision did not start");
-            manager.updateSettings(id, [](SampleSettings& settings)
-            {
-                settings.stretchRatio = 3.0f;
-            });
-            allowBlockedCall.store(true);
-            const auto newestPublished = waitUntil([&]
-            {
-                const auto snapshot = manager.getSnapshot();
-                return !snapshot->empty() && !snapshot->front()->stretchPending
-                    && snapshot->front()->prepared != nullptr
-                    && snapshot->front()->prepared->revision == 2
-                    && snapshot->front()->prepared->stretchRatio == 3.0f;
-            });
-            check(newestPublished,
-                  "a stale stretch result replaced or blocked the newest revision");
-
-            const auto activeOldVersion = manager.getSnapshot()->front()->prepared;
-            allowBlockedCall.store(false);
-            const auto removalCall = callCount.load() + 1;
-            blockedCall.store(removalCall);
-            manager.updateSettings(id, [](SampleSettings& settings)
-            {
-                settings.stretchRatio = 4.0f;
-            });
-            const auto removalJobStarted = waitUntil(
-                [&] { return callCount.load() >= removalCall; });
-            check(removalJobStarted, "removal-race stretch revision did not start");
-            manager.remove(id);
-            manager.collectGarbage();
-            check(manager.size() == 0 && activeOldVersion != nullptr
-                      && activeOldVersion->audio != nullptr
-                      && activeOldVersion->audio->getNumSamples() > 0,
-                  "source removal invalidated an active immutable prepared version");
-            allowBlockedCall.store(true);
-        }
-        else
-        {
-            allowBlockedCall.store(true);
-        }
-    }
-    check(file.deleteFile(), "could not remove stale-stretch fixture");
-}
 }
 
 int main()
 {
     testSupportedFormatsAndPoolState();
-    testWeightedSelectionAndPitch();
+    testEqualSelectionAndPitch();
     testRegionsAndVoices();
     testMeltSingleMacroProgression();
     testHostGrid();
@@ -1459,8 +1325,6 @@ int main()
     testSpectralMaskPublicationAndState();
     testSpectralDrawProcessor();
     testStateMigration();
-    testStretchSemanticsAndPublication();
-    testStretchStaleJobsAndRemoval();
     if (failures == 0)
         std::cout << "All recompiler.dll foundation tests passed.\n";
     return failures == 0 ? 0 : 1;
