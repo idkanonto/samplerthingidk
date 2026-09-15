@@ -34,7 +34,6 @@ public:
 
     void setCanvas(const Canvas& newCanvas);
     void clearCanvas();
-    void setEraseMode(bool shouldErase) noexcept { eraseMode = shouldErase; }
     void setScanPosition(float position);
     void paint(juce::Graphics&) override;
     void mouseDown(const juce::MouseEvent&) override;
@@ -50,7 +49,6 @@ private:
     Canvas canvas {};
     juce::Point<int> lastCell { -1, -1 };
     float scanPosition = 0.0f;
-    bool eraseMode = false;
 };
 
 class CreativeVisualizer final : public juce::Component
@@ -98,42 +96,37 @@ private:
 
     RandomChopSamplerAudioProcessor& processor;
     juce::Label title, status;
-    juce::TextButton addButton { "Add samples..." }, clearButton { "Clear All" };
-    juce::TextButton enableAllButton { "Enable All" }, disableAllButton { "Disable All" };
     juce::ListBox list { "Samples", this };
     SourceWaveformComponent waveform;
     juce::ComboBox sourceKey;
-    juce::Slider sourceTranspose, sourceFineTune, sourceGain, sourceWeight, sourceStretch;
+    juce::Slider sourceTranspose, sourceFineTune, sourceGain;
     juce::Label sourceKeyLabel, sourceTransposeLabel, sourceFineTuneLabel,
-        sourceGainLabel, sourceWeightLabel, sourceStretchLabel;
-    juce::ComboBox targetKey, voiceMode, globalGrid;
-    juce::TextButton spectralDrawButton { "Draw" }, spectralEraseButton { "Erase" },
-        spectralClearButton { "Clear" };
-    juce::ComboBox spectralScanRate;
+        sourceGainLabel;
+    juce::ComboBox targetKey;
+    juce::ToggleButton voiceMode { "MONO" };
+    juce::TextButton spectralResetButton { "Reset" };
     SpectralCanvasComponent spectralCanvas;
     CreativeVisualizer scrambleVisual { CreativeVisualizer::Kind::scramble };
     CreativeVisualizer meltVisual { CreativeVisualizer::Kind::melt };
     CreativeVisualizer smearVisual { CreativeVisualizer::Kind::smear };
-    juce::ToggleButton midiPitch { "MIDI Pitch" };
-    juce::Slider rootNote, output;
+    juce::ToggleButton midiPitch { "CHORDS" };
+    juce::Slider output;
     juce::Slider scrambleAmount, meltAmount, spectralDepth, smearAmount;
-    juce::Label targetKeyLabel, rootNoteLabel, voiceModeLabel, globalGridLabel,
+    juce::Label targetKeyLabel, voiceModeLabel,
         outputLabel, scrambleAmountLabel,
-        meltAmountLabel, spectralDrawLabel, spectralScanRateLabel,
+        meltAmountLabel, spectralDrawLabel,
         spectralDepthLabel, smearAmountLabel;
 
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ComboBoxAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
-    std::unique_ptr<SliderAttachment> outputAttachment, rootNoteAttachment,
+    std::unique_ptr<SliderAttachment> outputAttachment,
         scrambleAmountAttachment, meltAmountAttachment,
         spectralDepthAttachment, smearAmountAttachment;
-    std::unique_ptr<ComboBoxAttachment> targetKeyAttachment, voiceModeAttachment,
-        globalGridAttachment, spectralScanRateAttachment;
-    std::unique_ptr<ButtonAttachment> midiPitchAttachment;
+    std::unique_ptr<ComboBoxAttachment> targetKeyAttachment;
+    std::unique_ptr<ButtonAttachment> midiPitchAttachment, voiceModeAttachment;
     std::shared_ptr<const SampleManager::Pool> displayPool;
     juce::String selectedSourceId;
-    std::unique_ptr<juce::FileChooser> chooser;
     juce::String transientMessage;
     uint64_t lastSpectralCanvasGeneration = 0;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(RandomChopSamplerAudioProcessorEditor)

@@ -2,10 +2,13 @@
 
 #include <JuceHeader.h>
 #include <signalsmith-linear/fft.h>
+#include <algorithm>
 #include <array>
 #include <atomic>
+#include <cmath>
 #include <complex>
 #include <cstdint>
+#include <limits>
 #include <mutex>
 
 namespace randomchop
@@ -82,6 +85,25 @@ public:
         constexpr std::array<double, 4> cycles { 2.0, 4.0, 8.0, 16.0 };
         return choice >= 0 && choice < static_cast<int>(cycles.size())
             ? cycles[static_cast<std::size_t>(choice)] : cycles[1];
+    }
+
+    static int automaticCycleChoice(double bpm) noexcept
+    {
+        bpm = std::clamp(std::isfinite(bpm) ? bpm : 120.0, 20.0, 400.0);
+        constexpr double targetSeconds = 2.0;
+        int bestChoice = 1;
+        auto bestDistance = std::numeric_limits<double>::max();
+        for (int choice = 0; choice < 4; ++choice)
+        {
+            const auto duration = 60.0 * cycleQuarterNotes(choice) / bpm;
+            const auto distance = std::abs(std::log(duration / targetSeconds));
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestChoice = choice;
+            }
+        }
+        return bestChoice;
     }
 
     void prepare(double newSampleRate);

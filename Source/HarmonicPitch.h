@@ -48,6 +48,12 @@ inline int shortestTonicCorrection(int sourceTonic, int targetTonic) noexcept
     return distance;
 }
 
+inline int chordRootMidiNote(int targetTonic) noexcept
+{
+    constexpr int centralC = 72;
+    return centralC + shortestTonicCorrection(1, targetTonic);
+}
+
 inline double totalPitchSemitones(int sourceTonic, int targetTonic,
                                   int transposeSemitones, float fineTuneCents,
                                   bool midiPitchEnabled, int midiNote,

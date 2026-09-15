@@ -2,42 +2,29 @@
 
 #include "RandomizationEngine.h"
 #include "SampleManager.h"
-#include <algorithm>
-#include <cmath>
-
 namespace randomchop
 {
-inline int chooseWeightedSource(const SampleManager::Pool& pool,
-                                RandomizationEngine& random) noexcept
+inline int chooseSource(const SampleManager::Pool& pool,
+                        RandomizationEngine& random) noexcept
 {
-    const auto safeWeight = [](float weight) noexcept
-    {
-        return std::isfinite(weight) ? std::clamp(weight, 0.01f, 10.0f) : 1.0f;
-    };
-    double total = 0.0;
+    int playableCount = 0;
     for (const auto& source : pool)
         if (source->isPlayable())
-            total += safeWeight(source->settings.selectionWeight);
+            ++playableCount;
 
-    if (total <= 0.0)
+    if (playableCount == 0)
         return -1;
 
-    double target = random.unit() * total;
+    auto target = static_cast<int>(random.unit() * static_cast<double>(playableCount));
+    if (target >= playableCount)
+        target = playableCount - 1;
     for (size_t i = 0; i < pool.size(); ++i)
     {
         if (!pool[i]->isPlayable())
             continue;
-
-        target -= safeWeight(pool[i]->settings.selectionWeight);
-        if (target <= 0.0)
+        if (target-- == 0)
             return static_cast<int>(i);
     }
-
-    // Floating-point rounding can leave a tiny positive remainder.
-    for (size_t i = pool.size(); i-- > 0;)
-        if (pool[i]->isPlayable())
-            return static_cast<int>(i);
-
     return -1;
 }
 }

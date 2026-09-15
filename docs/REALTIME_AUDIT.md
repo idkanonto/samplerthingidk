@@ -11,7 +11,7 @@ status: active
 
 # Realtime Safety Audit
 
-This audit covers single-macro MELT/dynamic SMEAR code head `a18375061de91b2fcd1f2f10641ac40a12778487` on [PR #20](https://github.com/idkanonto/samplerthingidk/pull/20), which passed [Windows Release CI run #72](https://github.com/idkanonto/samplerthingidk/actions/runs/34800123449), against [[DSP_NOTES]], and retains the earlier Gate E ownership/lifecycle findings. Source and CI review do not replace an allocator hook, realtime profiler, or DAW stress pass.
+This audit covers straightforward-sampler code head `3dfbc5d55c717275d44ffb6798388d28bb3abbed` on [PR #22](https://github.com/idkanonto/samplerthingidk/pull/22), which passed [Windows Release CI run #79](https://github.com/idkanonto/samplerthingidk/actions/runs/34983220916), against [[DSP_NOTES]], and retains the earlier creative-effect ownership/lifecycle findings. Source and CI review do not replace an allocator hook, realtime profiler, or DAW stress pass.
 
 ## Audio-thread paths
 
@@ -29,9 +29,9 @@ This audit covers single-macro MELT/dynamic SMEAR code head `a18375061de91b2fcd1
 ## Non-realtime paths
 
 - File validation, decoding, waveform preparation, source-state restore, pool publication, and retirement collection remain control/state work.
-- Signalsmith work runs on the dedicated worker. Source identity and revision reject stale publication.
-- Source edits use `mutationMutex`; the stretch queue uses its own mutex and condition variable. Neither is reached by the callback.
-- Gate E finite-clamps hostile persisted/updated source Gain and Weight before publication. Voice envelope/sample sanitization is fixed-cost and protects internal voice state before the global chain.
+- There is no background manual-stretch worker or queue. Decoded PCM is wrapped once in an immutable prepared handle on the control/state path.
+- Source edits use `mutationMutex`, which is never reached by the callback.
+- Persisted/updated source Gain is finite-clamped before publication. Voice envelope/sample sanitization is fixed-cost and protects internal voice state before the global chain.
 - Editor selection is a stable source ID. Trigger highlighting is a separate atomic runtime ID and cannot retarget edits.
 - Canvas drawing, clamping, encoding, restore, and canonical mutation occur on UI/state paths. Publication writes a free slot completely before its release-store; the callback reads only a held immutable slot.
 - State migration allocates/mutates only during host state restore, never during audio rendering. A restored internal seed reaches the callback atomically; normal preparation initializes all salted RNG streams before the first block.
@@ -39,4 +39,4 @@ This audit covers single-macro MELT/dynamic SMEAR code head `a18375061de91b2fcd1
 
 ## External verification boundary
 
-Source review finds no callback file access, explicit locks, waits, logging, parsing, stretch preparation, canvas copying, or callback-owned final reclamation. The full-chain test exercises variable blocks, discontinuity, hostile state/audio, stale worker completion, source removal during preparation, and retained old prepared versions. No allocator hook, realtime profiler, or DAW host stress pass is available in CI; those remain explicit external release checks.
+Source review finds no callback file access, explicit locks, waits, logging, parsing, stretch preparation, canvas copying, or callback-owned final reclamation. The full-chain test exercises variable blocks, discontinuity, hostile state/audio, source removal, and retained immutable prepared handles. No allocator hook, realtime profiler, or DAW host stress pass is available in CI; those remain explicit external release checks.
