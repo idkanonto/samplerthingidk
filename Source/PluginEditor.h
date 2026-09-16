@@ -20,15 +20,21 @@ public:
                       juce::ComboBox&) override;
     void positionComboBoxText(juce::ComboBox&, juce::Label&) override;
     void drawToggleButton(juce::Graphics&, juce::ToggleButton&, bool, bool) override;
+    void drawScrollbar(juce::Graphics&, juce::ScrollBar&, int, int, int, int,
+                       bool, int, int, bool, bool) override;
+    void drawTooltip(juce::Graphics&, const juce::String&, int, int) override;
 };
 
-class SourceWaveformComponent final : public juce::Component
+class SourceWaveformComponent final : public juce::Component,
+    public juce::SettableTooltipClient
 {
 public:
     void setSource(SampleManager::SamplePtr);
     void paint(juce::Graphics&) override;
     void mouseDown(const juce::MouseEvent&) override;
     void mouseDrag(const juce::MouseEvent&) override;
+    void mouseMove(const juce::MouseEvent&) override;
+    void mouseExit(const juce::MouseEvent&) override;
     void mouseUp(const juce::MouseEvent&) override;
 
     std::function<void(double, double)> onRegionChanged;
@@ -42,9 +48,11 @@ private:
     SampleManager::SamplePtr source;
     randomchop::NormalisedRegion region;
     DragMarker dragMarker = DragMarker::none;
+    DragMarker hoverMarker = DragMarker::none;
 };
 
-class SpectralCanvasComponent final : public juce::Component
+class SpectralCanvasComponent final : public juce::Component,
+    public juce::SettableTooltipClient
 {
 public:
     using Canvas = randomchop::SpectralMaskStore::Canvas;
@@ -55,6 +63,8 @@ public:
     void paint(juce::Graphics&) override;
     void mouseDown(const juce::MouseEvent&) override;
     void mouseDrag(const juce::MouseEvent&) override;
+    void mouseMove(const juce::MouseEvent&) override;
+    void mouseExit(const juce::MouseEvent&) override;
 
     std::function<void(const Canvas&)> onCanvasChanged;
 
@@ -65,10 +75,12 @@ private:
 
     Canvas canvas {};
     juce::Point<int> lastCell { -1, -1 };
+    juce::Point<float> hoverPosition { -1.0f, -1.0f };
     float scanPosition = 0.0f;
 };
 
-class CreativeVisualizer final : public juce::Component
+class CreativeVisualizer final : public juce::Component,
+    public juce::SettableTooltipClient
 {
 public:
     enum class Kind { scramble, melt, smear };
@@ -97,17 +109,34 @@ public:
                      bool isButtonDown) override;
 };
 
+class XpWindowCloseButton final : public juce::Button
+{
+public:
+    XpWindowCloseButton() : juce::Button("Close window") {}
+    void paintButton(juce::Graphics&, bool, bool) override;
+};
+
+class XpModalOverlay final : public juce::Component
+{
+public:
+    void paint(juce::Graphics&) override;
+    void mouseDown(const juce::MouseEvent&) override;
+    std::function<void()> onDismiss;
+};
+
 class XpInfoPanel final : public juce::Component
 {
 public:
     XpInfoPanel();
     void paint(juce::Graphics&) override;
     void resized() override;
+    bool keyPressed(const juce::KeyPress&) override;
 
     std::function<void()> onClose;
 
 private:
     juce::TextButton closeButton { "Close" };
+    XpWindowCloseButton titleCloseButton;
 };
 
 class RandomChopSamplerAudioProcessorEditor final : public juce::AudioProcessorEditor,
@@ -119,6 +148,8 @@ public:
     void paint(juce::Graphics&) override;
     void resized() override;
     bool isInterestedInFileDrag(const juce::StringArray&) override;
+    void fileDragEnter(const juce::StringArray&, int, int) override;
+    void fileDragExit(const juce::StringArray&) override;
     void filesDropped(const juce::StringArray&, int, int) override;
 
 private:
@@ -134,8 +165,9 @@ private:
 
     RandomChopSamplerAudioProcessor& processor;
     XpLookAndFeel xpLookAndFeel;
-    juce::Label title, subtitle, status;
+    juce::Label title, subtitle, alert, status;
     XpInfoButton infoButton;
+    XpModalOverlay modalOverlay;
     XpInfoPanel infoPanel;
     juce::ListBox list { "Samples", this };
     SourceWaveformComponent waveform;
@@ -169,7 +201,10 @@ private:
     std::shared_ptr<const SampleManager::Pool> displayPool;
     juce::String selectedSourceId;
     juce::String transientMessage;
+    int transientMessageTicks = 0;
     uint64_t lastSpectralCanvasGeneration = 0;
+    bool dragActive = false;
+    std::unique_ptr<juce::TooltipWindow> tooltipWindow;
     juce::Rectangle<int> titleBarBounds, samplePanelBounds, sampleDropBounds,
         sourcePanelBounds, globalPanelBounds, scramblePanelBounds,
         meltPanelBounds, smearPanelBounds, spectralPanelBounds, outputPanelBounds;
