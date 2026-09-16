@@ -202,7 +202,8 @@ void RandomChopSamplerAudioProcessor::processBlock(
                     source->settings.startNormalised, source->settings.endNormalised);
                 if (region.canInterpolate())
                 {
-                    previewVoice.start(source->prepared, 60, 1.0f, region.start, region,
+                    previewVoice.start(source->prepared, 60, 1.0f,
+                        static_cast<double>(region.firstFrame), region,
                         1.0, juce::Decibels::decibelsToGain(source->settings.gainDb),
                         internalAttackSeconds, internalReleaseSeconds, ++voiceCounter, 0.0f);
                     previewingRuntimeId.store(requestedId, std::memory_order_relaxed);

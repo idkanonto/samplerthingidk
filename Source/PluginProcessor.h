@@ -142,7 +142,7 @@ private:
     randomchop::HostTiming readHostTiming() const noexcept;
 
     randomchop::VoicePool voices;
-    randomchop::RandomSamplerVoice previewVoice;
+    RandomSamplerVoice previewVoice;
     randomchop::MeltProcessor meltProcessor;
     randomchop::SpectralMaskStore spectralMaskStore;
     randomchop::SpectralDrawProcessor spectralDrawProcessor;

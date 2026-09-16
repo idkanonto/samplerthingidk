@@ -2021,7 +2021,7 @@ void RandomChopSamplerAudioProcessorEditor::openFileChooser()
     juce::Component::SafePointer<RandomChopSamplerAudioProcessorEditor> safe(this);
     fileChooser->launchAsync(juce::FileBrowserComponent::openMode
         | juce::FileBrowserComponent::canSelectFiles
-        | juce::FileBrowserComponent::canSelectMultipleFiles,
+        | juce::FileBrowserComponent::canSelectMultipleItems,
         [safe](const juce::FileChooser& chooser)
         {
             if (safe == nullptr) return;
