@@ -2,6 +2,7 @@
 
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
+#include <array>
 #include <cstdint>
 #include <functional>
 
@@ -30,6 +31,10 @@ class SourceWaveformComponent final : public juce::Component,
 {
 public:
     void setSource(SampleManager::SamplePtr);
+    void zoomIn();
+    void zoomOut();
+    void focusRegion();
+    void fitAll();
     void paint(juce::Graphics&) override;
     void mouseDown(const juce::MouseEvent&) override;
     void mouseDrag(const juce::MouseEvent&) override;
@@ -49,6 +54,8 @@ private:
     randomchop::NormalisedRegion region;
     DragMarker dragMarker = DragMarker::none;
     DragMarker hoverMarker = DragMarker::none;
+    double viewStart = 0.0;
+    double viewSpan = 1.0;
 };
 
 class SpectralCanvasComponent final : public juce::Component,
@@ -58,6 +65,7 @@ public:
     using Canvas = randomchop::SpectralMaskStore::Canvas;
 
     void setCanvas(const Canvas& newCanvas);
+    void setSpectrum(const std::array<float, randomchop::SpectralDrawProcessor::displayBins>&);
     void clearCanvas();
     void setScanPosition(float position);
     void paint(juce::Graphics&) override;
@@ -74,6 +82,7 @@ private:
     void applyBrush(juce::Point<int> cell) noexcept;
 
     Canvas canvas {};
+    std::array<float, randomchop::SpectralDrawProcessor::displayBins> spectrum {};
     juce::Point<int> lastCell { -1, -1 };
     juce::Point<float> hoverPosition { -1.0f, -1.0f };
     float scanPosition = 0.0f;
@@ -99,6 +108,15 @@ private:
     float telemetryFirst = 0.0f;
     float telemetrySecond = 0.0f;
     uint32_t telemetryFlags = 0;
+};
+
+class OutputMeterComponent final : public juce::Component
+{
+public:
+    void setPeak(float newPeak) noexcept;
+    void paint(juce::Graphics&) override;
+private:
+    float peak = 0.0f;
 };
 
 class XpInfoButton final : public juce::Button
@@ -160,16 +178,38 @@ private:
     void timerCallback() override;
     void refresh();
     void addFiles(const juce::StringArray&);
+    void selectRelativeSource(int delta);
+    void showSampleMenu();
+    void openFileChooser();
+    void selectTab(int tab);
+    void showEffectModeMenu(int effect);
     void configureKnob(juce::Slider&, juce::Label&, const juce::String&);
     void configureLinearControl(juce::Slider&, juce::Label&, const juce::String&);
 
     RandomChopSamplerAudioProcessor& processor;
     XpLookAndFeel xpLookAndFeel;
     juce::Label title, subtitle, alert, status;
+    juce::Label pageMessage;
+    juce::TextButton pageActionButton { "BACK TO MAIN" };
     XpInfoButton infoButton;
     XpModalOverlay modalOverlay;
     XpInfoPanel infoPanel;
     juce::ListBox list { "Samples", this };
+    juce::TextButton addButton { "+ ADD" }, sampleMenuButton { "=" };
+    juce::TextButton previousSourceButton { "<" }, nextSourceButton { ">" };
+    juce::TextButton closeEditorButton { "X" };
+    juce::TextButton mainTab { "MAIN" }, fxTab { "FX" }, seqTab { "SEQ" }, settingsTab { "SETTINGS" };
+    juce::TextButton zoomInButton { "+" }, zoomOutButton { "-" }, focusRegionButton { "[]" }, fitButton { "FIT" };
+    juce::TextButton randomSourceButton { "DICE" }, regenerateButton { "R" };
+    juce::TextButton muteButton { "MUTE" }, moreButton { "..." };
+    juce::TextButton scrambleModeButton { "Random" }, meltModeButton { "Stretch" },
+        smearModeButton { "Diffuse" };
+    juce::TextButton scrambleFoldButton { ">" }, meltFoldButton { ">" },
+        smearFoldButton { ">" }, spectralFoldButton { ">" }, outputFoldButton { ">" };
+    juce::TextButton scramblePowerButton { "o" }, meltPowerButton { "o" },
+        smearPowerButton { "o" }, spectralPowerButton { "o" }, outputPowerButton { "o" };
+    juce::TextButton chordsOffButton { "OFF" }, chordsOnButton { "ON" };
+    juce::TextButton polyButton { "POLY" }, monoButton { "MONO" };
     SourceWaveformComponent waveform;
     juce::ComboBox sourceKey;
     juce::Slider sourceTranspose, sourceFineTune, sourceGain;
@@ -184,6 +224,7 @@ private:
     CreativeVisualizer smearVisual { CreativeVisualizer::Kind::smear };
     juce::ToggleButton midiPitch { "CHORDS" };
     juce::Slider output;
+    OutputMeterComponent outputMeter;
     juce::Slider scrambleAmount, meltAmount, spectralDepth, smearAmount;
     juce::Label targetKeyLabel, voiceModeLabel,
         outputLabel, scrambleAmountLabel,
@@ -205,7 +246,11 @@ private:
     uint64_t lastSpectralCanvasGeneration = 0;
     bool dragActive = false;
     std::unique_ptr<juce::TooltipWindow> tooltipWindow;
-    juce::Rectangle<int> titleBarBounds, samplePanelBounds, sampleDropBounds,
+    std::unique_ptr<juce::FileChooser> fileChooser;
+    int selectedTab = 0;
+    bool expandedCards[5] { true, true, true, true, true };
+    juce::Rectangle<int> titleBarBounds, footerBounds, pagePaneBounds,
+        samplePanelBounds, sampleDropBounds,
         sourcePanelBounds, globalPanelBounds, scramblePanelBounds,
         meltPanelBounds, smearPanelBounds, spectralPanelBounds, outputPanelBounds;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(RandomChopSamplerAudioProcessorEditor)

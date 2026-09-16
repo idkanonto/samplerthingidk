@@ -4,8 +4,8 @@
 
 namespace
 {
-constexpr auto xpInk = 0xff11275c;
-constexpr auto xpPanel = 0xffeaf3fb;
+constexpr auto xpInk = 0xff1b1b1b;
+constexpr auto xpPanel = 0xffd7d7d7;
 
 void paintXpPanel(juce::Graphics& g, juce::Rectangle<int> bounds,
                   const juce::String& heading = {})
@@ -14,24 +14,24 @@ void paintXpPanel(juce::Graphics& g, juce::Rectangle<int> bounds,
         return;
 
     const auto area = bounds.toFloat();
-    g.setColour(juce::Colour(0xff7895b4).withAlpha(0.45f));
-    g.fillRoundedRectangle(area.translated(1.0f, 2.0f), 8.0f);
-    g.setGradientFill(juce::ColourGradient(juce::Colour(0xfff8fbfd), area.getX(), area.getY(),
+    g.setColour(juce::Colour(0xff777777).withAlpha(0.45f));
+    g.fillRoundedRectangle(area.translated(1.0f, 2.0f), 4.0f);
+    g.setGradientFill(juce::ColourGradient(juce::Colour(0xfff7f7f7), area.getX(), area.getY(),
                                            juce::Colour(xpPanel), area.getX(), area.getBottom(), false));
-    g.fillRoundedRectangle(area, 8.0f);
+    g.fillRoundedRectangle(area, 4.0f);
     g.setColour(juce::Colours::white.withAlpha(0.9f));
-    g.drawRoundedRectangle(area.reduced(1.0f), 7.0f, 1.2f);
-    g.setColour(juce::Colour(0xff6f8fb1));
-    g.drawRoundedRectangle(area.reduced(0.5f), 8.0f, 1.3f);
+    g.drawRoundedRectangle(area.reduced(1.0f), 3.0f, 1.2f);
+    g.setColour(juce::Colour(0xff555555));
+    g.drawRoundedRectangle(area.reduced(0.5f), 4.0f, 1.3f);
 
     if (heading.isNotEmpty())
     {
         auto headingArea = area.reduced(3.0f).removeFromTop(25.0f);
-        g.setGradientFill(juce::ColourGradient(juce::Colour(0xffeaf5ff), headingArea.getX(),
-                                               headingArea.getY(), juce::Colour(0xffbcd6ee),
+        g.setGradientFill(juce::ColourGradient(juce::Colour(0xfff2f2f2), headingArea.getX(),
+                                               headingArea.getY(), juce::Colour(0xffc8c8c8),
                                                headingArea.getX(), headingArea.getBottom(), false));
-        g.fillRoundedRectangle(headingArea, 6.0f);
-        g.setColour(juce::Colour(0xff86a6c8));
+        g.fillRoundedRectangle(headingArea, 3.0f);
+        g.setColour(juce::Colour(0xff777777));
         g.drawHorizontalLine(juce::roundToInt(headingArea.getBottom()),
                              headingArea.getX() + 4.0f, headingArea.getRight() - 4.0f);
         g.setColour(juce::Colour(xpInk));
@@ -41,7 +41,7 @@ void paintXpPanel(juce::Graphics& g, juce::Rectangle<int> bounds,
 
         const auto hatch = headingArea.withTrimmedLeft(headingArea.getWidth() * 0.62f)
                                       .reduced(7.0f, 6.0f);
-        g.setColour(juce::Colour(0xff4b87bd).withAlpha(0.35f));
+        g.setColour(juce::Colour(0xff555555).withAlpha(0.42f));
         for (float x = hatch.getX(); x < hatch.getRight(); x += 5.0f)
             g.drawLine(x, hatch.getBottom(), x + 8.0f, hatch.getY(), 1.0f);
     }
@@ -51,50 +51,79 @@ void paintXpPanel(juce::Graphics& g, juce::Rectangle<int> bounds,
 XpLookAndFeel::XpLookAndFeel()
 {
     setColour(juce::Label::textColourId, juce::Colour(xpInk));
-    setColour(juce::TextButton::buttonColourId, juce::Colour(0xffdceaf8));
-    setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xff75baff));
+    setColour(juce::TextButton::buttonColourId, juce::Colour(0xffdedede));
+    setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xff333333));
     setColour(juce::TextButton::textColourOffId, juce::Colour(xpInk));
-    setColour(juce::TextButton::textColourOnId, juce::Colour(0xff071d51));
-    setColour(juce::ComboBox::backgroundColourId, juce::Colour(0xfff8fbff));
+    setColour(juce::TextButton::textColourOnId, juce::Colours::white);
+    setColour(juce::ComboBox::backgroundColourId, juce::Colour(0xffeeeeee));
     setColour(juce::ComboBox::textColourId, juce::Colour(xpInk));
-    setColour(juce::ComboBox::outlineColourId, juce::Colour(0xff6a87a7));
+    setColour(juce::ComboBox::outlineColourId, juce::Colour(0xff333333));
     setColour(juce::ComboBox::arrowColourId, juce::Colour(xpInk));
     setColour(juce::Slider::textBoxTextColourId, juce::Colour(xpInk));
-    setColour(juce::Slider::textBoxBackgroundColourId, juce::Colour(0xfff8fbff));
-    setColour(juce::Slider::textBoxOutlineColourId, juce::Colour(0xff7693b3));
-    setColour(juce::Slider::trackColourId, juce::Colour(0xff1686e4));
-    setColour(juce::Slider::thumbColourId, juce::Colour(0xffdcecf9));
-    setColour(juce::PopupMenu::backgroundColourId, juce::Colour(0xfff7fbff));
+    setColour(juce::Slider::textBoxBackgroundColourId, juce::Colour(0xffededed));
+    setColour(juce::Slider::textBoxOutlineColourId, juce::Colour(0xff444444));
+    setColour(juce::Slider::trackColourId, juce::Colour(0xff333333));
+    setColour(juce::Slider::thumbColourId, juce::Colour(0xffdddddd));
+    setColour(juce::PopupMenu::backgroundColourId, juce::Colour(0xffeeeeee));
     setColour(juce::PopupMenu::textColourId, juce::Colour(xpInk));
-    setColour(juce::PopupMenu::highlightedBackgroundColourId, juce::Colour(0xff2f91ee));
+    setColour(juce::PopupMenu::highlightedBackgroundColourId, juce::Colour(0xff333333));
     setColour(juce::PopupMenu::highlightedTextColourId, juce::Colours::white);
 }
 
 void XpLookAndFeel::drawButtonBackground(juce::Graphics& g, juce::Button& button,
                                          const juce::Colour&, bool over, bool down)
 {
+    if (button.getName() == "Fold card") return;
+    if (button.getName() == "Effect power")
+    {
+        auto circle = button.getLocalBounds().toFloat().reduced(2.0f);
+        g.setColour(button.getToggleState() ? juce::Colour(0xff222222)
+                                            : juce::Colour(0xffaaaaaa));
+        g.fillEllipse(circle);
+        g.setColour(juce::Colour(0xff333333));
+        g.drawEllipse(circle, 1.1f);
+        if (over || down)
+        {
+            g.setColour(juce::Colour(0xff555555));
+            g.drawEllipse(circle.expanded(1.0f), 1.0f);
+        }
+        return;
+    }
     auto bounds = button.getLocalBounds().toFloat().reduced(0.5f);
-    const auto top = down ? juce::Colour(0xffb4cee8)
-                          : (over ? juce::Colour(0xffffffff) : juce::Colour(0xfff6f9fd));
-    const auto bottom = down ? juce::Colour(0xffedf5fc)
-                             : (over ? juce::Colour(0xffc9e5ff) : juce::Colour(0xffcdddec));
+    const auto top = button.getToggleState() ? juce::Colour(0xff353535) : down ? juce::Colour(0xffa9a9a9)
+                          : (over ? juce::Colour(0xffffffff) : juce::Colour(0xffeeeeee));
+    const auto bottom = button.getToggleState() ? juce::Colour(0xff171717) : down ? juce::Colour(0xffdddddd)
+                             : (over ? juce::Colour(0xffd4d4d4) : juce::Colour(0xffc6c6c6));
     g.setGradientFill(juce::ColourGradient(top, bounds.getCentreX(), bounds.getY(), bottom,
                                            bounds.getCentreX(), bounds.getBottom(), false));
-    g.fillRoundedRectangle(bounds, 4.0f);
+    g.fillRoundedRectangle(bounds, 2.0f);
     g.setColour(juce::Colours::white.withAlpha(down ? 0.45f : 0.9f));
-    g.drawRoundedRectangle(bounds.reduced(1.0f), 3.0f, 1.0f);
-    g.setColour(juce::Colour(down ? 0xff315d8e : 0xff718dab));
-    g.drawRoundedRectangle(bounds, 4.0f, 1.2f);
+    g.drawRoundedRectangle(bounds.reduced(1.0f), 1.0f, 1.0f);
+    g.setColour(juce::Colour(down ? 0xff111111 : 0xff555555));
+    g.drawRoundedRectangle(bounds, 2.0f, 1.2f);
     if (button.hasKeyboardFocus(true))
     {
-        g.setColour(juce::Colour(0xff073d9b));
-        g.drawRoundedRectangle(bounds.reduced(2.5f), 2.5f, 1.4f);
+        g.setColour(juce::Colour(0xff222222));
+        g.drawRoundedRectangle(bounds.reduced(2.5f), 1.0f, 1.4f);
     }
 }
 
 void XpLookAndFeel::drawButtonText(juce::Graphics& g, juce::TextButton& button,
                                    bool, bool)
 {
+    if (button.getName() == "Effect power") return;
+    if (button.getName() == "Fold card")
+    {
+        const auto centre = button.getLocalBounds().toFloat().getCentre();
+        juce::Path arrow;
+        arrow.startNewSubPath(centre.x - 3.0f, centre.y - 5.0f);
+        arrow.lineTo(centre.x + 4.0f, centre.y);
+        arrow.lineTo(centre.x - 3.0f, centre.y + 5.0f);
+        arrow.closeSubPath();
+        g.setColour(juce::Colour(0xff222222));
+        g.fillPath(arrow);
+        return;
+    }
     g.setColour(button.findColour(button.getToggleState()
         ? juce::TextButton::textColourOnId : juce::TextButton::textColourOffId));
     g.setFont(juce::Font(12.0f, juce::Font::bold));
@@ -115,7 +144,7 @@ void XpLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int width,
     const auto angle = startAngle + position * (endAngle - startAngle);
     const auto accent = slider.findColour(juce::Slider::rotarySliderFillColourId);
 
-    g.setColour(juce::Colour(0xff557797).withAlpha(0.72f));
+    g.setColour(juce::Colour(0xff333333).withAlpha(0.72f));
     for (int tick = 0; tick <= 10; ++tick)
     {
         const auto tickAngle = startAngle + static_cast<float>(tick) * (endAngle - startAngle) / 10.0f;
@@ -125,12 +154,12 @@ void XpLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int width,
         g.drawLine({ tickStart, tickEnd }, tick % 5 == 0 ? 1.4f : 0.9f);
     }
 
-    g.setColour(juce::Colour(0xff51657d).withAlpha(0.35f));
+    g.setColour(juce::Colour(0xff555555).withAlpha(0.35f));
     g.fillEllipse(bounds.translated(1.5f, 2.5f));
     juce::Path track;
     track.addCentredArc(centre.x, centre.y, radius - 2.5f, radius - 2.5f, 0.0f,
                         startAngle, endAngle, true);
-    g.setColour(juce::Colour(0xff244a78));
+    g.setColour(juce::Colour(0xff9a9a9a));
     g.strokePath(track, juce::PathStrokeType(6.5f, juce::PathStrokeType::curved,
                                              juce::PathStrokeType::rounded));
     juce::Path valueArc;
@@ -142,12 +171,12 @@ void XpLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int width,
 
     auto face = bounds.reduced(8.0f);
     g.setGradientFill(juce::ColourGradient(juce::Colours::white, face.getX(), face.getY(),
-                                           juce::Colour(0xff9dacbd), face.getRight(),
+                                           juce::Colour(0xff9a9a9a), face.getRight(),
                                            face.getBottom(), false));
     g.fillEllipse(face);
-    g.setColour(juce::Colour(0xffedf5fc));
+    g.setColour(juce::Colour(0xfff3f3f3));
     g.drawEllipse(face.reduced(1.0f), 1.6f);
-    g.setColour(juce::Colour(0xff33475f));
+    g.setColour(juce::Colour(0xff252525));
     g.drawEllipse(face, 1.2f);
     const auto pointerStart = centre.getPointOnCircumference(radius * 0.20f, angle);
     const auto pointerEnd = centre.getPointOnCircumference(radius * 0.62f, angle);
@@ -161,7 +190,7 @@ void XpLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int width,
     }
     if (slider.hasKeyboardFocus(true))
     {
-        g.setColour(juce::Colour(0xff073d9b));
+        g.setColour(juce::Colour(0xff222222));
         g.drawEllipse(bounds.expanded(3.0f), 1.5f);
     }
 }
@@ -181,20 +210,20 @@ void XpLookAndFeel::drawLinearSlider(juce::Graphics& g, int x, int y, int width,
     const auto cy = static_cast<float>(y + height / 2);
     const auto left = static_cast<float>(x + 5);
     const auto right = static_cast<float>(x + width - 5);
-    g.setColour(juce::Colour(0xff8297ad));
+    g.setColour(juce::Colour(0xff9b9b9b));
     g.fillRoundedRectangle(left, cy - 3.0f, right - left, 6.0f, 3.0f);
     g.setColour(slider.findColour(juce::Slider::trackColourId));
     g.fillRoundedRectangle(left, cy - 2.0f, juce::jmax(0.0f, sliderPos - left), 4.0f, 2.0f);
     auto thumb = juce::Rectangle<float>(sliderPos - 5.0f, cy - 10.0f, 10.0f, 20.0f);
     g.setGradientFill(juce::ColourGradient(juce::Colours::white, thumb.getX(), thumb.getY(),
-                                           juce::Colour(0xffb6c8db), thumb.getX(),
+                                           juce::Colour(0xffb6b6b6), thumb.getX(),
                                            thumb.getBottom(), false));
     g.fillRoundedRectangle(thumb, 2.0f);
-    g.setColour(juce::Colour(0xff526b85));
+    g.setColour(juce::Colour(0xff555555));
     g.drawRoundedRectangle(thumb, 2.0f, 1.0f);
     if (slider.hasKeyboardFocus(true))
     {
-        g.setColour(juce::Colour(0xff073d9b));
+        g.setColour(juce::Colour(0xff222222));
         g.drawRoundedRectangle(thumb.expanded(2.0f), 3.0f, 1.4f);
     }
 }
@@ -205,14 +234,14 @@ void XpLookAndFeel::drawComboBox(juce::Graphics& g, int width, int height, bool 
     auto bounds = juce::Rectangle<float>(0.0f, 0.0f, static_cast<float>(width),
                                          static_cast<float>(height)).reduced(0.5f);
     g.setGradientFill(juce::ColourGradient(juce::Colours::white, 0.0f, 0.0f,
-                                           juce::Colour(0xffdbe8f4), 0.0f,
+                                           juce::Colour(0xffcccccc), 0.0f,
                                            static_cast<float>(height), false));
-    g.fillRoundedRectangle(bounds, 4.0f);
+    g.fillRoundedRectangle(bounds, 2.0f);
     g.setColour(box.findColour(juce::ComboBox::outlineColourId));
-    g.drawRoundedRectangle(bounds, 4.0f, 1.1f);
+    g.drawRoundedRectangle(bounds, 2.0f, 1.1f);
     auto arrowArea = bounds.removeFromRight(static_cast<float>(height));
-    g.setColour(juce::Colour(down ? 0xffb4d8f8 : 0xffc9e4fb));
-    g.fillRoundedRectangle(arrowArea.reduced(2.0f), 3.0f);
+    g.setColour(juce::Colour(down ? 0xff999999 : 0xffbbbbbb));
+    g.fillRoundedRectangle(arrowArea.reduced(2.0f), 1.0f);
     juce::Path arrow;
     const auto centre = arrowArea.getCentre();
     arrow.startNewSubPath(centre.x - 5.0f, centre.y - 2.0f);
@@ -223,7 +252,7 @@ void XpLookAndFeel::drawComboBox(juce::Graphics& g, int width, int height, bool 
     g.fillPath(arrow);
     if (box.hasKeyboardFocus(true))
     {
-        g.setColour(juce::Colour(0xff073d9b));
+        g.setColour(juce::Colour(0xff222222));
         g.drawRoundedRectangle(juce::Rectangle<float>(1.8f, 1.8f,
             static_cast<float>(width) - 3.6f, static_cast<float>(height) - 3.6f), 3.0f, 1.4f);
     }
@@ -238,25 +267,45 @@ void XpLookAndFeel::positionComboBoxText(juce::ComboBox& box, juce::Label& label
 void XpLookAndFeel::drawToggleButton(juce::Graphics& g, juce::ToggleButton& button,
                                      bool over, bool down)
 {
+    if (button.getName() == "Source enabled")
+    {
+        const auto box = button.getLocalBounds().toFloat().reduced(1.5f);
+        g.setColour(over ? juce::Colours::white : juce::Colour(0xffececec));
+        g.fillRect(box);
+        g.setColour(juce::Colour(0xff333333));
+        g.drawRect(box, 1.2f);
+        if (button.getToggleState())
+        {
+            juce::Path check;
+            check.startNewSubPath(box.getX() + box.getWidth() * 0.18f,
+                                  box.getY() + box.getHeight() * 0.5f);
+            check.lineTo(box.getX() + box.getWidth() * 0.42f,
+                         box.getY() + box.getHeight() * 0.78f);
+            check.lineTo(box.getX() + box.getWidth() * 0.82f,
+                         box.getY() + box.getHeight() * 0.18f);
+            g.strokePath(check, juce::PathStrokeType(2.1f));
+        }
+        return;
+    }
     auto bounds = button.getLocalBounds().toFloat().reduced(1.0f);
     const auto on = button.getToggleState();
-    const auto top = on ? juce::Colour(over ? 0xff82c5ff : 0xff55aaff)
-                        : juce::Colour(over ? 0xffeff7ff : 0xffdce8f4);
-    const auto bottom = on ? juce::Colour(down ? 0xff0a61c5 : 0xff1680e7)
-                           : juce::Colour(down ? 0xffb4c7da : 0xffb8c9da);
+    const auto top = on ? juce::Colour(0xff3c3c3c)
+                        : juce::Colour(over ? 0xfffafafa : 0xffe5e5e5);
+    const auto bottom = on ? juce::Colour(0xff181818)
+                           : juce::Colour(down ? 0xffaaaaaa : 0xffc5c5c5);
     g.setGradientFill(juce::ColourGradient(top, bounds.getCentreX(), bounds.getY(), bottom,
                                            bounds.getCentreX(), bounds.getBottom(), false));
-    g.fillRoundedRectangle(bounds, bounds.getHeight() * 0.48f);
-    g.setColour(juce::Colour(on ? 0xff0750ad : 0xff6f879f));
-    g.drawRoundedRectangle(bounds, bounds.getHeight() * 0.48f, 1.2f);
+    g.fillRoundedRectangle(bounds, 2.0f);
+    g.setColour(juce::Colour(on ? 0xff111111 : 0xff555555));
+    g.drawRoundedRectangle(bounds, 2.0f, 1.2f);
     g.setColour(on ? juce::Colours::white : juce::Colour(xpInk));
     g.setFont(juce::Font(12.0f, juce::Font::bold));
     g.drawFittedText(button.getButtonText().toUpperCase(), button.getLocalBounds().reduced(8, 1),
                      juce::Justification::centred, 1);
     if (button.hasKeyboardFocus(true))
     {
-        g.setColour(juce::Colour(on ? 0xffffffff : 0xff073d9b).withAlpha(0.9f));
-        g.drawRoundedRectangle(bounds.reduced(2.5f), bounds.getHeight() * 0.42f, 1.2f);
+        g.setColour(juce::Colour(on ? 0xffffffff : 0xff222222).withAlpha(0.9f));
+        g.drawRoundedRectangle(bounds.reduced(2.5f), 1.0f, 1.2f);
     }
 }
 
@@ -266,9 +315,9 @@ void XpLookAndFeel::drawScrollbar(juce::Graphics& g, juce::ScrollBar&, int x, in
 {
     auto track = juce::Rectangle<float>(static_cast<float>(x), static_cast<float>(y),
                                         static_cast<float>(width), static_cast<float>(height));
-    g.setColour(juce::Colour(0xffd9e8f5));
+    g.setColour(juce::Colour(0xffdddddd));
     g.fillRect(track);
-    g.setColour(juce::Colour(0xff89a6c1));
+    g.setColour(juce::Colour(0xff777777));
     g.drawRect(track, 1.0f);
     auto thumb = vertical
         ? juce::Rectangle<float>(static_cast<float>(x + 2), static_cast<float>(thumbStart),
@@ -276,12 +325,12 @@ void XpLookAndFeel::drawScrollbar(juce::Graphics& g, juce::ScrollBar&, int x, in
         : juce::Rectangle<float>(static_cast<float>(thumbStart), static_cast<float>(y + 2),
                                  static_cast<float>(thumbSize), static_cast<float>(height - 4));
     g.setGradientFill(juce::ColourGradient(
-        juce::Colour(over ? 0xffffffff : 0xffedf6ff), thumb.getX(), thumb.getY(),
-        juce::Colour(down ? 0xff83b8e8 : 0xffa9cae8), thumb.getRight(), thumb.getBottom(), false));
+        juce::Colour(over ? 0xffffffff : 0xffeeeeee), thumb.getX(), thumb.getY(),
+        juce::Colour(down ? 0xff999999 : 0xffbbbbbb), thumb.getRight(), thumb.getBottom(), false));
     g.fillRoundedRectangle(thumb, 3.0f);
-    g.setColour(juce::Colour(0xff517da8));
+    g.setColour(juce::Colour(0xff555555));
     g.drawRoundedRectangle(thumb, 3.0f, 1.0f);
-    g.setColour(juce::Colour(0xff769abd));
+    g.setColour(juce::Colour(0xff777777));
     const auto centre = thumb.getCentre();
     for (int offset = -3; offset <= 3; offset += 3)
     {
@@ -299,13 +348,13 @@ void XpLookAndFeel::drawTooltip(juce::Graphics& g, const juce::String& text,
 {
     auto bounds = juce::Rectangle<float>(0.0f, 0.0f, static_cast<float>(width),
                                          static_cast<float>(height)).reduced(0.5f);
-    g.setColour(juce::Colour(0xff17345b).withAlpha(0.28f));
+    g.setColour(juce::Colour(0xff333333).withAlpha(0.28f));
     g.fillRoundedRectangle(bounds.translated(1.0f, 1.5f), 4.0f);
-    g.setColour(juce::Colour(0xffffffe1));
+    g.setColour(juce::Colour(0xfff2f2f2));
     g.fillRoundedRectangle(bounds, 4.0f);
-    g.setColour(juce::Colour(0xff365f91));
+    g.setColour(juce::Colour(0xff555555));
     g.drawRoundedRectangle(bounds, 4.0f, 1.0f);
-    g.setColour(juce::Colour(0xff10213c));
+    g.setColour(juce::Colour(0xff222222));
     g.setFont(12.5f);
     g.drawFittedText(text, 7, 4, width - 14, height - 8,
                      juce::Justification::centredLeft, 3);
@@ -313,20 +362,57 @@ void XpLookAndFeel::drawTooltip(juce::Graphics& g, const juce::String& text,
 
 void SourceWaveformComponent::setSource(SampleManager::SamplePtr newSource)
 {
+    if (source == nullptr || newSource == nullptr
+        || source->settings.id != newSource->settings.id)
+    {
+        viewStart = 0.0;
+        viewSpan = 1.0;
+    }
     source = std::move(newSource);
     region = source != nullptr
         ? randomchop::clampNormalisedRegion(source->settings.startNormalised,
                                             source->settings.endNormalised)
         : randomchop::NormalisedRegion {};
     setTooltip(source != nullptr
-        ? "Drag the green and orange handles to set the playable source region."
+        ? "Drag START and END to set the playable source region."
         : "Select a sample to view and edit its playable region.");
+    repaint();
+}
+
+void SourceWaveformComponent::zoomIn()
+{
+    const auto centre = viewStart + viewSpan * 0.5;
+    viewSpan = juce::jmax(0.025, viewSpan * 0.5);
+    viewStart = juce::jlimit(0.0, 1.0 - viewSpan, centre - viewSpan * 0.5);
+    repaint();
+}
+
+void SourceWaveformComponent::zoomOut()
+{
+    const auto centre = viewStart + viewSpan * 0.5;
+    viewSpan = juce::jmin(1.0, viewSpan * 2.0);
+    viewStart = juce::jlimit(0.0, 1.0 - viewSpan, centre - viewSpan * 0.5);
+    repaint();
+}
+
+void SourceWaveformComponent::focusRegion()
+{
+    viewSpan = juce::jlimit(0.025, 1.0, (region.end - region.start) * 1.1);
+    viewStart = juce::jlimit(0.0, 1.0 - viewSpan,
+                             (region.start + region.end - viewSpan) * 0.5);
+    repaint();
+}
+
+void SourceWaveformComponent::fitAll()
+{
+    viewStart = 0.0;
+    viewSpan = 1.0;
     repaint();
 }
 
 juce::Rectangle<int> SourceWaveformComponent::getWaveformBounds() const
 {
-    return getLocalBounds().reduced(5).withTrimmedTop(25).withTrimmedBottom(5);
+    return getLocalBounds().reduced(5).withTrimmedTop(25).withTrimmedRight(44);
 }
 
 double SourceWaveformComponent::positionToNormalised(float x) const noexcept
@@ -334,9 +420,9 @@ double SourceWaveformComponent::positionToNormalised(float x) const noexcept
     const auto bounds = getWaveformBounds();
     if (bounds.getWidth() <= 0)
         return 0.0;
-    return juce::jlimit(0.0, 1.0,
+    return juce::jlimit(viewStart, viewStart + viewSpan,
         static_cast<double>(x - static_cast<float>(bounds.getX()))
-            / static_cast<double>(bounds.getWidth()));
+            / static_cast<double>(bounds.getWidth()) * viewSpan + viewStart);
 }
 
 juce::String SourceWaveformComponent::markerDescription(const juce::String& name,
@@ -356,42 +442,43 @@ juce::String SourceWaveformComponent::markerDescription(const juce::String& name
 void SourceWaveformComponent::paint(juce::Graphics& g)
 {
     const auto outer = getLocalBounds().toFloat();
-    g.setGradientFill(juce::ColourGradient(juce::Colour(0xfff8fbff), outer.getX(), outer.getY(),
-                                           juce::Colour(0xffbed4e8), outer.getX(),
+    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff353535), outer.getX(), outer.getY(),
+                                           juce::Colour(0xff171717), outer.getX(),
                                            outer.getBottom(), false));
-    g.fillRoundedRectangle(outer, 7.0f);
-    g.setColour(juce::Colour(0xff59799c));
-    g.drawRoundedRectangle(outer.reduced(0.5f), 7.0f, 1.4f);
+    g.fillRoundedRectangle(outer, 3.0f);
+    g.setColour(juce::Colour(0xff555555));
+    g.drawRoundedRectangle(outer.reduced(0.5f), 3.0f, 1.4f);
 
     g.setFont(juce::Font(13.0f, juce::Font::bold));
-    g.setColour(juce::Colour(xpInk));
+    g.setColour(juce::Colours::white);
     juce::String heading("SELECT A SOURCE");
     if (source != nullptr)
         heading = source->settings.displayName;
     auto headingBounds = getLocalBounds().reduced(9).removeFromTop(18);
-    g.drawText(heading, headingBounds.withTrimmedRight(126),
+    g.drawText(heading, headingBounds.withTrimmedRight(190),
                juce::Justification::centredLeft, true);
     if (source != nullptr && source->audio != nullptr)
     {
         const auto seconds = static_cast<double>(source->audio->getNumSamples())
             / juce::jmax(1.0, source->sampleRate);
         const auto details = juce::String(source->sampleRate / 1000.0, 1) + " kHz   "
-            + juce::String(seconds, 2) + " s";
+            + (source->bitDepth > 0 ? juce::String(source->bitDepth) + " bit   " : juce::String())
+            + juce::String(seconds, 1) + " s";
         g.setFont(11.0f);
-        g.setColour(juce::Colour(0xff456d9c));
-        g.drawText(details, headingBounds.removeFromRight(120),
+        g.setColour(juce::Colour(0xffdedede));
+        g.drawText(details, headingBounds.removeFromRight(185),
                    juce::Justification::centredRight, true);
     }
 
     const auto waveBounds = getWaveformBounds();
-    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff061b39),
+    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff222222),
                                            static_cast<float>(waveBounds.getX()),
                                            static_cast<float>(waveBounds.getY()),
-                                           juce::Colour(0xff0b3159),
+                                           juce::Colour(0xff292929),
                                            static_cast<float>(waveBounds.getX()),
                                            static_cast<float>(waveBounds.getBottom()), false));
-    g.fillRoundedRectangle(waveBounds.toFloat(), 4.0f);
-    g.setColour(juce::Colour(0xff2c6696).withAlpha(0.45f));
+    g.fillRoundedRectangle(waveBounds.toFloat(), 1.0f);
+    g.setColour(juce::Colour(0xffb0b0b0).withAlpha(0.4f));
     for (int line = 1; line < 12; ++line)
     {
         const auto x = waveBounds.getX() + line * waveBounds.getWidth() / 12;
@@ -404,24 +491,24 @@ void SourceWaveformComponent::paint(juce::Graphics& g)
         g.drawHorizontalLine(y, static_cast<float>(waveBounds.getX()),
                              static_cast<float>(waveBounds.getRight()));
     }
-    g.setColour(juce::Colour(0xff78aee0).withAlpha(0.55f));
+    g.setColour(juce::Colour(0xffbcbcbc).withAlpha(0.55f));
     g.drawHorizontalLine(waveBounds.getCentreY(), static_cast<float>(waveBounds.getX()),
                          static_cast<float>(waveBounds.getRight()));
 
     if (source == nullptr)
     {
-        g.setColour(juce::Colour(0xff9fc5eb));
+        g.setColour(juce::Colour(0xffdddddd));
         g.drawText("Select a source to edit its region", waveBounds,
                    juce::Justification::centred);
-        g.setColour(juce::Colour(0xff6f95ba));
-        g.drawRoundedRectangle(waveBounds.toFloat(), 4.0f, 1.0f);
+        g.setColour(juce::Colour(0xff888888));
+        g.drawRoundedRectangle(waveBounds.toFloat(), 1.0f, 1.0f);
         return;
     }
 
     if (source->settings.missing || source->audio == nullptr
         || source->waveformPeaks == nullptr || source->waveformPeaks->empty())
     {
-        g.setColour(juce::Colour(0xffffa0a0));
+        g.setColour(juce::Colour(0xffeeeeee));
         g.drawText("Waveform unavailable for missing source", waveBounds,
                    juce::Justification::centred);
     }
@@ -431,14 +518,14 @@ void SourceWaveformComponent::paint(juce::Graphics& g)
         const auto peakCount = peaks.size();
         const auto halfHeight = static_cast<float>(waveBounds.getHeight()) * 0.46f;
         const auto centreY = static_cast<float>(waveBounds.getCentreY());
-        g.setColour(juce::Colour(0xff86c2ff));
+        g.setColour(juce::Colour(0xfff5f5f5));
         for (int x = 0; x < waveBounds.getWidth(); ++x)
         {
-            const auto first = static_cast<size_t>(x) * peakCount
-                / static_cast<size_t>(waveBounds.getWidth());
+            const auto first = static_cast<size_t>((viewStart
+                + static_cast<double>(x) * viewSpan / waveBounds.getWidth()) * peakCount);
             const auto last = juce::jmax(first + 1,
-                static_cast<size_t>(x + 1) * peakCount
-                    / static_cast<size_t>(waveBounds.getWidth()));
+                static_cast<size_t>((viewStart
+                    + static_cast<double>(x + 1) * viewSpan / waveBounds.getWidth()) * peakCount));
             float minimum = 0.0f;
             float maximum = 0.0f;
             for (auto peak = first; peak < juce::jmin(last, peakCount); ++peak)
@@ -453,10 +540,12 @@ void SourceWaveformComponent::paint(juce::Graphics& g)
     }
 
     const auto startX = static_cast<float>(waveBounds.getX())
-        + static_cast<float>(region.start) * static_cast<float>(waveBounds.getWidth());
+        + static_cast<float>((region.start - viewStart) / viewSpan) * static_cast<float>(waveBounds.getWidth());
     const auto endX = static_cast<float>(waveBounds.getX())
-        + static_cast<float>(region.end) * static_cast<float>(waveBounds.getWidth());
-    g.setColour(juce::Colour(0xff3b91d8).withAlpha(0.11f));
+        + static_cast<float>((region.end - viewStart) / viewSpan) * static_cast<float>(waveBounds.getWidth());
+    g.saveState();
+    g.reduceClipRegion(waveBounds);
+    g.setColour(juce::Colour(0xffffffff).withAlpha(0.06f));
     g.fillRect(juce::Rectangle<float>(startX, static_cast<float>(waveBounds.getY()),
                                      juce::jmax(0.0f, endX - startX),
                                      static_cast<float>(waveBounds.getHeight())));
@@ -471,16 +560,16 @@ void SourceWaveformComponent::paint(juce::Graphics& g)
 
     const auto startHovered = hoverMarker == DragMarker::start || dragMarker == DragMarker::start;
     const auto endHovered = hoverMarker == DragMarker::end || dragMarker == DragMarker::end;
-    g.setColour(juce::Colour(0xff66e3a4).withAlpha(startHovered ? 0.28f : 0.12f));
+    g.setColour(juce::Colour(0xffffffff).withAlpha(startHovered ? 0.28f : 0.12f));
     g.fillRect(startX - (startHovered ? 5.0f : 3.0f), static_cast<float>(waveBounds.getY()),
                startHovered ? 10.0f : 6.0f, static_cast<float>(waveBounds.getHeight()));
-    g.setColour(juce::Colour(0xff66e3a4));
+    g.setColour(juce::Colour(0xffeeeeee));
     g.drawLine(startX, static_cast<float>(waveBounds.getY()), startX,
                static_cast<float>(waveBounds.getBottom()), startHovered ? 3.0f : 2.0f);
-    g.setColour(juce::Colour(0xffffa65c).withAlpha(endHovered ? 0.28f : 0.12f));
+    g.setColour(juce::Colour(0xffffffff).withAlpha(endHovered ? 0.28f : 0.12f));
     g.fillRect(endX - (endHovered ? 5.0f : 3.0f), static_cast<float>(waveBounds.getY()),
                endHovered ? 10.0f : 6.0f, static_cast<float>(waveBounds.getHeight()));
-    g.setColour(juce::Colour(0xffffa65c));
+    g.setColour(juce::Colour(0xffeeeeee));
     g.drawLine(endX, static_cast<float>(waveBounds.getY()), endX,
                static_cast<float>(waveBounds.getBottom()), endHovered ? 3.0f : 2.0f);
 
@@ -495,8 +584,8 @@ void SourceWaveformComponent::paint(juce::Graphics& g)
         g.setColour(colour);
         g.fillPath(handle);
     };
-    drawHandle(startX, juce::Colour(0xff66e3a4), true);
-    drawHandle(endX, juce::Colour(0xffffa65c), false);
+    drawHandle(startX, juce::Colour(0xffeeeeee), true);
+    drawHandle(endX, juce::Colour(0xffeeeeee), false);
 
     const auto drawTag = [&g, &waveBounds](float markerX, const juce::String& text,
                                            juce::Colour colour)
@@ -509,14 +598,15 @@ void SourceWaveformComponent::paint(juce::Graphics& g)
                                           tagWidth, 19.0f);
         g.setColour(colour);
         g.fillRoundedRectangle(tag, 3.0f);
-        g.setColour(juce::Colour(0xff10213c));
+        g.setColour(juce::Colour(0xff111111));
         g.setFont(juce::Font(10.0f, juce::Font::bold));
         g.drawText(text, tag.toNearestInt(), juce::Justification::centred, false);
     };
-    drawTag(startX, "START", juce::Colour(0xffa9e95e));
-    drawTag(endX, "END", juce::Colour(0xffffa23d));
-    g.setColour(juce::Colour(0xff82a7c9));
-    g.drawRoundedRectangle(waveBounds.toFloat(), 4.0f, 1.1f);
+    drawTag(startX, "START", juce::Colour(0xffeeeeee));
+    drawTag(endX, "END", juce::Colour(0xffeeeeee));
+    g.restoreState();
+    g.setColour(juce::Colour(0xff888888));
+    g.drawRoundedRectangle(waveBounds.toFloat(), 1.0f, 1.1f);
 }
 
 void SourceWaveformComponent::mouseDown(const juce::MouseEvent& event)
@@ -526,9 +616,9 @@ void SourceWaveformComponent::mouseDown(const juce::MouseEvent& event)
 
     const auto bounds = getWaveformBounds();
     const auto startX = static_cast<float>(bounds.getX())
-        + static_cast<float>(region.start) * static_cast<float>(bounds.getWidth());
+        + static_cast<float>((region.start - viewStart) / viewSpan) * static_cast<float>(bounds.getWidth());
     const auto endX = static_cast<float>(bounds.getX())
-        + static_cast<float>(region.end) * static_cast<float>(bounds.getWidth());
+        + static_cast<float>((region.end - viewStart) / viewSpan) * static_cast<float>(bounds.getWidth());
     if (std::abs(startX - endX) < 0.5f)
     {
         const auto position = positionToNormalised(event.position.x);
@@ -584,9 +674,9 @@ void SourceWaveformComponent::mouseMove(const juce::MouseEvent& event)
 
     const auto bounds = getWaveformBounds();
     const auto startX = static_cast<float>(bounds.getX())
-        + static_cast<float>(region.start) * static_cast<float>(bounds.getWidth());
+        + static_cast<float>((region.start - viewStart) / viewSpan) * static_cast<float>(bounds.getWidth());
     const auto endX = static_cast<float>(bounds.getX())
-        + static_cast<float>(region.end) * static_cast<float>(bounds.getWidth());
+        + static_cast<float>((region.end - viewStart) / viewSpan) * static_cast<float>(bounds.getWidth());
     const auto distanceToStart = std::abs(event.position.x - startX);
     const auto distanceToEnd = std::abs(event.position.x - endX);
     const auto next = juce::jmin(distanceToStart, distanceToEnd) <= 9.0f
@@ -610,7 +700,7 @@ void SourceWaveformComponent::mouseExit(const juce::MouseEvent&)
     hoverMarker = DragMarker::none;
     setMouseCursor(juce::MouseCursor::NormalCursor);
     setTooltip(source != nullptr
-        ? "Drag the green and orange handles to set the playable source region."
+        ? "Drag START and END to set the playable source region."
         : "Select a sample to view and edit its playable region.");
     repaint();
 }
@@ -618,6 +708,14 @@ void SourceWaveformComponent::mouseExit(const juce::MouseEvent&)
 void SpectralCanvasComponent::setCanvas(const Canvas& newCanvas)
 {
     canvas = newCanvas;
+    repaint();
+}
+
+void SpectralCanvasComponent::setSpectrum(
+    const std::array<float, randomchop::SpectralDrawProcessor::displayBins>& values)
+{
+    for (size_t index = 0; index < spectrum.size(); ++index)
+        spectrum[index] = juce::jmax(values[index], spectrum[index] * 0.80f);
     repaint();
 }
 
@@ -717,15 +815,15 @@ void SpectralCanvasComponent::mouseExit(const juce::MouseEvent&)
 void SpectralCanvasComponent::paint(juce::Graphics& g)
 {
     const auto bounds = getLocalBounds().reduced(2);
-    g.fillAll(juce::Colour(0xffbdd1e5));
-    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff061b3c),
+    g.fillAll(juce::Colour(0xffaaaaaa));
+    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff202020),
                                            static_cast<float>(bounds.getX()),
                                            static_cast<float>(bounds.getY()),
-                                           juce::Colour(0xff102f58),
+                                           juce::Colour(0xff303030),
                                            static_cast<float>(bounds.getX()),
                                            static_cast<float>(bounds.getBottom()), false));
-    g.fillRoundedRectangle(bounds.toFloat(), 4.0f);
-    g.setColour(juce::Colour(0xff2e6192).withAlpha(0.5f));
+    g.fillRoundedRectangle(bounds.toFloat(), 2.0f);
+    g.setColour(juce::Colour(0xffaaaaaa).withAlpha(0.5f));
     for (int line = 1; line < 8; ++line)
     {
         const auto x = bounds.getX() + line * bounds.getWidth() / 8;
@@ -738,6 +836,17 @@ void SpectralCanvasComponent::paint(juce::Graphics& g)
         g.drawHorizontalLine(y, static_cast<float>(bounds.getX()),
                              static_cast<float>(bounds.getRight()));
     }
+    const auto barWidth = static_cast<float>(bounds.getWidth())
+        / static_cast<float>(spectrum.size());
+    for (size_t index = 0; index < spectrum.size(); ++index)
+    {
+        const auto barHeight = std::sqrt(juce::jlimit(0.0f, 1.0f, spectrum[index]))
+            * static_cast<float>(bounds.getHeight()) * 0.88f;
+        g.setColour(juce::Colour(0xffcccccc).withAlpha(0.62f));
+        g.fillRect(static_cast<float>(bounds.getX()) + static_cast<float>(index) * barWidth,
+                   static_cast<float>(bounds.getBottom()) - barHeight,
+                   juce::jmax(1.0f, barWidth - 1.0f), barHeight);
+    }
     const auto cellWidth = static_cast<float>(bounds.getWidth())
         / randomchop::SpectralMaskStore::canvasWidth;
     const auto cellHeight = static_cast<float>(bounds.getHeight())
@@ -749,7 +858,7 @@ void SpectralCanvasComponent::paint(juce::Graphics& g)
                 row * randomchop::SpectralMaskStore::canvasWidth + column)];
             if (value > 0.0001f)
             {
-                g.setColour(juce::Colour(0xffa765ff).withAlpha(0.25f + 0.65f * value));
+                g.setColour(juce::Colour(0xffeeeeee).withAlpha(0.25f + 0.65f * value));
                 g.fillRect(static_cast<float>(bounds.getX()) + column * cellWidth,
                            static_cast<float>(bounds.getY()) + row * cellHeight,
                            cellWidth + 0.5f, cellHeight + 0.5f);
@@ -757,16 +866,16 @@ void SpectralCanvasComponent::paint(juce::Graphics& g)
         }
     const auto scannerX = static_cast<float>(bounds.getX())
         + scanPosition * static_cast<float>(bounds.getWidth());
-    g.setColour(juce::Colour(0xffffdd45).withAlpha(0.18f));
+    g.setColour(juce::Colour(0xffffffff).withAlpha(0.18f));
     g.fillRect(scannerX - 5.0f, static_cast<float>(bounds.getY()), 10.0f,
                static_cast<float>(bounds.getHeight()));
-    g.setColour(juce::Colour(0xffffed73));
+    g.setColour(juce::Colour(0xffffffff));
     g.drawVerticalLine(juce::roundToInt(scannerX), static_cast<float>(bounds.getY()),
                        static_cast<float>(bounds.getBottom()));
-    g.setColour(juce::Colour(0xff6f95ba));
-    g.drawRoundedRectangle(bounds.toFloat(), 4.0f, 1.0f);
+    g.setColour(juce::Colour(0xffaaaaaa));
+    g.drawRoundedRectangle(bounds.toFloat(), 2.0f, 1.0f);
     g.setFont(juce::Font(8.0f, juce::Font::bold));
-    g.setColour(juce::Colour(0xffa9c8e8).withAlpha(0.78f));
+    g.setColour(juce::Colour(0xffeeeeee).withAlpha(0.78f));
     g.drawText("HIGH", bounds.getX() + 5, bounds.getY() + 3, 30, 10,
                juce::Justification::centredLeft, false);
     g.drawText("LOW", bounds.getX() + 5, bounds.getBottom() - 13, 30, 10,
@@ -826,13 +935,13 @@ void CreativeVisualizer::paint(juce::Graphics& g)
 {
     const auto outer = getLocalBounds().toFloat();
     const auto inner = outer.reduced(7.0f, 8.0f);
-    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff061a37), outer.getX(), outer.getY(),
-                                           juce::Colour(0xff0b3159), outer.getX(),
+    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff202020), outer.getX(), outer.getY(),
+                                           juce::Colour(0xff303030), outer.getX(),
                                            outer.getBottom(), false));
-    g.fillRoundedRectangle(outer, 7.0f);
-    g.setColour(juce::Colour(0xff668eb6));
-    g.drawRoundedRectangle(outer.reduced(0.5f), 7.0f, 1.2f);
-    g.setColour(juce::Colour(0xff3e75a6).withAlpha(0.20f));
+    g.fillRoundedRectangle(outer, 2.0f);
+    g.setColour(juce::Colour(0xff888888));
+    g.drawRoundedRectangle(outer.reduced(0.5f), 2.0f, 1.2f);
+    g.setColour(juce::Colour(0xffaaaaaa).withAlpha(0.20f));
     for (int line = 1; line < 4; ++line)
     {
         const auto y = inner.getY() + static_cast<float>(line) * inner.getHeight() / 4.0f;
@@ -864,13 +973,13 @@ void CreativeVisualizer::paint(juce::Graphics& g)
             auto cell = juce::Rectangle<float>(
                 inner.getX() + index * (cellWidth + gap), inner.getY() + displacement,
                 cellWidth, inner.getHeight() - std::abs(displacement));
-            g.setColour(activeSlice ? juce::Colour(0xff7fc2ff).withAlpha(0.42f + 0.48f * primary)
-                                    : juce::Colour(0xff183c63));
+            g.setColour(activeSlice ? juce::Colour(0xffeeeeee).withAlpha(0.42f + 0.48f * primary)
+                                    : juce::Colour(0xff555555));
             g.fillRoundedRectangle(cell, 2.0f);
         }
         const auto scanner = inner.getX() + telemetryFirst * inner.getWidth();
         const auto armed = (telemetryFlags & (uint32_t { 1 } << 9)) != 0;
-        g.setColour(juce::Colour(0xffd8efff).withAlpha(armed ? 0.65f : 1.0f));
+        g.setColour(juce::Colour(0xffffffff).withAlpha(armed ? 0.65f : 1.0f));
         g.drawLine(scanner, inner.getY() - 2.0f, scanner, inner.getBottom() + 2.0f, 1.5f);
         return;
     }
@@ -890,7 +999,7 @@ void CreativeVisualizer::paint(juce::Graphics& g)
             auto cell = juce::Rectangle<float>(
                 inner.getX() + slice * (cellWidth + gap), inner.getY(),
                 cellWidth, inner.getHeight());
-            g.setColour(juce::Colour(reversed ? 0xffff8fab : 0xff67e8f9)
+            g.setColour(juce::Colour(reversed ? 0xffdddddd : 0xffaaaaaa)
                 .withAlpha(active ? 0.22f + 0.38f * primary : 0.12f));
             g.fillRoundedRectangle(cell, 3.0f);
 
@@ -908,11 +1017,11 @@ void CreativeVisualizer::paint(juce::Graphics& g)
                 if (point == 0) ribbon.startNewSubPath(x, y);
                 else ribbon.lineTo(x, y);
             }
-            g.setColour(juce::Colour(reversed ? 0xffff8fab : 0xff67e8f9)
+            g.setColour(juce::Colour(reversed ? 0xffffffff : 0xffcccccc)
                 .withAlpha(active ? 0.90f : 0.36f));
             g.strokePath(ribbon, juce::PathStrokeType(1.7f));
         }
-        g.setColour(juce::Colour(0xffffcf5a).withAlpha(active ? 1.0f : 0.45f));
+        g.setColour(juce::Colour(0xffffffff).withAlpha(active ? 1.0f : 0.45f));
         g.drawLine(scanner, inner.getY() - 2.0f, scanner,
                    inner.getBottom() + 2.0f, 1.5f);
         return;
@@ -933,12 +1042,46 @@ void CreativeVisualizer::paint(juce::Graphics& g)
             * std::fmod(static_cast<float>(index) * 0.618f, 1.0f);
         const auto length = (10.0f - 6.5f * primary) * lengthVariation
             * (0.72f + 0.28f * telemetrySecond);
-        g.setColour(juce::Colour(0xff67e8f9).withAlpha(0.18f + 0.62f * primary));
+        g.setColour(juce::Colour(0xffaaaaaa).withAlpha(0.18f + 0.62f * primary));
         g.drawLine(x - length, y + length * 0.35f, x + length, y - length * 0.35f,
                    1.0f + 1.2f * primary);
-        g.setColour(juce::Colour(0xfff0f9ff).withAlpha(0.28f + 0.66f * primary));
+        g.setColour(juce::Colour(0xfff5f5f5).withAlpha(0.28f + 0.66f * primary));
         const auto radius = 1.8f - 0.7f * primary;
         g.fillEllipse(x - radius, y - radius, radius * 2.0f, radius * 2.0f);
+    }
+}
+
+void OutputMeterComponent::setPeak(float newPeak) noexcept
+{
+    peak = juce::jmax(juce::jlimit(0.0f, 1.0f, newPeak), peak * 0.82f);
+    repaint();
+}
+
+void OutputMeterComponent::paint(juce::Graphics& g)
+{
+    auto bounds = getLocalBounds().reduced(1);
+    const auto meter = bounds.removeFromLeft(juce::jmax(12, bounds.getWidth() / 3));
+    g.setColour(juce::Colour(0xff1e1e1e));
+    g.fillRect(meter);
+    const auto db = peak > 0.000001f ? juce::Decibels::gainToDecibels(peak) : -60.0f;
+    const auto fraction = juce::jlimit(0.0f, 1.0f, (db + 60.0f) / 60.0f);
+    const auto segments = 12;
+    for (int index = 0; index < segments; ++index)
+    {
+        const auto y = meter.getBottom() - (index + 1) * meter.getHeight() / segments;
+        g.setColour(index < juce::roundToInt(fraction * segments)
+            ? juce::Colour(0xffeeeeee) : juce::Colour(0xff555555));
+        g.fillRect(meter.getX() + 3, y + 1, meter.getWidth() - 6,
+                   juce::jmax(2, meter.getHeight() / segments - 3));
+    }
+    g.setColour(juce::Colour(0xff222222));
+    g.setFont(juce::Font(9.0f));
+    const char* labels[] { "0", "-12", "-24", "-36", "-60" };
+    for (int index = 0; index < 5; ++index)
+    {
+        const auto y = bounds.getY() + index * (bounds.getHeight() - 12) / 4;
+        g.drawText(labels[index], meter.getRight() + 3, y, bounds.getRight() - meter.getRight(),
+                   12, juce::Justification::centredLeft);
     }
 }
 
@@ -946,11 +1089,11 @@ void XpInfoButton::paintButton(juce::Graphics& g, bool isMouseOverButton,
                                bool isButtonDown)
 {
     auto bounds = getLocalBounds().toFloat().reduced(2.0f);
-    const auto top = isButtonDown ? juce::Colour(0xff0b62c7)
-                                  : (isMouseOverButton ? juce::Colour(0xff69b9ff)
-                                                       : juce::Colour(0xff3b98ee));
-    const auto bottom = isButtonDown ? juce::Colour(0xff43a8ff)
-                                     : juce::Colour(0xff0754b5);
+    const auto top = isButtonDown ? juce::Colour(0xff555555)
+                                  : (isMouseOverButton ? juce::Colour(0xffaaaaaa)
+                                                       : juce::Colour(0xff888888));
+    const auto bottom = isButtonDown ? juce::Colour(0xff777777)
+                                     : juce::Colour(0xff333333);
     g.setGradientFill(juce::ColourGradient(top, bounds.getCentreX(), bounds.getY(),
                                            bottom, bounds.getCentreX(), bounds.getBottom(),
                                            false));
@@ -970,15 +1113,15 @@ void XpInfoButton::paintButton(juce::Graphics& g, bool isMouseOverButton,
 void XpWindowCloseButton::paintButton(juce::Graphics& g, bool over, bool down)
 {
     auto bounds = getLocalBounds().toFloat().reduced(0.7f);
-    const auto top = down ? juce::Colour(0xffa7291d)
-                          : (over ? juce::Colour(0xffff8c72) : juce::Colour(0xfff45a46));
-    const auto bottom = down ? juce::Colour(0xffe6533f) : juce::Colour(0xffb51d13);
+    const auto top = down ? juce::Colour(0xff555555)
+                          : (over ? juce::Colour(0xffbbbbbb) : juce::Colour(0xff999999));
+    const auto bottom = down ? juce::Colour(0xff777777) : juce::Colour(0xff333333);
     g.setGradientFill(juce::ColourGradient(top, bounds.getCentreX(), bounds.getY(), bottom,
                                            bounds.getCentreX(), bounds.getBottom(), false));
     g.fillRoundedRectangle(bounds, 4.0f);
     g.setColour(juce::Colours::white.withAlpha(0.9f));
     g.drawRoundedRectangle(bounds.reduced(1.0f), 3.0f, 1.0f);
-    g.setColour(juce::Colour(0xff78130d));
+    g.setColour(juce::Colour(0xff222222));
     g.drawRoundedRectangle(bounds, 4.0f, 1.0f);
     g.setColour(juce::Colours::white);
     g.drawLine(bounds.getX() + 6.0f, bounds.getY() + 6.0f,
@@ -989,7 +1132,7 @@ void XpWindowCloseButton::paintButton(juce::Graphics& g, bool over, bool down)
 
 void XpModalOverlay::paint(juce::Graphics& g)
 {
-    g.fillAll(juce::Colour(0xff071a38).withAlpha(0.33f));
+    g.fillAll(juce::Colour(0xff111111).withAlpha(0.40f));
 }
 
 void XpModalOverlay::mouseDown(const juce::MouseEvent&)
@@ -1004,9 +1147,9 @@ XpInfoPanel::XpInfoPanel()
     setWantsKeyboardFocus(true);
     addAndMakeVisible(closeButton);
     addAndMakeVisible(titleCloseButton);
-    closeButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xffe8eef8));
-    closeButton.setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xffd5e8ff));
-    closeButton.setColour(juce::TextButton::textColourOffId, juce::Colour(0xff15295a));
+    closeButton.setColour(juce::TextButton::buttonColourId, juce::Colour(0xffeeeeee));
+    closeButton.setColour(juce::TextButton::buttonOnColourId, juce::Colour(0xffcccccc));
+    closeButton.setColour(juce::TextButton::textColourOffId, juce::Colour(0xff222222));
     const auto close = [this]
     {
         if (onClose)
@@ -1020,13 +1163,13 @@ XpInfoPanel::XpInfoPanel()
 void XpInfoPanel::paint(juce::Graphics& g)
 {
     const auto bounds = getLocalBounds().toFloat();
-    g.fillAll(juce::Colour(0xffece9d8));
-    g.setColour(juce::Colour(0xff003c9d));
+    g.fillAll(juce::Colour(0xffdddddd));
+    g.setColour(juce::Colour(0xff333333));
     g.drawRect(bounds, 3.0f);
 
     auto titleBar = bounds.reduced(3.0f).removeFromTop(31.0f);
-    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff0a70e8), titleBar.getX(),
-                                           titleBar.getY(), juce::Colour(0xff0751bb),
+    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff555555), titleBar.getX(),
+                                           titleBar.getY(), juce::Colour(0xff222222),
                                            titleBar.getRight(), titleBar.getY(), false));
     g.fillRect(titleBar);
     g.setColour(juce::Colours::white);
@@ -1035,8 +1178,8 @@ void XpInfoPanel::paint(juce::Graphics& g)
                juce::Justification::centredLeft, false);
 
     auto icon = juce::Rectangle<float>(25.0f, 58.0f, 42.0f, 42.0f);
-    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff70c4ff), icon.getCentreX(),
-                                           icon.getY(), juce::Colour(0xff0756bc),
+    g.setGradientFill(juce::ColourGradient(juce::Colour(0xffaaaaaa), icon.getCentreX(),
+                                           icon.getY(), juce::Colour(0xff333333),
                                            icon.getCentreX(), icon.getBottom(), false));
     g.fillEllipse(icon);
     g.setColour(juce::Colours::white);
@@ -1075,29 +1218,23 @@ class SourceRowControls final : public juce::Component
 public:
     SourceRowControls()
     {
-        setInterceptsMouseClicks(true, true);
+        setInterceptsMouseClicks(false, true);
         addAndMakeVisible(enabled);
-        addAndMakeVisible(remove);
-        remove.setButtonText("Remove");
+        addAndMakeVisible(preview);
+        preview.setButtonText("> ");
         enabled.setTooltip("Include or exclude this source from random selection.");
-        remove.setTooltip("Remove this source from the pool.");
+        preview.setTooltip("Audition this source; click again to stop.");
         enabled.setName("Source enabled");
-        remove.setName("Remove source");
-        remove.setColour(juce::TextButton::textColourOffId, juce::Colour(0xff7a1e14));
-    }
-    void mouseDown(const juce::MouseEvent&) override
-    {
-        if (onSelect)
-            onSelect(row);
+        preview.setName("Preview source");
     }
     void resized() override
     {
         auto area = getLocalBounds();
-        remove.setBounds(area.removeFromRight(68).reduced(2));
-        enabled.setBounds(area.removeFromRight(70).reduced(2));
+        enabled.setBounds(area.removeFromLeft(30).reduced(4, 6));
+        preview.setBounds(area.removeFromLeft(27).reduced(2, 5));
     }
-    juce::ToggleButton enabled { "On" };
-    juce::TextButton remove;
+    juce::ToggleButton enabled;
+    juce::TextButton preview;
     std::function<void(int)> onSelect;
     int row = -1;
 };
@@ -1110,23 +1247,33 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     setOpaque(true);
     setFocusContainerType(juce::Component::FocusContainerType::keyboardFocusContainer);
     setResizable(true, true);
-    setResizeLimits(760, 520, 1180, 820);
-    setSize(880, 600);
+    setResizeLimits(900, 600, 1536, 1024);
+    setSize(1024, 683);
     title.setText("recompiler.dll", juce::dontSendNotification);
-    title.setFont(juce::Font(22.0f, juce::Font::bold));
-    title.setColour(juce::Label::textColourId, juce::Colours::white);
-    subtitle.setText("|   random sample instrument", juce::dontSendNotification);
-    subtitle.setFont(juce::Font(13.0f));
-    subtitle.setColour(juce::Label::textColourId, juce::Colour(0xffd9edff));
-    status.setFont(juce::Font(12.0f, juce::Font::bold));
-    status.setColour(juce::Label::textColourId, juce::Colour(0xffd9edff));
-    status.setJustificationType(juce::Justification::centredRight);
+    title.setFont(juce::Font(25.0f, juce::Font::bold));
+    title.setColour(juce::Label::textColourId, juce::Colour(xpInk));
+    subtitle.setText("|   RANDOM SAMPLE INSTRUMENT", juce::dontSendNotification);
+    subtitle.setFont(juce::Font(12.0f));
+    subtitle.setColour(juce::Label::textColourId, juce::Colour(xpInk));
+    status.setFont(juce::Font(13.0f));
+    status.setColour(juce::Label::textColourId, juce::Colour(xpInk));
+    status.setJustificationType(juce::Justification::centred);
     alert.setFont(juce::Font(11.0f, juce::Font::bold));
-    alert.setColour(juce::Label::textColourId, juce::Colour(0xff5c2500));
+    alert.setColour(juce::Label::textColourId, juce::Colour(xpInk));
     alert.setJustificationType(juce::Justification::centred);
     alert.setVisible(false);
 
-    juce::Component* components[] = { &title, &subtitle, &alert, &status, &infoButton, &list, &waveform, &sourceKey,
+    juce::Component* components[] = { &title, &subtitle, &alert, &status,
+        &pageMessage, &pageActionButton, &infoButton, &list, &waveform, &outputMeter,
+        &addButton, &sampleMenuButton, &previousSourceButton, &nextSourceButton, &closeEditorButton,
+        &mainTab, &fxTab, &seqTab, &settingsTab, &zoomInButton, &zoomOutButton,
+        &focusRegionButton, &fitButton, &randomSourceButton, &regenerateButton,
+        &muteButton, &moreButton, &chordsOffButton, &chordsOnButton, &polyButton, &monoButton,
+        &scrambleModeButton, &meltModeButton, &smearModeButton,
+        &scrambleFoldButton, &meltFoldButton, &smearFoldButton, &spectralFoldButton, &outputFoldButton,
+        &scramblePowerButton, &meltPowerButton, &smearPowerButton, &spectralPowerButton,
+        &outputPowerButton,
+        &sourceKey,
         &sourceTranspose, &sourceFineTune, &sourceGain,
         &sourceKeyLabel,
         &sourceTransposeLabel, &sourceFineTuneLabel, &sourceGainLabel,
@@ -1154,13 +1301,105 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     infoPanel.onClose = dismissInfo;
     modalOverlay.onDismiss = dismissInfo;
     infoButton.setTooltip("About recompiler.dll");
-    list.setColour(juce::ListBox::backgroundColourId, juce::Colour(0xfff5f8fc));
-    list.setColour(juce::ListBox::outlineColourId, juce::Colour(0xff7896b5));
+    infoButton.setVisible(false);
+    pageMessage.setJustificationType(juce::Justification::centred);
+    pageMessage.setFont(juce::Font(17.0f));
+    pageMessage.setColour(juce::Label::textColourId, juce::Colour(xpInk));
+    pageMessage.setVisible(false);
+    pageActionButton.setVisible(false);
+    pageActionButton.onClick = [this]
+    {
+        if (selectedTab == 3) infoButton.triggerClick();
+        else selectTab(0);
+    };
+    list.setColour(juce::ListBox::backgroundColourId, juce::Colour(0xffeeeeee));
+    list.setColour(juce::ListBox::outlineColourId, juce::Colour(0xff555555));
     list.setOutlineThickness(1);
-    list.setRowHeight(25);
+    list.setRowHeight(36);
     list.setTooltip("Drop WAV, AIFF, MP3, or FLAC files here");
     list.setName("Sample sources");
-    list.setHelpText("Select a source to edit it. Use each row's ON/OFF and REMOVE controls to manage the pool.");
+    list.setHelpText("Select a source to edit it. Use the checkbox to include it, the triangle to audition, or the menu to remove it.");
+
+    addButton.setTooltip("Choose WAV, AIFF, MP3, or FLAC files to add to the pool.");
+    sampleMenuButton.setTooltip("Sample actions, including Remove selected.");
+    previousSourceButton.setTooltip("Select previous source.");
+    nextSourceButton.setTooltip("Select next source.");
+    closeEditorButton.setTooltip("Hide this editor; reopen it from the host.");
+    zoomInButton.setTooltip("Zoom into the waveform.");
+    zoomOutButton.setTooltip("Zoom out of the waveform.");
+    focusRegionButton.setTooltip("Focus on the playable region.");
+    fitButton.setTooltip("Fit the whole source waveform.");
+    randomSourceButton.setTooltip("Select a random loaded source for editing.");
+    regenerateButton.setTooltip("Generate a new internal creative seed.");
+    muteButton.setTooltip("Temporarily mute or unmute the plugin output.");
+    moreButton.setTooltip("Output actions.");
+    addButton.onClick = [this] { openFileChooser(); };
+    sampleMenuButton.onClick = [this] { showSampleMenu(); };
+    previousSourceButton.onClick = [this] { selectRelativeSource(-1); };
+    nextSourceButton.onClick = [this] { selectRelativeSource(1); };
+    closeEditorButton.onClick = [this]
+    {
+        setVisible(false);
+    };
+    zoomInButton.onClick = [this] { waveform.zoomIn(); };
+    zoomOutButton.onClick = [this] { waveform.zoomOut(); };
+    focusRegionButton.onClick = [this] { waveform.focusRegion(); };
+    fitButton.onClick = [this] { waveform.fitAll(); };
+    randomSourceButton.onClick = [this]
+    {
+        if (displayPool && !displayPool->empty())
+            list.selectRow(juce::Random::getSystemRandom().nextInt(
+                static_cast<int>(displayPool->size())));
+    };
+    regenerateButton.onClick = [this] { processor.regenerateCreativeSeed(); };
+    muteButton.onClick = [this] { processor.setOutputMuted(!processor.isOutputMuted()); };
+    moreButton.onClick = [this]
+    {
+        juce::PopupMenu menu;
+        menu.addItem(1, "Reset output to 0 dB");
+        menu.addItem(2, "About recompiler.dll");
+        juce::Component::SafePointer<RandomChopSamplerAudioProcessorEditor> safe(this);
+        menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&moreButton),
+            [safe](int choice)
+            {
+                if (safe == nullptr) return;
+                if (choice == 1) safe->output.setValue(0.0);
+                if (choice == 2) safe->infoButton.triggerClick();
+            });
+    };
+    chordsOffButton.onClick = [this] { if (midiPitch.getToggleState()) midiPitch.triggerClick(); };
+    chordsOnButton.onClick = [this] { if (!midiPitch.getToggleState()) midiPitch.triggerClick(); };
+    polyButton.onClick = [this] { if (voiceMode.getToggleState()) voiceMode.triggerClick(); };
+    monoButton.onClick = [this] { if (!voiceMode.getToggleState()) voiceMode.triggerClick(); };
+    mainTab.onClick = [this] { selectTab(0); };
+    fxTab.onClick = [this] { selectTab(1); };
+    seqTab.onClick = [this] { selectTab(2); };
+    settingsTab.onClick = [this] { selectTab(3); };
+    scrambleModeButton.onClick = [this] { showEffectModeMenu(0); };
+    meltModeButton.onClick = [this] { showEffectModeMenu(1); };
+    smearModeButton.onClick = [this] { showEffectModeMenu(2); };
+    juce::TextButton* foldButtons[] { &scrambleFoldButton, &meltFoldButton,
+        &smearFoldButton, &spectralFoldButton, &outputFoldButton };
+    for (int index = 0; index < 5; ++index)
+        foldButtons[index]->onClick = [this, index]
+        {
+            expandedCards[index] = !expandedCards[index];
+            resized();
+            repaint();
+        };
+    for (auto* button : foldButtons)
+        button->setName("Fold card");
+    juce::TextButton* powerButtons[] { &scramblePowerButton, &meltPowerButton,
+        &smearPowerButton, &spectralPowerButton, &outputPowerButton };
+    for (int index = 0; index < 5; ++index)
+        powerButtons[index]->onClick = [this, index]
+        {
+            if (index == 4) processor.setOutputMuted(!processor.isOutputMuted());
+            else processor.setEffectEnabled(index, !processor.isEffectEnabled(index));
+            repaint();
+        };
+    for (auto* button : powerButtons)
+        button->setName("Effect power");
 
     for (int index = 0; index < static_cast<int>(randomchop::tonicNames.size()); ++index)
     {
@@ -1173,14 +1412,15 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     sourceFineTune.setTextValueSuffix(" cents");
     sourceGain.setRange(-60.0, 12.0, 0.1);
     sourceGain.setTextValueSuffix(" dB");
-    for (auto* slider : { &sourceTranspose, &sourceFineTune, &sourceGain })
+    for (auto* slider : { &sourceTranspose, &sourceFineTune })
     {
-        slider->setSliderStyle(juce::Slider::LinearHorizontal);
-        slider->setTextBoxStyle(juce::Slider::TextBoxRight, false, 84, 22);
+        slider->setSliderStyle(juce::Slider::IncDecButtons);
+        slider->setIncDecButtonsMode(juce::Slider::incDecButtonsDraggable_Vertical);
+        slider->setTextBoxStyle(juce::Slider::TextBoxLeft, false, 64, 22);
     }
     sourceGain.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     sourceGain.setTextBoxStyle(juce::Slider::TextBoxRight, false, 58, 22);
-    sourceGain.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff1686e4));
+    sourceGain.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff222222));
     sourceKey.setTooltip("Set the detected or known musical key of the selected source.");
     sourceTranspose.setTooltip("Shift the selected source by whole semitones.");
     sourceFineTune.setTooltip("Correct the selected source in cents.");
@@ -1196,7 +1436,7 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     sourceFineTuneLabel.setText("FINE TUNE", juce::dontSendNotification);
     sourceGainLabel.setText("GAIN", juce::dontSendNotification);
     targetKeyLabel.setText("PLAY IN KEY", juce::dontSendNotification);
-    voiceModeLabel.setText("VOICES", juce::dontSendNotification);
+    voiceModeLabel.setText("POLY / MONO", juce::dontSendNotification);
     spectralDrawLabel.setText("SPECTRAL DRAW", juce::dontSendNotification);
     midiPitch.setTooltip("Off keeps every trigger in Play In Key; on follows MIDI notes for chords");
     voiceMode.setTooltip("POLY overlaps held notes; MONO cuts the previous voice");
@@ -1260,13 +1500,13 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     configureKnob(output, outputLabel, "OUTPUT");
     configureKnob(scrambleAmount, scrambleAmountLabel, "SCRAMBLE");
     configureKnob(meltAmount, meltAmountLabel, "MELT");
-    configureLinearControl(spectralDepth, spectralDepthLabel, "SPECTRAL DEPTH");
+    configureKnob(spectralDepth, spectralDepthLabel, "SPECTRAL DEPTH");
     configureKnob(smearAmount, smearAmountLabel, "SMEAR");
-    scrambleAmount.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff1587e8));
-    meltAmount.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xffe45aa5));
-    smearAmount.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff8059dc));
-    output.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff1686e4));
-    spectralDepth.setColour(juce::Slider::trackColourId, juce::Colour(0xff7d59dc));
+    scrambleAmount.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff222222));
+    meltAmount.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff222222));
+    smearAmount.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff222222));
+    output.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff222222));
+    spectralDepth.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff333333));
     scrambleAmount.setTooltip("Increase rhythmic rearrangement, repeats, reversals, and octave gestures.");
     meltAmount.setTooltip("Increase automatic slice density and pitch-preserving time stretch.");
     smearAmount.setTooltip("Increase the density and brightness of progressively smaller pitched grains.");
@@ -1315,6 +1555,7 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
         p.parameters, "smearAmount", smearAmount);
 
     tooltipWindow = std::make_unique<juce::TooltipWindow>(this, 550);
+    selectTab(0);
     refresh();
     startTimerHz(20);
 }
@@ -1330,7 +1571,7 @@ void RandomChopSamplerAudioProcessorEditor::configureKnob(juce::Slider& slider, 
 {
     slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
     slider.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 54, 20);
-    slider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff8b5cf6));
+    slider.setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff222222));
     label.setText(text, juce::dontSendNotification);
     label.setJustificationType(juce::Justification::centred);
     label.setColour(juce::Label::textColourId, juce::Colour(xpInk));
@@ -1343,7 +1584,7 @@ void RandomChopSamplerAudioProcessorEditor::configureLinearControl(
 {
     slider.setSliderStyle(juce::Slider::LinearHorizontal);
     slider.setTextBoxStyle(juce::Slider::TextBoxRight, false, 72, 20);
-    slider.setColour(juce::Slider::trackColourId, juce::Colour(0xff8b5cf6));
+    slider.setColour(juce::Slider::trackColourId, juce::Colour(0xff222222));
     label.setText(text, juce::dontSendNotification);
     label.setJustificationType(juce::Justification::centred);
     label.setColour(juce::Label::textColourId, juce::Colour(xpInk));
@@ -1354,29 +1595,27 @@ void RandomChopSamplerAudioProcessorEditor::configureLinearControl(
 void RandomChopSamplerAudioProcessorEditor::paint(juce::Graphics& g)
 {
     const auto full = getLocalBounds().toFloat();
-    g.setGradientFill(juce::ColourGradient(juce::Colour(0xfff5f8fb), full.getX(), full.getY(),
-                                           juce::Colour(0xffc7d9e8), full.getX(),
+    g.setGradientFill(juce::ColourGradient(juce::Colour(0xffefefef), full.getX(), full.getY(),
+                                           juce::Colour(0xffcacaca), full.getX(),
                                            full.getBottom(), false));
     g.fillRect(full);
-    g.setColour(juce::Colours::white.withAlpha(0.24f));
-    for (int y = titleBarBounds.getBottom() + 1; y < getHeight(); y += 3)
-        g.drawHorizontalLine(y, 2.0f, static_cast<float>(getWidth() - 2));
-
+    g.setColour(juce::Colour(0xff666666));
+    g.drawRect(getLocalBounds().reduced(1), 2);
     const auto bar = titleBarBounds.toFloat();
-    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff0c8aff), bar.getX(), bar.getY(),
-                                           juce::Colour(0xff0752d2), bar.getX(),
+    g.setGradientFill(juce::ColourGradient(juce::Colour(0xfff7f7f7), bar.getX(), bar.getY(),
+                                           juce::Colour(0xffd1d1d1), bar.getX(),
                                            bar.getBottom(), false));
     g.fillRect(bar);
-    g.setColour(juce::Colour(0xff0646ad));
+    g.setColour(juce::Colour(0xff555555));
     g.drawHorizontalLine(titleBarBounds.getBottom() - 1, bar.getX(), bar.getRight());
 
-    auto icon = juce::Rectangle<float>(10.0f, bar.getY() + 6.0f, 28.0f, bar.getHeight() - 12.0f);
+    auto icon = juce::Rectangle<float>(12.0f, bar.getY() + 7.0f, 56.0f, 39.0f);
     g.setGradientFill(juce::ColourGradient(juce::Colours::white, icon.getX(), icon.getY(),
-                                           juce::Colour(0xff9fd3ff), icon.getX(),
+                                           juce::Colour(0xffbbbbbb), icon.getX(),
                                            icon.getBottom(), false));
-    g.fillRoundedRectangle(icon, 3.0f);
-    g.setColour(juce::Colour(0xff173e78));
-    g.drawRoundedRectangle(icon, 3.0f, 1.0f);
+    g.fillRoundedRectangle(icon, 2.0f);
+    g.setColour(juce::Colour(0xff222222));
+    g.drawRoundedRectangle(icon, 2.0f, 1.0f);
     juce::Path miniWave;
     for (int index = 0; index <= 16; ++index)
     {
@@ -1386,74 +1625,81 @@ void RandomChopSamplerAudioProcessorEditor::paint(juce::Graphics& g)
             * (2.0f + 5.0f * std::sin(unit * juce::MathConstants<float>::pi));
         if (index == 0) miniWave.startNewSubPath(x, y); else miniWave.lineTo(x, y);
     }
-    g.strokePath(miniWave, juce::PathStrokeType(1.3f));
+    g.strokePath(miniWave, juce::PathStrokeType(2.0f));
 
-    auto statusPlate = status.getBounds().expanded(5, 2).toFloat();
-    g.setColour(juce::Colour(0xff064aa9).withAlpha(0.58f));
-    g.fillRoundedRectangle(statusPlate, 6.0f);
-    g.setColour(juce::Colour(0xff61b5ff).withAlpha(0.75f));
-    g.drawRoundedRectangle(statusPlate, 6.0f, 1.0f);
-    g.setColour(juce::Colours::white.withAlpha(0.14f));
-    g.drawHorizontalLine(juce::roundToInt(statusPlate.getY() + 3.0f),
-                         statusPlate.getX() + 5.0f, statusPlate.getRight() - 5.0f);
+    auto statusPlate = status.getBounds().expanded(1, 1).toFloat();
+    g.setColour(juce::Colour(0xfff1f1f1));
+    g.fillRect(statusPlate);
+    g.setColour(juce::Colour(0xff333333));
+    g.drawRect(statusPlate, 1.0f);
+    g.setFont(juce::Font(11.0f));
+    g.drawText("v3.0.0", closeEditorButton.getX() - 43, closeEditorButton.getY(),
+               40, closeEditorButton.getHeight(), juce::Justification::centred);
+    g.setColour(juce::Colour(0xff444444));
+    for (int row = 0; row < 3; ++row)
+        for (int column = 0; column < 7; ++column)
+            g.fillEllipse(static_cast<float>(mainTab.getX() - 34 + column * 5),
+                          static_cast<float>(8 + row * 6), 2.0f, 2.0f);
 
     if (alert.isVisible())
     {
         auto alertPlate = alert.getBounds().expanded(4, 1).toFloat();
-        g.setGradientFill(juce::ColourGradient(juce::Colour(0xffffefa7), alertPlate.getX(),
-                                               alertPlate.getY(), juce::Colour(0xffffbf55),
+        g.setGradientFill(juce::ColourGradient(juce::Colour(0xffeeeeee), alertPlate.getX(),
+                                               alertPlate.getY(), juce::Colour(0xffaaaaaa),
                                                alertPlate.getX(), alertPlate.getBottom(), false));
-        g.fillRoundedRectangle(alertPlate, 5.0f);
-        g.setColour(juce::Colour(0xff9b5700));
-        g.drawRoundedRectangle(alertPlate, 5.0f, 1.0f);
+        g.fillRoundedRectangle(alertPlate, 2.0f);
+        g.setColour(juce::Colour(0xff333333));
+        g.drawRoundedRectangle(alertPlate, 2.0f, 1.0f);
     }
 
-    paintXpPanel(g, samplePanelBounds, "SAMPLES");
-    paintXpPanel(g, sourcePanelBounds);
-    paintXpPanel(g, globalPanelBounds, "GLOBAL");
-    paintXpPanel(g, scramblePanelBounds, "SCRAMBLE");
-    paintXpPanel(g, meltPanelBounds, "MELT");
-    paintXpPanel(g, smearPanelBounds, "SMEAR");
-    paintXpPanel(g, spectralPanelBounds, "SPECTRAL DRAW");
-    paintXpPanel(g, outputPanelBounds, "OUTPUT");
-
-    const auto paintState = [&g](juce::Rectangle<int> panel, bool active,
-                                  juce::Colour accent)
+    if (selectedTab == 0)
     {
-        auto badge = juce::Rectangle<float>(static_cast<float>(panel.getRight() - 31),
-                                             static_cast<float>(panel.getY() + 6), 24.0f, 14.0f);
-        g.setColour(active ? accent.withAlpha(0.22f) : juce::Colour(0xff8ba0b4).withAlpha(0.18f));
-        g.fillRoundedRectangle(badge, 6.0f);
-        g.setColour(active ? accent.darker(0.35f) : juce::Colour(0xff657a8f));
-        g.drawRoundedRectangle(badge, 6.0f, 0.8f);
-        g.setFont(juce::Font(8.0f, juce::Font::bold));
-        g.drawText(active ? "ON" : "OFF", badge.toNearestInt(), juce::Justification::centred, false);
-    };
-    paintState(scramblePanelBounds, scrambleAmount.getValue() > 0.0001, juce::Colour(0xff1587e8));
-    paintState(meltPanelBounds, meltAmount.getValue() > 0.0001, juce::Colour(0xffe45aa5));
-    paintState(smearPanelBounds, smearAmount.getValue() > 0.0001, juce::Colour(0xff8059dc));
-    paintState(spectralPanelBounds, spectralDepth.getValue() > 0.0001, juce::Colour(0xff8059dc));
-    if (list.hasKeyboardFocus(true))
-    {
-        g.setColour(juce::Colour(0xff073d9b));
-        g.drawRoundedRectangle(list.getBounds().expanded(2).toFloat(), 3.0f, 1.5f);
+        paintXpPanel(g, samplePanelBounds, "SAMPLES");
+        paintXpPanel(g, sourcePanelBounds);
+        paintXpPanel(g, globalPanelBounds);
+        auto globalTag = globalPanelBounds.reduced(5).removeFromLeft(85).toFloat();
+        g.setColour(juce::Colour(0xff242424));
+        g.fillRoundedRectangle(globalTag, 2.0f);
+        g.setColour(juce::Colours::white);
+        g.setFont(juce::Font(14.0f, juce::Font::bold));
+        g.drawText("GLOBAL", globalTag.toNearestInt(), juce::Justification::centred);
+        g.setColour(juce::Colour(0xff222222));
+        g.setFont(juce::Font(12.0f, juce::Font::bold));
+        g.drawText("CHORDS", chordsOffButton.getX() - 57, chordsOffButton.getY(),
+                   55, chordsOffButton.getHeight(), juce::Justification::centred);
+        g.setColour(juce::Colour(0xff777777));
+        for (const auto x : { sourceTransposeLabel.getX() - 4,
+                              sourceFineTuneLabel.getX() - 4, sourceGainLabel.getX() - 4 })
+            g.drawVerticalLine(x, static_cast<float>(sourceKeyLabel.getY()),
+                               static_cast<float>(sourcePanelBounds.getBottom() - 9));
+        if (list.hasKeyboardFocus(true))
+        {
+            g.setColour(juce::Colour(0xff222222));
+            g.drawRect(list.getBounds().expanded(2), 1);
+        }
     }
+    if (selectedTab <= 1)
+    {
+        paintXpPanel(g, scramblePanelBounds, "   SCRAMBLE");
+        paintXpPanel(g, meltPanelBounds, "   MELT");
+        paintXpPanel(g, smearPanelBounds, "   SMEAR");
+        paintXpPanel(g, spectralPanelBounds, "   SPECTRAL DRAW");
+        paintXpPanel(g, outputPanelBounds, "   OUTPUT");
+        g.setColour(juce::Colour(0xff222222));
+        g.setFont(juce::Font(11.0f, juce::Font::bold));
+        for (const auto panel : { scramblePanelBounds, meltPanelBounds, smearPanelBounds })
+            g.drawText("MODE", panel.getX() + 9, panel.getBottom() - 32, 48, 24,
+                       juce::Justification::centredLeft);
+    }
+    if (selectedTab >= 2)
+        paintXpPanel(g, pagePaneBounds);
 
-    g.setColour(juce::Colour(0xff7897b5).withAlpha(0.55f));
-    for (const auto x : { sourceTransposeLabel.getX() - 4, sourceFineTuneLabel.getX() - 4,
-                          sourceGainLabel.getX() - 4 })
-        g.drawVerticalLine(x, static_cast<float>(sourceKeyLabel.getY()),
-                           static_cast<float>(sourcePanelBounds.getBottom() - 9));
-    for (const auto x : { midiPitch.getX() - 8, voiceModeLabel.getX() - 8 })
-        g.drawVerticalLine(x, static_cast<float>(globalPanelBounds.getY() + 31),
-                           static_cast<float>(globalPanelBounds.getBottom() - 8));
-
-    if (!sampleDropBounds.isEmpty())
+    if (selectedTab == 0 && !sampleDropBounds.isEmpty())
     {
         const auto drop = sampleDropBounds.toFloat();
-        g.setColour(dragActive ? juce::Colour(0xffb8e0ff) : juce::Colour(0xfff8fbff).withAlpha(0.75f));
-        g.fillRoundedRectangle(drop, 5.0f);
-        g.setColour(dragActive ? juce::Colour(0xff0874e8) : juce::Colour(0xff7a9fc4));
+        g.setColour(dragActive ? juce::Colour(0xffeeeeee) : juce::Colour(0xffdcdcdc));
+        g.fillRoundedRectangle(drop, 2.0f);
+        g.setColour(juce::Colour(0xff333333));
         const float dashes[] { 5.0f, 4.0f };
         g.drawDashedLine({ drop.getX(), drop.getY(), drop.getRight(), drop.getY() },
                          dashes, 2, 1.0f);
@@ -1469,60 +1715,105 @@ void RandomChopSamplerAudioProcessorEditor::paint(juce::Graphics& g)
         arrow.lineTo(arrowX + 4.0f, arrowY - 1.0f);
         g.strokePath(arrow, juce::PathStrokeType(1.6f));
         g.drawHorizontalLine(juce::roundToInt(arrowY + 6.0f), arrowX - 6.0f, arrowX + 6.0f);
-        g.setColour(dragActive ? juce::Colour(0xff064ca8) : juce::Colour(0xff6887a8));
+        g.setColour(juce::Colour(0xff333333));
         g.setFont(juce::Font(10.0f, juce::Font::bold));
-        g.drawFittedText(dragActive ? "RELEASE TO ADD SAMPLES" : "DROP WAV, AIFF, MP3 OR FLAC",
+        g.drawFittedText(dragActive ? "RELEASE TO ADD SAMPLES" : "DRAG & DROP SAMPLES  /  WAV, AIFF, MP3 OR FLAC",
                          sampleDropBounds.reduced(28, 5),
                          juce::Justification::centred, 1);
     }
 
-    g.setColour(juce::Colour(0xff3972ad));
-    g.drawRoundedRectangle(full.reduced(1.0f), 7.0f, 2.0f);
+    g.setColour(juce::Colour(0xffececec));
+    g.fillRect(footerBounds);
+    g.setColour(juce::Colour(0xff555555));
+    g.drawHorizontalLine(footerBounds.getY(), 1.0f, static_cast<float>(getWidth() - 1));
+    g.setColour(juce::Colour(0xff222222));
+    g.setFont(juce::Font(10.0f));
+    g.drawText("RECOMPILER.DLL", footerBounds.withTrimmedLeft(55).removeFromLeft(170),
+               juce::Justification::centredLeft);
+    g.drawText("SAMPLES FIND NEW MEANINGS", footerBounds,
+               juce::Justification::centred);
+    g.drawText("v3.0.0", footerBounds.withTrimmedRight(50).removeFromRight(45),
+               juce::Justification::centredRight);
+    for (int row = 0; row < 3; ++row)
+        for (int column = 0; column < 5; ++column)
+        {
+            g.fillEllipse(static_cast<float>(13 + column * 6),
+                          static_cast<float>(footerBounds.getY() + 4 + row * 6), 2.0f, 2.0f);
+            g.fillEllipse(static_cast<float>(getWidth() - 42 + column * 6),
+                          static_cast<float>(footerBounds.getY() + 4 + row * 6), 2.0f, 2.0f);
+        }
+    g.setColour(juce::Colour(0xff222222));
+    g.drawRoundedRectangle(full.reduced(1.0f), 4.0f, 1.4f);
 }
 
 void RandomChopSamplerAudioProcessorEditor::resized()
 {
     constexpr int gap = 6;
-    const auto verticalScale = juce::jlimit(0.86f, 1.25f,
-        static_cast<float>(getHeight()) / 600.0f);
+    const auto verticalScale = juce::jlimit(0.86f, 1.5f,
+        static_cast<float>(getHeight()) / 683.0f);
     const auto scaled = [verticalScale](int value)
     {
         return juce::jmax(1, juce::roundToInt(static_cast<float>(value) * verticalScale));
     };
 
-    titleBarBounds = getLocalBounds().removeFromTop(scaled(42));
-    auto header = titleBarBounds.reduced(7, 4);
-    infoButton.setBounds(header.removeFromRight(scaled(29)).reduced(2));
+    titleBarBounds = getLocalBounds().removeFromTop(scaled(64));
+    footerBounds = getLocalBounds().removeFromBottom(scaled(25));
+    auto header = titleBarBounds.reduced(8, 5).removeFromTop(scaled(34));
+    closeEditorButton.setBounds(header.removeFromRight(26).reduced(1));
+    header.removeFromRight(8);
+    header.removeFromRight(37); // version text is painted in the title bar.
+    nextSourceButton.setBounds(header.removeFromRight(25).reduced(1));
+    status.setBounds(header.removeFromRight(156).reduced(1));
+    previousSourceButton.setBounds(header.removeFromRight(25).reduced(1));
     header.removeFromRight(5);
-    status.setBounds(header.removeFromRight(175).reduced(3, 2));
-    header.removeFromRight(5);
-    const auto alertWidth = juce::jmin(190, header.getWidth() / 3);
-    alert.setBounds(header.removeFromRight(alertWidth).reduced(5, 3));
+    alert.setBounds(header.removeFromRight(juce::jmin(150, header.getWidth() / 3)).reduced(3));
     auto brand = header;
-    brand.removeFromLeft(38);
-    title.setBounds(brand.removeFromLeft(190));
+    brand.removeFromLeft(67);
+    title.setBounds(brand.removeFromLeft(juce::jmin(225, brand.getWidth() / 2)));
     subtitle.setBounds(brand);
+    auto tabs = titleBarBounds.withTrimmedTop(scaled(38)).reduced(8, 2);
+    const auto tabWidth = juce::jmin(94, juce::jmax(60, getWidth() / 10));
+    settingsTab.setBounds(tabs.removeFromRight(tabWidth).reduced(2, 0));
+    seqTab.setBounds(tabs.removeFromRight(tabWidth).reduced(2, 0));
+    fxTab.setBounds(tabs.removeFromRight(tabWidth).reduced(2, 0));
+    mainTab.setBounds(tabs.removeFromRight(tabWidth).reduced(2, 0));
+    infoButton.setBounds(0, 0, 0, 0);
 
-    auto area = getLocalBounds().withTrimmedTop(titleBarBounds.getHeight()).reduced(8, 7);
-    const auto topHeight = juce::jlimit(scaled(202), scaled(270),
-                                        juce::roundToInt(area.getHeight() * 0.43f));
+    auto area = getLocalBounds().withTrimmedTop(titleBarBounds.getHeight())
+        .withTrimmedBottom(footerBounds.getHeight()).reduced(8, 6);
+    pagePaneBounds = area;
+    const auto topHeight = juce::jlimit(scaled(258), scaled(430),
+                                        juce::roundToInt(area.getHeight() * 0.50f));
     auto topRow = area.removeFromTop(topHeight);
     area.removeFromTop(gap);
-    auto globalRow = area.removeFromTop(68);
+    auto globalRow = area.removeFromTop(scaled(48));
     area.removeFromTop(gap);
     auto bottomRow = area;
+    if (selectedTab == 1)
+        bottomRow = pagePaneBounds;
 
     samplePanelBounds = topRow.removeFromLeft(juce::roundToInt(topRow.getWidth() * 0.29f));
     topRow.removeFromLeft(gap);
     sourcePanelBounds = topRow;
 
-    auto sampleContent = samplePanelBounds.reduced(7).withTrimmedTop(25);
-    sampleDropBounds = sampleContent.removeFromBottom(scaled(43)).reduced(2, 4);
+    auto sampleHeader = samplePanelBounds.reduced(6).removeFromTop(25);
+    sampleMenuButton.setBounds(sampleHeader.removeFromRight(24).reduced(1));
+    addButton.setBounds(sampleHeader.removeFromRight(78).reduced(2, 1));
+    auto sampleContent = samplePanelBounds.reduced(7).withTrimmedTop(29);
+    sampleDropBounds = sampleContent.removeFromBottom(scaled(38)).reduced(2, 4);
     list.setBounds(sampleContent.reduced(1));
+    list.setRowHeight(juce::jlimit(29, 52, juce::jmax(1, list.getHeight() / 6)));
 
     auto sourceContent = sourcePanelBounds.reduced(7);
-    auto sourceControlRow = sourceContent.removeFromBottom(scaled(65));
+    auto sourceControlRow = sourceContent.removeFromBottom(scaled(72));
     waveform.setBounds(sourceContent.reduced(1));
+    auto waveTools = waveform.getBounds().reduced(5).removeFromRight(40);
+    waveTools.removeFromTop(26);
+    const auto toolHeight = juce::jmax(23, waveTools.getHeight() / 4);
+    zoomInButton.setBounds(waveTools.removeFromTop(toolHeight).reduced(2));
+    zoomOutButton.setBounds(waveTools.removeFromTop(toolHeight).reduced(2));
+    focusRegionButton.setBounds(waveTools.removeFromTop(toolHeight).reduced(2));
+    fitButton.setBounds(waveTools.reduced(2));
     const auto cellWidth = sourceControlRow.getWidth() / 4;
     auto layoutSourceCell = [cellWidth](juce::Rectangle<int>& row, juce::Label& label,
                                         juce::Component& control)
@@ -1539,19 +1830,29 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     sourceGain.setBounds(gainCell.reduced(0, 1));
 
     globalPanelBounds = globalRow;
-    auto globalContent = globalPanelBounds.reduced(8).withTrimmedTop(25);
-    const auto globalCellWidth = globalContent.getWidth() / 3;
-    auto targetCell = globalContent.removeFromLeft(globalCellWidth).reduced(4, 1);
-    targetKeyLabel.setBounds(targetCell.removeFromLeft(78));
-    targetKey.setBounds(targetCell);
-    midiPitch.setBounds(globalContent.removeFromLeft(globalCellWidth).reduced(16, 1));
-    auto voiceCell = globalContent.reduced(4, 1);
-    voiceModeLabel.setBounds(voiceCell.removeFromLeft(92));
-    voiceMode.setBounds(voiceCell.reduced(6, 0));
+    auto globalContent = globalPanelBounds.reduced(7);
+    globalContent.removeFromLeft(93);
+    regenerateButton.setBounds(globalContent.removeFromRight(36).reduced(2));
+    randomSourceButton.setBounds(globalContent.removeFromRight(36).reduced(2));
+    auto keyCell = globalContent.removeFromLeft(juce::jmax(205, globalContent.getWidth() / 3));
+    targetKeyLabel.setBounds(keyCell.removeFromLeft(82));
+    targetKey.setBounds(keyCell.reduced(2, 1));
+    auto chordsCell = globalContent.removeFromLeft(globalContent.getWidth() / 2);
+    chordsCell.removeFromLeft(57);
+    const auto halfChords = chordsCell.getWidth() / 2;
+    chordsOffButton.setBounds(chordsCell.removeFromLeft(halfChords).reduced(1));
+    chordsOnButton.setBounds(chordsCell.reduced(1));
+    auto voicesCell = globalContent;
+    voiceModeLabel.setBounds(voicesCell.removeFromLeft(88));
+    const auto halfVoices = voicesCell.getWidth() / 2;
+    polyButton.setBounds(voicesCell.removeFromLeft(halfVoices).reduced(1));
+    monoButton.setBounds(voicesCell.reduced(1));
+    midiPitch.setBounds(0, 0, 0, 0);
+    voiceMode.setBounds(0, 0, 0, 0);
 
     const auto available = bottomRow.getWidth() - gap * 4;
-    const auto effectWidth = juce::roundToInt(static_cast<float>(available) * 0.175f);
-    const auto spectralWidth = juce::roundToInt(static_cast<float>(available) * 0.36f);
+    const auto effectWidth = juce::roundToInt(static_cast<float>(available) * 0.19f);
+    const auto spectralWidth = juce::roundToInt(static_cast<float>(available) * 0.29f);
     scramblePanelBounds = bottomRow.removeFromLeft(effectWidth);
     bottomRow.removeFromLeft(gap);
     meltPanelBounds = bottomRow.removeFromLeft(effectWidth);
@@ -1563,37 +1864,120 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     outputPanelBounds = bottomRow;
 
     const auto layoutEffect = [scaled](juce::Rectangle<int> panel, juce::Label& label,
-                                        juce::Slider& slider, CreativeVisualizer& visual)
+                                        juce::Slider& slider, CreativeVisualizer& visual,
+                                        juce::TextButton& mode, juce::TextButton& fold,
+                                        juce::TextButton& power)
     {
         label.setBounds(0, 0, 0, 0);
+        fold.setBounds(panel.getX() + 5, panel.getY() + 4, 19, 19);
+        power.setBounds(panel.getRight() - 27, panel.getY() + 5, 18, 18);
         auto content = panel.reduced(7).withTrimmedTop(25);
-        auto knobArea = content.removeFromTop(juce::jmin(scaled(91), content.getHeight() / 2));
-        slider.setBounds(knobArea.withSizeKeepingCentre(juce::jmin(104, knobArea.getWidth()),
+        auto modeRow = content.removeFromBottom(scaled(27));
+        mode.setBounds(modeRow.removeFromRight(juce::jmax(92, modeRow.getWidth() - 55)).reduced(1));
+        auto knobArea = content.removeFromTop(juce::jmin(scaled(95), content.getHeight() / 2));
+        slider.setBounds(knobArea.withSizeKeepingCentre(juce::jmin(114, knobArea.getWidth()),
                                                         knobArea.getHeight()));
         visual.setBounds(content.reduced(1, 2));
     };
-    layoutEffect(scramblePanelBounds, scrambleAmountLabel, scrambleAmount, scrambleVisual);
-    layoutEffect(meltPanelBounds, meltAmountLabel, meltAmount, meltVisual);
-    layoutEffect(smearPanelBounds, smearAmountLabel, smearAmount, smearVisual);
+    layoutEffect(scramblePanelBounds, scrambleAmountLabel, scrambleAmount, scrambleVisual,
+                 scrambleModeButton, scrambleFoldButton, scramblePowerButton);
+    layoutEffect(meltPanelBounds, meltAmountLabel, meltAmount, meltVisual,
+                 meltModeButton, meltFoldButton, meltPowerButton);
+    layoutEffect(smearPanelBounds, smearAmountLabel, smearAmount, smearVisual,
+                 smearModeButton, smearFoldButton, smearPowerButton);
 
     spectralDrawLabel.setBounds(0, 0, 0, 0);
+    spectralFoldButton.setBounds(spectralPanelBounds.getX() + 5, spectralPanelBounds.getY() + 4, 19, 19);
+    spectralPowerButton.setBounds(spectralPanelBounds.getRight() - 27, spectralPanelBounds.getY() + 5, 18, 18);
     auto spectralContent = spectralPanelBounds.reduced(7).withTrimmedTop(25);
-    auto spectralTools = spectralContent.removeFromBottom(scaled(55));
+    auto spectralTools = spectralContent.removeFromBottom(scaled(58));
     spectralCanvas.setBounds(spectralContent.reduced(1, 2));
     auto depthArea = spectralTools.reduced(4, 3);
-    spectralResetButton.setBounds(depthArea.removeFromRight(66).reduced(2, 8));
-    spectralDepthLabel.setBounds(depthArea.removeFromTop(17));
-    spectralDepth.setBounds(depthArea.reduced(2, 0));
+    spectralResetButton.setBounds(depthArea.removeFromRight(68).reduced(2, 10));
+    spectralDepthLabel.setBounds(depthArea.removeFromLeft(112));
+    spectralDepth.setBounds(depthArea.removeFromLeft(77));
 
     outputLabel.setBounds(0, 0, 0, 0);
+    outputFoldButton.setBounds(outputPanelBounds.getX() + 5, outputPanelBounds.getY() + 4, 19, 19);
+    outputPowerButton.setBounds(outputPanelBounds.getRight() - 27, outputPanelBounds.getY() + 5, 18, 18);
     auto outputContent = outputPanelBounds.reduced(7).withTrimmedTop(25);
+    auto outputActions = outputContent.removeFromBottom(scaled(30));
+    muteButton.setBounds(outputActions.removeFromLeft(outputActions.getWidth() / 2).reduced(2));
+    moreButton.setBounds(outputActions.reduced(2));
+    outputMeter.setBounds(outputContent.removeFromRight(35).reduced(1, 4));
     output.setBounds(outputContent.withSizeKeepingCentre(
-        juce::jmin(105, outputContent.getWidth()), juce::jmin(125, outputContent.getHeight())));
+        juce::jmin(105, outputContent.getWidth()), juce::jmin(138, outputContent.getHeight())));
 
     const auto dialogWidth = juce::jmin(350, getWidth() - 48);
     const auto dialogHeight = juce::jmin(180, getHeight() - 48);
     modalOverlay.setBounds(getLocalBounds());
     infoPanel.setBounds(getLocalBounds().withSizeKeepingCentre(dialogWidth, dialogHeight));
+
+    const auto onMain = selectedTab == 0;
+    const auto onEffects = selectedTab == 0 || selectedTab == 1;
+    for (auto* component : { static_cast<juce::Component*>(&list),
+                             static_cast<juce::Component*>(&waveform),
+                             static_cast<juce::Component*>(&addButton),
+                             static_cast<juce::Component*>(&sampleMenuButton),
+                             static_cast<juce::Component*>(&zoomInButton),
+                             static_cast<juce::Component*>(&zoomOutButton),
+                             static_cast<juce::Component*>(&focusRegionButton),
+                             static_cast<juce::Component*>(&fitButton),
+                             static_cast<juce::Component*>(&sourceKey),
+                             static_cast<juce::Component*>(&sourceTranspose),
+                             static_cast<juce::Component*>(&sourceFineTune),
+                             static_cast<juce::Component*>(&sourceGain),
+                             static_cast<juce::Component*>(&sourceKeyLabel),
+                             static_cast<juce::Component*>(&sourceTransposeLabel),
+                             static_cast<juce::Component*>(&sourceFineTuneLabel),
+                             static_cast<juce::Component*>(&sourceGainLabel),
+                             static_cast<juce::Component*>(&targetKey),
+                             static_cast<juce::Component*>(&targetKeyLabel),
+                             static_cast<juce::Component*>(&voiceModeLabel),
+                             static_cast<juce::Component*>(&chordsOffButton),
+                             static_cast<juce::Component*>(&chordsOnButton),
+                             static_cast<juce::Component*>(&polyButton),
+                             static_cast<juce::Component*>(&monoButton),
+                             static_cast<juce::Component*>(&randomSourceButton),
+                             static_cast<juce::Component*>(&regenerateButton) })
+        component->setVisible(onMain);
+    for (auto* component : { static_cast<juce::Component*>(&scrambleAmount),
+                             static_cast<juce::Component*>(&meltAmount),
+                             static_cast<juce::Component*>(&smearAmount),
+                             static_cast<juce::Component*>(&spectralDepth),
+                             static_cast<juce::Component*>(&spectralResetButton),
+                             static_cast<juce::Component*>(&output),
+                             static_cast<juce::Component*>(&scrambleFoldButton),
+                             static_cast<juce::Component*>(&meltFoldButton),
+                             static_cast<juce::Component*>(&smearFoldButton),
+                             static_cast<juce::Component*>(&spectralFoldButton),
+                             static_cast<juce::Component*>(&outputFoldButton),
+                             static_cast<juce::Component*>(&scramblePowerButton),
+                             static_cast<juce::Component*>(&meltPowerButton),
+                             static_cast<juce::Component*>(&smearPowerButton),
+                             static_cast<juce::Component*>(&spectralPowerButton),
+                             static_cast<juce::Component*>(&outputPowerButton) })
+        component->setVisible(onEffects);
+    scrambleVisual.setVisible(onEffects && expandedCards[0]);
+    meltVisual.setVisible(onEffects && expandedCards[1]);
+    smearVisual.setVisible(onEffects && expandedCards[2]);
+    scrambleModeButton.setVisible(onEffects && expandedCards[0]);
+    meltModeButton.setVisible(onEffects && expandedCards[1]);
+    smearModeButton.setVisible(onEffects && expandedCards[2]);
+    spectralCanvas.setVisible(onEffects && expandedCards[3]);
+    spectralDepth.setVisible(onEffects && expandedCards[3]);
+    spectralDepthLabel.setVisible(onEffects && expandedCards[3]);
+    spectralResetButton.setVisible(onEffects && expandedCards[3]);
+    outputMeter.setVisible(onEffects && expandedCards[4]);
+    muteButton.setVisible(onEffects && expandedCards[4]);
+    moreButton.setVisible(onEffects && expandedCards[4]);
+    midiPitch.setVisible(false);
+    voiceMode.setVisible(false);
+    pageMessage.setBounds(pagePaneBounds.reduced(40).withTrimmedBottom(52));
+    pageActionButton.setBounds(pagePaneBounds.withSizeKeepingCentre(155, 34)
+        .translated(0, pagePaneBounds.getHeight() / 4));
+    pageMessage.setVisible(selectedTab >= 2);
+    pageActionButton.setVisible(selectedTab >= 2);
 }
 
 bool RandomChopSamplerAudioProcessorEditor::isInterestedInFileDrag(const juce::StringArray& files)
@@ -1628,6 +2012,141 @@ void RandomChopSamplerAudioProcessorEditor::addFiles(const juce::StringArray& fi
                                       : juce::String(errors.size()) + " file(s) rejected";
     transientMessageTicks = errors.empty() ? 0 : 60;
     refresh();
+}
+
+void RandomChopSamplerAudioProcessorEditor::openFileChooser()
+{
+    fileChooser = std::make_unique<juce::FileChooser>(
+        "Add samples", juce::File {}, "*.wav;*.aif;*.aiff;*.mp3;*.flac", true);
+    juce::Component::SafePointer<RandomChopSamplerAudioProcessorEditor> safe(this);
+    fileChooser->launchAsync(juce::FileBrowserComponent::openMode
+        | juce::FileBrowserComponent::canSelectFiles
+        | juce::FileBrowserComponent::canSelectMultipleFiles,
+        [safe](const juce::FileChooser& chooser)
+        {
+            if (safe == nullptr) return;
+            juce::StringArray paths;
+            for (const auto& file : chooser.getResults())
+                paths.add(file.getFullPathName());
+            if (!paths.isEmpty()) safe->addFiles(paths);
+        });
+}
+
+void RandomChopSamplerAudioProcessorEditor::selectRelativeSource(int delta)
+{
+    const auto count = getNumRows();
+    if (count == 0) return;
+    const auto current = list.getSelectedRow();
+    const auto next = current < 0 ? 0 : (current + delta + count) % count;
+    list.selectRow(next);
+    list.scrollToEnsureRowIsOnscreen(next);
+}
+
+void RandomChopSamplerAudioProcessorEditor::showSampleMenu()
+{
+    juce::PopupMenu menu;
+    const auto hasSelection = selectedSourceId.isNotEmpty();
+    menu.addItem(1, "Remove selected source", hasSelection);
+    menu.addItem(2, "Reveal selected file", hasSelection);
+    menu.addSeparator();
+    menu.addItem(3, "About recompiler.dll");
+    juce::Component::SafePointer<RandomChopSamplerAudioProcessorEditor> safe(this);
+    menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&sampleMenuButton),
+        [safe](int choice)
+        {
+            if (safe == nullptr) return;
+            if (choice == 1 && safe->selectedSourceId.isNotEmpty())
+            {
+                safe->processor.requestSourcePreview(0);
+                safe->processor.samples.remove(safe->selectedSourceId);
+                safe->refresh();
+            }
+            else if (choice == 2 && safe->displayPool)
+            {
+                for (const auto& source : *safe->displayPool)
+                    if (source->settings.id == safe->selectedSourceId)
+                        juce::File(source->settings.filePath).revealToUser();
+            }
+            else if (choice == 3) safe->infoButton.triggerClick();
+        });
+}
+
+void RandomChopSamplerAudioProcessorEditor::showEffectModeMenu(int effect)
+{
+    struct Option { const char* name; uint32_t flag; };
+    const Option scramble[] {
+        { "Octave pitch", randomchop::ScrambleFeatures::pitch },
+        { "Hold and micro-loop", randomchop::ScrambleFeatures::hold },
+        { "Reverse", randomchop::ScrambleFeatures::reverse },
+        { "Jump and reorder", randomchop::ScrambleFeatures::jump },
+        { "Motif repeats", randomchop::ScrambleFeatures::motif }
+    };
+    const Option melt[] {
+        { "Time stretch", randomchop::MeltFeatures::stretch },
+        { "Reverse", randomchop::MeltFeatures::reverse },
+        { "Slice variation", randomchop::MeltFeatures::sliceVariation }
+    };
+    const Option smear[] {
+        { "Pitched intervals", randomchop::SmearFeatures::pitch },
+        { "Time scatter", randomchop::SmearFeatures::scatter },
+        { "Pitch and pan motion", randomchop::SmearFeatures::orbit },
+        { "Stereo spread", randomchop::SmearFeatures::stereo },
+        { "Bright particles", randomchop::SmearFeatures::brightness },
+        { "Feedback", randomchop::SmearFeatures::feedback }
+    };
+    const Option* options = effect == 0 ? scramble : effect == 1 ? melt : smear;
+    const auto optionCount = effect == 0 ? 5 : effect == 1 ? 3 : 6;
+    const auto all = effect == 0 ? randomchop::ScrambleFeatures::all
+        : effect == 1 ? randomchop::MeltFeatures::all : randomchop::SmearFeatures::all;
+    const auto current = effect == 0 ? processor.getScrambleFeatures()
+        : effect == 1 ? processor.getMeltFeatures() : processor.getSmearFeatures();
+    juce::PopupMenu menu;
+    menu.addItem(100, "All gestures", true, current == all);
+    menu.addSeparator();
+    for (int index = 0; index < optionCount; ++index)
+        menu.addItem(index + 1, options[index].name, true,
+                     (current & options[index].flag) != 0);
+    juce::Component* target = effect == 0 ? static_cast<juce::Component*>(&scrambleModeButton)
+        : effect == 1 ? static_cast<juce::Component*>(&meltModeButton)
+                      : static_cast<juce::Component*>(&smearModeButton);
+    juce::Component::SafePointer<RandomChopSamplerAudioProcessorEditor> safe(this);
+    menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(target),
+        [safe, effect, current, all](int choice)
+        {
+            if (safe == nullptr || choice == 0) return;
+            const uint32_t next = choice == 100 ? all
+                : current ^ (uint32_t { 1 } << static_cast<uint32_t>(choice - 1));
+            if (effect == 0) safe->processor.setScrambleFeatures(next);
+            else if (effect == 1) safe->processor.setMeltFeatures(next);
+            else safe->processor.setSmearFeatures(next);
+            safe->repaint();
+        });
+}
+
+void RandomChopSamplerAudioProcessorEditor::selectTab(int tab)
+{
+    selectedTab = juce::jlimit(0, 3, tab);
+    mainTab.setToggleState(selectedTab == 0, juce::dontSendNotification);
+    fxTab.setToggleState(selectedTab == 1, juce::dontSendNotification);
+    seqTab.setToggleState(selectedTab == 2, juce::dontSendNotification);
+    settingsTab.setToggleState(selectedTab == 3, juce::dontSendNotification);
+    if (selectedTab == 2)
+    {
+        pageMessage.setText("SEQ  /  AUTOMATIC TIMING\n\nCreative slices follow the host tempo automatically.\n"
+                            "There is no programmable sequencer in this instrument.",
+                            juce::dontSendNotification);
+        pageActionButton.setButtonText("BACK TO MAIN");
+    }
+    else if (selectedTab == 3)
+    {
+        pageMessage.setText("SETTINGS  /  RECOMPILER.DLL\n\n"
+                            "Drop or add up to 20 samples, shape them, then play from MIDI.\n"
+                            "Use the About button for plugin information.",
+                            juce::dontSendNotification);
+        pageActionButton.setButtonText("ABOUT");
+    }
+    resized();
+    repaint();
 }
 
 void RandomChopSamplerAudioProcessorEditor::refresh()
@@ -1678,48 +2197,45 @@ void RandomChopSamplerAudioProcessorEditor::paintListBoxItem(int row, juce::Grap
     const auto& source = (*displayPool)[static_cast<size_t>(row)];
     const bool recent = source->runtimeId
         == processor.lastTriggeredRuntimeId.load(std::memory_order_relaxed);
-    if (selected)
-    {
-        g.setGradientFill(juce::ColourGradient(juce::Colour(0xffd9eeff), 0.0f, 0.0f,
-                                               juce::Colour(0xff8ec8fa), 0.0f,
-                                               static_cast<float>(height), false));
-        g.fillRect(0, 0, width, height);
-        g.setColour(juce::Colour(0xff086fda));
-        g.fillRect(0, 0, 3, height);
-    }
-    else
-    {
-        g.fillAll(recent ? juce::Colour(0xffe7efff) : juce::Colour(0xfff7f9fc));
-    }
-    g.setColour(juce::Colour(0xffd0dce8));
+    g.fillAll(selected ? juce::Colour(0xffbcbcbc)
+                       : recent ? juce::Colour(0xffe2e2e2) : juce::Colour(0xffeeeeee));
+    g.setColour(juce::Colour(0xffaaaaaa));
     g.drawHorizontalLine(height - 1, 0.0f, static_cast<float>(width));
-    const auto iconX = 8.0f;
-    const auto centreY = static_cast<float>(height) * 0.5f;
-    if (recent)
+    const auto thumb = juce::Rectangle<int>(59, 3, juce::jmin(62, width / 5),
+                                            juce::jmax(1, height - 6));
+    g.setColour(juce::Colour(0xff3c3c3c));
+    g.fillRect(thumb);
+    if (source->waveformPeaks && !source->waveformPeaks->empty())
     {
-        juce::Path play;
-        play.startNewSubPath(iconX + 2.0f, centreY - 6.0f);
-        play.lineTo(iconX + 13.0f, centreY);
-        play.lineTo(iconX + 2.0f, centreY + 6.0f);
-        play.closeSubPath();
-        g.setColour(juce::Colour(0xff17824c));
-        g.fillPath(play);
-    }
-    else
-    {
-        g.setColour(juce::Colour(0xff174d83));
-        for (int line = 0; line < 5; ++line)
+        const auto& peaks = *source->waveformPeaks;
+        const auto centre = static_cast<float>(thumb.getCentreY());
+        const auto halfHeight = thumb.getHeight() * 0.42f;
+        g.setColour(juce::Colour(0xfff0f0f0));
+        for (int x = 1; x < thumb.getWidth() - 1; ++x)
         {
-            const auto h = line % 2 == 0 ? 12.0f : 7.0f;
-            g.drawVerticalLine(juce::roundToInt(iconX + line * 3.0f), centreY - h * 0.5f,
-                               centreY + h * 0.5f);
+            const auto index = static_cast<size_t>(x) * peaks.size()
+                / static_cast<size_t>(thumb.getWidth());
+            const auto& peak = peaks[juce::jmin(index, peaks.size() - 1)];
+            g.drawVerticalLine(thumb.getX() + x,
+                centre - peak.maximum * halfHeight,
+                centre - peak.minimum * halfHeight);
         }
     }
-    g.setColour(source->settings.missing ? juce::Colour(0xffb52a2a) : juce::Colour(xpInk));
-    const auto suffix = source->settings.missing ? juce::String("  [MISSING]")
-                                                 : juce::String();
-    g.setFont(13.0f);
-    g.drawText(source->settings.displayName + suffix, 27, 0, width - 166, height,
+    const auto textX = thumb.getRight() + 8;
+    g.setColour(juce::Colour(xpInk));
+    g.setFont(juce::Font(12.0f, juce::Font::bold));
+    g.drawText(source->settings.displayName
+                   + (source->settings.missing ? " [MISSING]" : ""),
+               textX, 2, juce::jmax(1, width - textX - 5), height / 2,
+               juce::Justification::centredLeft, true);
+    auto format = juce::File(source->settings.filePath).getFileExtension()
+        .fromFirstOccurrenceOf(".", false, false).toUpperCase();
+    const auto seconds = source->audio != nullptr
+        ? static_cast<double>(source->audio->getNumSamples()) / juce::jmax(1.0, source->sampleRate)
+        : 0.0;
+    g.setFont(juce::Font(10.0f));
+    g.drawText(format + "  |  " + juce::String(seconds, 1) + " s",
+               textX, height / 2, juce::jmax(1, width - textX - 5), height / 2,
                juce::Justification::centredLeft, true);
 }
 
@@ -1739,11 +2255,10 @@ juce::Component* RandomChopSamplerAudioProcessorEditor::refreshComponentForRow(i
         const auto& settings = (*displayPool)[static_cast<size_t>(row)]->settings;
         controls->enabled.setToggleState(settings.enabled,
                                          juce::dontSendNotification);
-        controls->enabled.setButtonText(controls->enabled.getToggleState() ? "ON" : "OFF");
+        controls->enabled.setButtonText({});
         controls->enabled.setHelpText(juce::String("Include ") + settings.displayName
                                       + " in random selection");
-        controls->remove.setHelpText(juce::String("Remove ") + settings.displayName
-                                     + " from the sample pool");
+        controls->preview.setHelpText(juce::String("Audition ") + settings.displayName);
     }
     controls->enabled.onClick = [this, controls]
     {
@@ -1755,12 +2270,13 @@ juce::Component* RandomChopSamplerAudioProcessorEditor::refreshComponentForRow(i
                                          controls->enabled.getToggleState());
         refresh();
     };
-    controls->remove.onClick = [this, controls]
+    controls->preview.onClick = [this, controls]
     {
-        if (displayPool && controls->row >= 0
-            && controls->row < static_cast<int>(displayPool->size()))
-            processor.samples.remove((*displayPool)[static_cast<size_t>(controls->row)]->settings.id);
-        refresh();
+        if (!displayPool || controls->row < 0
+            || controls->row >= static_cast<int>(displayPool->size())) return;
+        const auto id = (*displayPool)[static_cast<size_t>(controls->row)]->runtimeId;
+        processor.requestSourcePreview(processor.getPreviewingSourceId() == id ? 0 : id);
+        if (controls->onSelect) controls->onSelect(controls->row);
     };
     return controls;
 }
@@ -1798,6 +2314,27 @@ void RandomChopSamplerAudioProcessorEditor::timerCallback()
         --transientMessageTicks;
     voiceMode.setButtonText(voiceMode.getToggleState() ? "MONO" : "POLY");
     midiPitch.setButtonText(midiPitch.getToggleState() ? "CHORDS ON" : "CHORDS OFF");
+    chordsOffButton.setToggleState(!midiPitch.getToggleState(), juce::dontSendNotification);
+    chordsOnButton.setToggleState(midiPitch.getToggleState(), juce::dontSendNotification);
+    polyButton.setToggleState(!voiceMode.getToggleState(), juce::dontSendNotification);
+    monoButton.setToggleState(voiceMode.getToggleState(), juce::dontSendNotification);
+    for (int effect = 0; effect < 4; ++effect)
+    {
+        juce::TextButton* buttons[] { &scramblePowerButton, &meltPowerButton,
+            &smearPowerButton, &spectralPowerButton };
+        buttons[effect]->setToggleState(processor.isEffectEnabled(effect),
+                                        juce::dontSendNotification);
+    }
+    outputPowerButton.setToggleState(!processor.isOutputMuted(), juce::dontSendNotification);
+    muteButton.setToggleState(processor.isOutputMuted(), juce::dontSendNotification);
+    muteButton.setButtonText(processor.isOutputMuted() ? "UNMUTE" : "MUTE");
+    scrambleModeButton.setButtonText(processor.getScrambleFeatures() == randomchop::ScrambleFeatures::all
+        ? "Random" : "Custom");
+    meltModeButton.setButtonText(processor.getMeltFeatures() == randomchop::MeltFeatures::all
+        ? "Stretch" : "Custom");
+    smearModeButton.setButtonText(processor.getSmearFeatures() == randomchop::SmearFeatures::all
+        ? "Diffuse" : "Custom");
+    outputMeter.setPeak(processor.getOutputPeak());
     const auto canvasGeneration = processor.getSpectralCanvasGeneration();
     if (canvasGeneration != lastSpectralCanvasGeneration)
     {
@@ -1805,6 +2342,7 @@ void RandomChopSamplerAudioProcessorEditor::timerCallback()
         lastSpectralCanvasGeneration = canvasGeneration;
     }
     spectralCanvas.setScanPosition(processor.getSpectralScanPosition());
+    spectralCanvas.setSpectrum(processor.getDisplaySpectrum());
     const auto readParameter = [this](const char* id)
     {
         if (const auto* value = processor.parameters.getRawParameterValue(id))

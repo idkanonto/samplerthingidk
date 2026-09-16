@@ -9,9 +9,20 @@
 
 namespace randomchop
 {
+namespace ScrambleFeatures
+{
+constexpr uint32_t pitch = 1u << 0;
+constexpr uint32_t hold = 1u << 1;
+constexpr uint32_t reverse = 1u << 2;
+constexpr uint32_t jump = 1u << 3;
+constexpr uint32_t motif = 1u << 4;
+constexpr uint32_t all = pitch | hold | reverse | jump | motif;
+}
+
 struct ScrambleSettings final
 {
     float amountPercent = 0.0f;
+    uint32_t features = ScrambleFeatures::all;
 };
 
 class ScrambleProcessor final
@@ -80,6 +91,7 @@ private:
     bool active = false;
     bool enabled = false;
     bool armed = false;
+    uint32_t currentFeatures = ScrambleFeatures::all;
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> bypassGain { 0.0f };
 };
 }

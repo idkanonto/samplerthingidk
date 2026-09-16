@@ -79,6 +79,7 @@ public:
     static constexpr int fftSize = 1024;
     static constexpr int hopSize = fftSize / 4;
     static constexpr int latencySamples = fftSize;
+    static constexpr int displayBins = 64;
 
     static constexpr double cycleQuarterNotes(int choice) noexcept
     {
@@ -114,6 +115,14 @@ public:
     {
         return publishedScanPosition.load(std::memory_order_relaxed);
     }
+    std::array<float, displayBins> getDisplaySpectrum() const noexcept
+    {
+        std::array<float, displayBins> result {};
+        for (int index = 0; index < displayBins; ++index)
+            result[static_cast<std::size_t>(index)] = displaySpectrum[static_cast<std::size_t>(index)]
+                .load(std::memory_order_relaxed);
+        return result;
+    }
 
 private:
     using Complex = std::complex<float>;
@@ -134,6 +143,8 @@ private:
     std::array<float, fftSize / 2 + 1> smoothedBinGains {};
     std::array<float, fftSize> frameBinGains {};
     std::atomic<float> publishedScanPosition { 0.0f };
+    std::array<std::atomic<float>, displayBins> displaySpectrum {};
+    std::array<int, displayBins> displayBinIndices {};
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> depthSmoother { 0.0f };
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> bypassMix { 0.0f };
     double sampleRate = 44100.0;

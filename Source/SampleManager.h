@@ -42,6 +42,7 @@ struct SampleData final
     std::shared_ptr<const WaveformPeaks> waveformPeaks;
     PreparedSamplePtr prepared;
     double sampleRate = 44100.0;
+    int bitDepth = 0;
     uint64_t runtimeId = 0;
 
     bool isPlayable() const noexcept

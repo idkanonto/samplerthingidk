@@ -35,16 +35,16 @@ This specification supersedes the earlier Random Chop Sampler V2 feature plan. I
 
 | Surface | Classification | Reason |
 |---|---|---|
-| Drag-and-drop, per-source On/Remove, and row selection | Essential | Minimal sample-pool management and editing target. |
+| Drag-and-drop, Add, per-source checkbox/audition, row selection, and menu removal | Essential | The monochrome reference's sample-browser controls are real actions. |
 | Waveform Start/End | Essential | Defines the playable source region and legal random-start range. |
 | Source Key, Transpose, Fine Tune, Gain | Essential | Source preparation, harmonic placement, correction, and balance. |
 | Play In Key, Chords | Essential | Straightforward harmonic normalization and optional keyboard tracking. |
 | POLY/MONO | Essential | Voice overlap policy presented as one two-position switch. |
 | Output | Essential | Final gain with a short sample-time ramp for automation safety. |
-| SCRAMBLE | Macro | Collapses density, selection, repeats, holds, reverse, jumps, pitch, and event span into one perceptual progression. |
-| MELT | Macro | Controls automatic slice selection, pitch-preserving stretch depth, slice density, internally derived reversal probability, and wetness through one progression. |
+| SCRAMBLE | Macro with gesture checklist | Amount sets intensity; the Mode menu can include/exclude pitch, hold/micro-loop, reverse, jump/reorder, and motif repeat gestures. All checked retains the original sound. |
+| MELT | Macro with gesture checklist | Amount sets intensity; the Mode menu can include/exclude stretching, reversal, and slice-count variation. All checked retains the original sound. |
 | Spectral canvas, Reset, Depth | Essential | Dragging draws; timing is automatic and one Reset action clears the canvas. |
-| SMEAR | Macro | Collapses grain density, length, pitch range, scatter, stereo behavior, brightness, and wetness into one control. |
+| SMEAR | Macro with gesture checklist | Amount sets intensity; the Mode menu can include/exclude pitch intervals, time scatter, pitch/pan motion, stereo spread, brightness, and feedback. All checked retains the original sound. |
 
 Internal-only values include the persisted creative seed and every technical probability, buffer size, fade time, modulation phase/depth, cutoff, resonance, grain, filtered-history, and transient-suppression setting.
 
@@ -88,7 +88,7 @@ A crystalline pitched-grain cloud, not a blur or reverb substitute. A fixed prea
 - Remove the exposed Seed, SCRAMBLE Chance, Freeze Size/Hold/Chance/Octave Chance, every FRACTURE control, and CODEC Amount/Quality controls. `fractureCharacter` and `fractureMix` are retired rather than reinterpreted as MELT.
 - Remove the exposed MELT Reverse Chance. `meltReverseChance` is retired rather than mapped onto the new one-knob macro; reversal remains an internal amount-derived slice decision.
 - Remove Selection Weight and manual per-source Stretch. Old source properties are ignored rather than reinterpreted.
-- Remove Add Samples, Clear All, Enable All, and Disable All; loading is drag-and-drop and source actions are individual.
+- Keep Add Samples alongside drag-and-drop to match the new reference. Removal remains an individual menu action; Clear All, Enable All, and Disable All remain absent.
 - Remove Root MIDI Note, Global Grid, and Spectral Scan Rate. Retire those parameter IDs rather than mapping old values onto surviving controls.
 - Remove separate Spectral Draw/Erase modes and keep only direct drawing plus Reset.
 - Do not add a Loop/One-shot mode.
@@ -98,4 +98,4 @@ A crystalline pitched-grain cloud, not a blur or reverb substitute. A fixed prea
 
 ## Delivery boundary
 
-This pass simplifies control semantics without adding unrelated features. Future passing Windows builds ship the raw complete VST3 bundle rather than a new unsigned installer executable. Completion requires Windows compilation/CTest, deterministic listening renders, fixed-latency and boundary-partition checks, artifact inspection, DAW listening guidance, and a green post-merge `main`.
+The editor follows the supplied monochrome desktop reference rather than the previous blue XP skin. Every shown action must be real: file add, source audition/navigation, waveform tools, harmony/voice switches, effect checklists/power, Spectral Reset, output mute/meter, and tab navigation. `SEQ` explains automatic timing; it does not add a programmable sequencer. Gesture checklists default to all on, preserve the established sound, and persist with state. Future passing Windows builds ship the raw complete VST3 bundle rather than a new unsigned installer executable. Completion requires Windows compilation/CTest, deterministic listening renders, fixed-latency and boundary-partition checks, artifact inspection, DAW listening guidance, and a green post-merge `main`.

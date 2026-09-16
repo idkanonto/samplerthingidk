@@ -8,9 +8,29 @@
 
 namespace randomchop
 {
+namespace MeltFeatures
+{
+constexpr uint32_t stretch = 1u << 0;
+constexpr uint32_t reverse = 1u << 1;
+constexpr uint32_t sliceVariation = 1u << 2;
+constexpr uint32_t all = stretch | reverse | sliceVariation;
+}
+
+namespace SmearFeatures
+{
+constexpr uint32_t pitch = 1u << 0;
+constexpr uint32_t scatter = 1u << 1;
+constexpr uint32_t orbit = 1u << 2;
+constexpr uint32_t stereo = 1u << 3;
+constexpr uint32_t brightness = 1u << 4;
+constexpr uint32_t feedback = 1u << 5;
+constexpr uint32_t all = pitch | scatter | orbit | stereo | brightness | feedback;
+}
+
 struct MeltSettings final
 {
     float amountPercent = 0.0f;
+    uint32_t features = MeltFeatures::all;
 };
 
 class MeltProcessor final
@@ -75,12 +95,14 @@ private:
     bool active = false;
     bool enabled = false;
     bool armed = false;
+    uint32_t currentFeatures = MeltFeatures::all;
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> bypassGain { 0.0f };
 };
 
 struct SmearSettings
 {
     float amount = 0.0f;
+    uint32_t features = SmearFeatures::all;
 };
 
 class SmearProcessor final
@@ -120,7 +142,7 @@ private:
     float readDelay(int channel, double position, double increment) const noexcept;
     float lookupSine(float phase) const noexcept;
     float lookupWindow(float phase) const noexcept;
-    void startGrain(float amount) noexcept;
+    void startGrain(float amount, uint32_t features) noexcept;
     void resetRealtimeState() noexcept;
 
     juce::AudioBuffer<float> delayBuffer;
