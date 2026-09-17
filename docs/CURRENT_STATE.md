@@ -6,14 +6,26 @@ tags:
   - implementation
   - current-state
 status: active
-verified: 2026-09-15
+verified: 2026-09-17
 ---
 
 # Current Implementation State
 
-The complete XP-editor head `1742a2d45832f9816d6a94054e60634805b676c9` on [PR #24](https://github.com/idkanonto/samplerthingidk/pull/24) passed [Windows Release CI run #85](https://github.com/idkanonto/samplerthingidk/actions/runs/35026852505). The workflow compiled the VST3, Standalone, and tests, passed CTest and deterministic listening-render verification, and verified the raw VST3 bundle. Artifact `10419677775` is 3,211,855 bytes with matching GitHub/downloaded SHA-256 `7d5c0f2330ba4cf70473b8fe4c418eab1207cfa7731ac116f7bd1b10d0967ec0`; it contains the top-level `recompiler.dll.vst3` bundle and a non-empty 7,375,872-byte module at `Contents/x86_64-win/recompiler.dll.vst3`.
+The current monochrome-reference head `833a0429a4f3de5c50eb8e90e3e7ab0cb3a371e2` on [PR #26](https://github.com/idkanonto/samplerthingidk/pull/26) passed [Windows Release CI run #91](https://github.com/idkanonto/samplerthingidk/actions/runs/35163505680). The workflow compiled the VST3, Standalone, and tests; CTest passed 1/1; all 16 deterministic listening renders were non-empty; and the runner verified the complete raw VST3 bundle. Artifact `10474097579` is 3,251,014 bytes with GitHub/upload SHA-256 `7cc62359c9373502a46ec0d8b95c8dee49c1238b99e528d412bd36b5b489e67b`. Its verified bundle contains a non-empty 7,477,248-byte Windows module at `recompiler.dll.vst3/Contents/x86_64-win/recompiler.dll.vst3`. The PR remains unmerged pending a hands-on DAW visual/interaction pass.
 
-## Verified complete XP editor
+## Verified monochrome-reference implementation
+
+- The complete editor now uses the supplied monochrome desktop hierarchy: header with source navigation, sample browser, source waveform/tools, global harmony and voice switches, SCRAMBLE/MELT/SMEAR/SPECTRAL DRAW/OUTPUT cards, tabs, and footer. It defaults to 1024×683 and supports 900×600 through 1536×1024. Code and Windows compilation are verified; exact visual matching still needs a DAW screenshot comparison.
+- Add opens a multi-file chooser, while drag-and-drop remains. Sample rows offer enable and audition actions, with individual removal in the sample menu. Source waveform zoom, region focus, fit, and Start/End edits are functional.
+- Effect Mode menus check individual SCRAMBLE, MELT, and SMEAR gestures. Each knob still sets intensity. All gestures are on by default, and focused CTest checks exact default/all-on equivalence, zero-mask dry behavior, and audible partial-mask differences. Gesture masks and effect power states persist without changing existing parameter IDs.
+- Chords and POLY/MONO switches, random source selection, creative-seed regeneration, Spectral Reset, output mute, and output meter are wired to real behavior. `SEQ` explains automatic timing instead of introducing a sequencer. The information dialog retains the requested `test` text.
+- Source preview uses a dedicated prepared voice, bounded selection from the immutable pool, and deferred source reclamation. Spectrum and meter displays publish bounded atomic telemetry; the callback performs no editor painting, file I/O, or heap allocation.
+
+## Historical complete XP editor
+
+The earlier XP-editor head `1742a2d45832f9816d6a94054e60634805b676c9` on [PR #24](https://github.com/idkanonto/samplerthingidk/pull/24) passed [Windows Release CI run #85](https://github.com/idkanonto/samplerthingidk/actions/runs/35026852505). It has since been superseded by the monochrome-reference editor above.
+
+### XP editor details (historical)
 
 - The full editor—not only its information popup—uses a reusable code-native Windows XP visual system across the application bar, source counter, sample browser, source waveform and markers, source controls, global harmony/voice strip, creative-effect cards, Spectral Draw display, Output, buttons, toggles, combo boxes, sliders, and rotary controls.
 - The compact responsive layout remains 880×600 by default and supports the existing 760×520 through 1180×820 range. At the default size it keeps six sample rows visible and reserves the lower half for dedicated SCRAMBLE, MELT, SMEAR, SPECTRAL DRAW, and OUTPUT cards.
@@ -148,6 +160,6 @@ Gate E PR #15 passed [Windows Release CI run #51](https://github.com/idkanonto/s
 
 - An allocator hook/realtime profiler and hands-on DAW host stress/listening pass are not available in CI and remain explicit external release checks.
 - Direct multi-source row-click interaction still requires a hands-on editor check even though the event-routing fix compiles and source identity/selection behavior remains covered structurally.
-- Final visual redesign is explicitly outside the current delivery boundary.
+- Pixel-level comparison of the current editor with the supplied reference, host interaction checks for every visible action, and subjective DAW listening remain external release checks. The downloaded artifact reference was obtained, but an independent local ZIP rehash could not be completed because the temporary file URL rejected shell authentication; the GitHub metadata and uploader digest agree.
 
 See [[TEST_MATRIX]] for what is runtime-verified and [[REALTIME_AUDIT]] for the callback contract.
