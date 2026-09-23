@@ -1,0 +1,45 @@
+:root {
+  color: #181818;
+  background: #d8d8d2;
+  font-family: Consolas, "Courier New", monospace;
+  font-synthesis: none;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; min-height: 100vh; }
+button, input { font: inherit; }
+
+main { width: min(960px, 100%); margin: 0 auto; padding: 24px; }
+header, section { border: 2px solid #181818; background: #eeeeea; }
+header { display: flex; justify-content: space-between; align-items: center; padding: 20px; }
+h1 { margin: 0; font-size: clamp(28px, 5vw, 54px); line-height: .95; }
+header p { margin: 8px 0 0; letter-spacing: .14em; font-weight: 700; }
+.status { padding: 8px 12px; border: 1px solid #181818; background: #c7c7c2; font-size: 12px; }
+.status.connected { color: #eeeeea; background: #181818; }
+section { margin-top: 12px; padding: 18px; }
+h2 { margin: -18px -18px 18px; padding: 7px 10px; border-bottom: 2px solid #181818; font-size: 13px; letter-spacing: .12em; }
+.control { display: grid; grid-template-columns: 120px 1fr 110px; gap: 12px; align-items: center; }
+.control input { accent-color: #181818; }
+.control output { text-align: right; }
+button { border: 2px solid #181818; border-radius: 0; background: #dadad5; padding: 9px 14px; cursor: pointer; box-shadow: 2px 2px 0 #181818; }
+button:active { transform: translate(2px, 2px); box-shadow: none; }
+.toggle { margin-top: 18px; }
+.toggle.active { color: #fff; background: #181818; }
+.two-column { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+.two-column h2 { margin: -18px 0 18px; }
+dl { display: grid; grid-template-columns: 150px 1fr; margin: 0; gap: 8px; }
+dt { color: #595959; } dd { margin: 0; font-weight: 700; }
+.meter { height: 22px; border: 2px solid #181818; padding: 2px; background: #fff; }
+.meter i { display: block; height: 100%; background: #181818; transition: width 60ms linear; }
+.muted { color: #595959; font-size: 12px; }
+.button-row { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+.error { color: #8b1717; }
+
+@media (max-width: 680px) {
+  main { padding: 12px; }
+  header, .two-column { display: block; }
+  .status { display: inline-block; margin-top: 16px; }
+  .two-column > div + div { margin-top: 28px; }
+  .control { grid-template-columns: 1fr; }
+  .control output { text-align: left; }
+}

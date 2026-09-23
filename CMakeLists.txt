@@ -3,6 +3,11 @@ project(RandomChopSampler VERSION 3.0.0 LANGUAGES CXX)
 
 include(CTest)
 
+option(RECOMPILER_USE_NATIVE_EDITOR
+    "Use the retained native JUCE editor instead of the WebView editor" OFF)
+option(RECOMPILER_REBUILD_FRONTEND
+    "Rebuild the React frontend when Node/npm are available" ON)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
@@ -41,6 +46,7 @@ juce_add_plugin(RandomChopSampler
     NEEDS_MIDI_OUTPUT FALSE
     IS_MIDI_EFFECT FALSE
     EDITOR_WANTS_KEYBOARD_FOCUS FALSE
+    NEEDS_WEBVIEW2 TRUE
     COPY_PLUGIN_AFTER_BUILD FALSE)
 
 # The source uses the Projucer-style aggregate include. Generate it explicitly
@@ -52,6 +58,8 @@ target_sources(RandomChopSampler PRIVATE
     Source/PluginProcessor.h
     Source/PluginEditor.cpp
     Source/PluginEditor.h
+    Source/WebViewEditor.cpp
+    Source/WebViewEditor.h
     Source/SampleManager.cpp
     Source/SampleManager.h
     Source/PreparedSampleData.h
@@ -71,14 +79,68 @@ target_sources(RandomChopSampler PRIVATE
     Source/PlaybackRegion.h
     Source/SourceSelection.h)
 
+set(frontend_directory "${CMAKE_CURRENT_SOURCE_DIR}/frontend")
+set(frontend_dist_files
+    "${frontend_directory}/dist/index.html"
+    "${frontend_directory}/dist/assets/app.js"
+    "${frontend_directory}/dist/assets/app.css")
+
+if (RECOMPILER_REBUILD_FRONTEND)
+    find_program(NPM_EXECUTABLE npm)
+    if (NPM_EXECUTABLE)
+        add_custom_command(
+            OUTPUT "${frontend_directory}/dist/.frontend-built"
+            COMMAND "${NPM_EXECUTABLE}" ci --no-audit --no-fund
+            COMMAND "${NPM_EXECUTABLE}" run build
+            COMMAND ${CMAKE_COMMAND} -E touch "${frontend_directory}/dist/.frontend-built"
+            WORKING_DIRECTORY "${frontend_directory}"
+            DEPENDS
+                "${frontend_directory}/package.json"
+                "${frontend_directory}/package-lock.json"
+                "${frontend_directory}/index.html"
+                "${frontend_directory}/vite.config.ts"
+                "${frontend_directory}/tsconfig.app.json"
+                "${frontend_directory}/src/App.tsx"
+                "${frontend_directory}/src/juceBridge.ts"
+                "${frontend_directory}/src/main.tsx"
+                "${frontend_directory}/src/styles.css"
+            BYPRODUCTS ${frontend_dist_files}
+            COMMENT "Building embedded React WebView frontend"
+            VERBATIM)
+        add_custom_target(RecompilerFrontendBuild
+            DEPENDS "${frontend_directory}/dist/.frontend-built")
+    else()
+        message(WARNING
+            "npm was not found; packaging the checked-in frontend/dist assets")
+    endif()
+endif()
+
+foreach(frontend_asset IN LISTS frontend_dist_files)
+    if (NOT EXISTS "${frontend_asset}")
+        message(FATAL_ERROR
+            "Missing ${frontend_asset}. Run npm install and npm run build in frontend/.")
+    endif()
+endforeach()
+
+juce_add_binary_data(RecompilerWebAssets
+    NAMESPACE BinaryData
+    SOURCES ${frontend_dist_files})
+if (TARGET RecompilerFrontendBuild)
+    add_dependencies(RecompilerWebAssets RecompilerFrontendBuild)
+endif()
+
 target_compile_definitions(RandomChopSampler PUBLIC
-    JUCE_WEB_BROWSER=0
+    JUCE_WEB_BROWSER=1
+    JUCE_USE_WIN_WEBVIEW2_WITH_STATIC_LINKING=1
     JUCE_USE_CURL=0
     JUCE_USE_MP3AUDIOFORMAT=1
-    JUCE_VST3_CAN_REPLACE_VST2=0)
+    JUCE_VST3_CAN_REPLACE_VST2=0
+    RECOMPILER_USE_NATIVE_EDITOR=$<BOOL:${RECOMPILER_USE_NATIVE_EDITOR}>)
 
 target_link_libraries(RandomChopSampler PRIVATE
     juce::juce_audio_utils
+    juce::juce_gui_extra
+    RecompilerWebAssets
     signalsmith-stretch
     PUBLIC juce::juce_recommended_config_flags
            juce::juce_recommended_lto_flags

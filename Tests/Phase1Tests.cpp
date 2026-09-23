@@ -590,7 +590,8 @@ juce::AudioBuffer<float> makeListeningInput(int frames, double sampleRate)
 }
 
 juce::AudioBuffer<float> renderScramble(float amount,
-                                        const juce::AudioBuffer<float>& input)
+                                        const juce::AudioBuffer<float>& input,
+                                        uint32_t features = randomchop::ScrambleFeatures::all)
 {
     auto output = copyBuffer(input);
     randomchop::ScrambleProcessor processor;
@@ -603,12 +604,13 @@ juce::AudioBuffer<float> renderScramble(float amount,
          frame < output.getNumSamples() && boundaries.count < 64;
          frame += gridFrames)
         boundaries.sampleOffsets[static_cast<std::size_t>(boundaries.count++)] = frame;
-    processor.process(output, boundaries, 1, { amount });
+    processor.process(output, boundaries, 1, { amount, features });
     return output;
 }
 
 juce::AudioBuffer<float> renderMelt(float amount,
-                                   const juce::AudioBuffer<float>& input)
+                                   const juce::AudioBuffer<float>& input,
+                                   uint32_t features = randomchop::MeltFeatures::all)
 {
     auto output = copyBuffer(input);
     randomchop::MeltProcessor processor;
@@ -621,18 +623,19 @@ juce::AudioBuffer<float> renderMelt(float amount,
          frame < output.getNumSamples() && boundaries.count < 64;
          frame += gridFrames)
         boundaries.sampleOffsets[static_cast<std::size_t>(boundaries.count++)] = frame;
-    processor.process(output, boundaries, 1, { amount });
+    processor.process(output, boundaries, 1, { amount, features });
     return output;
 }
 
 juce::AudioBuffer<float> renderSmear(float amount,
-                                     const juce::AudioBuffer<float>& input)
+                                     const juce::AudioBuffer<float>& input,
+                                     uint32_t features = randomchop::SmearFeatures::all)
 {
     auto output = copyBuffer(input);
     randomchop::SmearProcessor processor;
     processor.prepare(48000.0);
     processor.setSeed(0x5ea2);
-    processor.process(output, { amount });
+    processor.process(output, { amount, features });
     return output;
 }
 
@@ -1308,6 +1311,40 @@ void testStateMigration()
           "legacy parameter allow/deny boundary changed");
 }
 
+void testCreativeFeatureMenus()
+{
+    const auto dry = makeListeningInput(48000, 48000.0);
+    const auto scrambleDefault = renderScramble(75.0f, dry);
+    check(buffersEqual(scrambleDefault,
+              renderScramble(75.0f, dry, randomchop::ScrambleFeatures::all)),
+          "Scramble all-on feature selection changed the existing sound");
+    check(buffersEqual(dry, renderScramble(75.0f, dry, 0)),
+          "Scramble with every gesture unchecked was not dry");
+    check(!buffersEqual(scrambleDefault,
+              renderScramble(75.0f, dry, randomchop::ScrambleFeatures::pitch)),
+          "Scramble gesture checkboxes did not change the sound");
+
+    const auto meltDefault = renderMelt(75.0f, dry);
+    check(buffersEqual(meltDefault,
+              renderMelt(75.0f, dry, randomchop::MeltFeatures::all)),
+          "Melt all-on feature selection changed the existing sound");
+    check(buffersEqual(dry, renderMelt(75.0f, dry, 0)),
+          "Melt with every gesture unchecked was not dry");
+    check(!buffersEqual(meltDefault,
+              renderMelt(75.0f, dry, randomchop::MeltFeatures::reverse)),
+          "Melt gesture checkboxes did not change the sound");
+
+    const auto smearDefault = renderSmear(75.0f, dry);
+    check(buffersEqual(smearDefault,
+              renderSmear(75.0f, dry, randomchop::SmearFeatures::all)),
+          "Smear all-on feature selection changed the existing sound");
+    check(buffersEqual(dry, renderSmear(75.0f, dry, 0)),
+          "Smear with every gesture unchecked was not dry");
+    check(!buffersEqual(smearDefault,
+              renderSmear(75.0f, dry, randomchop::SmearFeatures::pitch)),
+          "Smear gesture checkboxes did not change the sound");
+}
+
 }
 
 int main()
@@ -1322,6 +1359,7 @@ int main()
     testScrambleProcessor();
     testMeltProcessor();
     testSmearProcessor();
+    testCreativeFeatureMenus();
     testSpectralMaskPublicationAndState();
     testSpectralDrawProcessor();
     testStateMigration();

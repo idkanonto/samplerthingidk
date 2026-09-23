@@ -137,6 +137,14 @@ void SpectralDrawProcessor::prepare(double newSampleRate)
             / static_cast<float>(fftSize));
         window[static_cast<std::size_t>(index)] = std::sqrt(std::max(0.0f, hann));
     }
+    for (int index = 0; index < displayBins; ++index)
+    {
+        const auto unit = static_cast<double>(index)
+            / static_cast<double>(displayBins - 1);
+        displayBinIndices[static_cast<std::size_t>(index)] = std::clamp(
+            static_cast<int>(std::llround(std::pow(fftSize / 2.0, unit))),
+            1, fftSize / 2);
+    }
     depthSmoother.reset(sampleRate, 0.020);
     bypassMix.reset(sampleRate, 0.020);
     reset();
@@ -154,6 +162,8 @@ void SpectralDrawProcessor::reset() noexcept
     frequencyData.fill(Complex {});
     smoothedBinGains.fill(1.0f);
     frameBinGains.fill(1.0f);
+    for (auto& value : displaySpectrum)
+        value.store(0.0f, std::memory_order_relaxed);
     scannerPhase = 0.0;
     inputWritePosition = 0;
     outputReadPosition = 0;
@@ -231,6 +241,16 @@ void SpectralDrawProcessor::processFrame(const SpectralMaskStore::Snapshot* snap
             };
         }
         fft.fft(timeData.data(), frequencyData.data());
+        if (channel == 0)
+            for (int index = 0; index < displayBins; ++index)
+            {
+                const auto bin = displayBinIndices[static_cast<std::size_t>(index)];
+                const auto magnitude = std::sqrt(std::norm(
+                    frequencyData[static_cast<std::size_t>(bin)])) / 64.0f;
+                displaySpectrum[static_cast<std::size_t>(index)].store(
+                    std::clamp(std::isfinite(magnitude) ? magnitude : 0.0f,
+                               0.0f, 1.0f), std::memory_order_relaxed);
+            }
         for (int bin = 0; bin < fftSize; ++bin)
             frequencyData[static_cast<std::size_t>(bin)]
                 *= frameBinGains[static_cast<std::size_t>(bin)];

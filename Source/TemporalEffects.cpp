@@ -102,14 +102,23 @@ void ScrambleProcessor::setSeed(uint64_t seed) noexcept
 void ScrambleProcessor::configureSlice(int slice, float amount) noexcept
 {
     const auto sourceSliceFrames = std::max(2, captureFrames / sliceCount);
-    const auto sourceSlice = static_cast<int>(random.bounded(
-        static_cast<uint32_t>(sliceCount)));
+    const auto sourceSlice = (currentFeatures & ScrambleFeatures::jump) != 0
+        ? static_cast<int>(random.bounded(static_cast<uint32_t>(sliceCount))) : slice;
     const auto origin = std::min(captureFrames - 2, sourceSlice * sourceSliceFrames);
     const auto available = std::max(2, std::min(sourceSliceFrames, captureFrames - origin));
-    const auto choice = random.unit();
-    const auto pitchWeight = 0.02 + 0.34 * static_cast<double>(amount * amount);
-    const auto holdWeight = 0.20 + 0.16 * static_cast<double>(amount);
-    const auto reverseWeight = 0.18 + 0.10 * static_cast<double>(amount);
+    const auto pitchWeight = (currentFeatures & ScrambleFeatures::pitch) != 0
+        ? 0.02 + 0.34 * static_cast<double>(amount * amount) : 0.0;
+    const auto holdWeight = (currentFeatures & ScrambleFeatures::hold) != 0
+        ? 0.20 + 0.16 * static_cast<double>(amount) : 0.0;
+    const auto reverseWeight = (currentFeatures & ScrambleFeatures::reverse) != 0
+        ? 0.18 + 0.10 * static_cast<double>(amount) : 0.0;
+    const auto jumpWeight = (currentFeatures & ScrambleFeatures::jump) != 0
+        ? std::max(0.0, 1.0 - (0.02 + 0.34 * static_cast<double>(amount * amount))
+                          - (0.20 + 0.16 * static_cast<double>(amount))
+                          - (0.18 + 0.10 * static_cast<double>(amount))) : 0.0;
+    const auto choice = random.unit()
+        * (currentFeatures == ScrambleFeatures::all ? 1.0
+            : pitchWeight + holdWeight + reverseWeight + jumpWeight);
 
     readOrigin[static_cast<std::size_t>(slice)] = static_cast<double>(origin);
     readOffset[static_cast<std::size_t>(slice)] = 0.0;
@@ -139,7 +148,7 @@ void ScrambleProcessor::configureSlice(int slice, float amount) noexcept
         readOffset[static_cast<std::size_t>(slice)] = static_cast<double>(available - 1);
         readIncrement[static_cast<std::size_t>(slice)] = -1.0;
     }
-    else
+    else if ((currentFeatures & ScrambleFeatures::jump) != 0)
     {
         const auto maximumOffset = std::max(1, available / 2);
         readOffset[static_cast<std::size_t>(slice)] = static_cast<double>(
@@ -204,7 +213,8 @@ void ScrambleProcessor::beginEvent(const GridBoundaries& boundaries, int gridCho
 
     // Carry a resolved gesture into an adjacent selected slice sometimes. This
     // creates phrase-like repeats instead of a bag of independent random switches.
-    if (amount > 0.28f && random.unit() < 0.18 + 0.42 * amount)
+    if ((currentFeatures & ScrambleFeatures::motif) != 0
+        && amount > 0.28f && random.unit() < 0.18 + 0.42 * amount)
     {
         for (int slice = 1; slice < sliceCount; ++slice)
         {
@@ -255,8 +265,10 @@ void ScrambleProcessor::process(juce::AudioBuffer<float>& buffer,
     if (boundaries.transportDiscontinuity || boundaries.gridChanged)
         invalidateHistory();
 
-    const auto amount = std::clamp(std::isfinite(settings.amountPercent)
-        ? settings.amountPercent * 0.01f : 0.0f, 0.0f, 1.0f);
+    currentFeatures = settings.features & ScrambleFeatures::all;
+    const auto amount = (currentFeatures & ~ScrambleFeatures::motif) != 0
+        ? std::clamp(std::isfinite(settings.amountPercent)
+            ? settings.amountPercent * 0.01f : 0.0f, 0.0f, 1.0f) : 0.0f;
     const auto wantsEnabled = amount > 0.0f;
     if (wantsEnabled && !enabled)
     {

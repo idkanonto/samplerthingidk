@@ -126,6 +126,8 @@ void MeltProcessor::configureSlice(int slice, int outputFrames, float amount) no
     configured.stretchRatio = lerp(static_cast<float>(minimumRatio),
                                    static_cast<float>(maximumRatio),
                                    static_cast<float>(random.unit()));
+    if ((currentFeatures & MeltFeatures::stretch) == 0)
+        configured.stretchRatio = 1.0;
     const auto desiredSourceFrames = static_cast<int>(std::ceil(
         static_cast<double>(outputFrames) / configured.stretchRatio)) + grainFrames + 2;
     configured.sourceFrames = std::clamp(desiredSourceFrames, grainFrames + 2,
@@ -135,7 +137,8 @@ void MeltProcessor::configureSlice(int slice, int outputFrames, float amount) no
     configured.sourceOrigin = static_cast<double>(random.bounded(
         static_cast<uint32_t>(availableOrigins)));
     const auto reverseChance = 0.08f + 0.52f * std::pow(amount, 0.90f);
-    configured.reversed = random.unit() < static_cast<double>(reverseChance);
+    configured.reversed = (currentFeatures & MeltFeatures::reverse) != 0
+        && random.unit() < static_cast<double>(reverseChance);
     constexpr int energyProbes = 24;
     double captureEnergy = 0.0;
     double sourceEnergy = 0.0;
@@ -185,8 +188,9 @@ void MeltProcessor::beginEvent(const GridBoundaries& boundaries, int gridChoice,
     eventFrames = step;
     eventBoundariesRemaining = 1;
     recordDuringEvent = eventFrames <= history.getNumSamples() - captureFrames;
-    sliceCount = std::clamp(2 + static_cast<int>(std::floor(amount * 2.99f)),
-                            2, maximumSlices);
+    sliceCount = (currentFeatures & MeltFeatures::sliceVariation) != 0
+        ? std::clamp(2 + static_cast<int>(std::floor(amount * 2.99f)),
+                     2, maximumSlices) : 2;
     sliceFrames = std::max(1, (eventFrames + sliceCount - 1) / sliceCount);
     grainFrames = std::clamp(std::min(
         static_cast<int>(std::llround(sampleRate * (0.024 + 0.018 * amount))),
@@ -277,7 +281,9 @@ void MeltProcessor::process(juce::AudioBuffer<float>& buffer,
     if (boundaries.transportDiscontinuity || boundaries.gridChanged)
         invalidateHistory();
 
-    const auto amount = normalisePercent(settings.amountPercent);
+    currentFeatures = settings.features & MeltFeatures::all;
+    const auto amount = currentFeatures != 0
+        ? normalisePercent(settings.amountPercent) : 0.0f;
     const auto wantsEnabled = amount > 0.0f;
     if (wantsEnabled && !enabled)
     {
@@ -463,7 +469,7 @@ float SmearProcessor::lookupWindow(float phase) const noexcept
                 hannTable[static_cast<std::size_t>(second)], scaled - first);
 }
 
-void SmearProcessor::startGrain(float amount) noexcept
+void SmearProcessor::startGrain(float amount, uint32_t features) noexcept
 {
     Grain* destination = nullptr;
     for (auto& grain : grains)
@@ -501,12 +507,15 @@ void SmearProcessor::startGrain(float amount) noexcept
         semitones = amount > 0.55f ? 19 : 7;
     else
         semitones = amount > 0.72f ? (random.bounded(2) == 0 ? -12 : 24) : 12;
-    const auto increment = std::pow(2.0, static_cast<double>(semitones) / 12.0);
+    const auto increment = (features & SmearFeatures::pitch) != 0
+        ? std::pow(2.0, static_cast<double>(semitones) / 12.0) : 1.0;
     const auto minimumDelay = static_cast<int>(std::ceil(length * std::max(1.0, increment))) + 4;
     if (validFrames <= minimumDelay)
         return;
-    const auto scatter = static_cast<int>(std::llround(sampleRate
-        * (0.035 + 0.24 * amount) * random.unit()));
+    const auto scatterChoice = random.unit();
+    const auto scatter = (features & SmearFeatures::scatter) != 0
+        ? static_cast<int>(std::llround(sampleRate
+            * (0.035 + 0.24 * amount) * scatterChoice)) : 0;
     const auto maximumDelay = std::max(minimumDelay,
         std::min(validFrames - 2, delayBuffer.getNumSamples() - 2));
     const auto delay = std::clamp(minimumDelay + scatter, minimumDelay, maximumDelay);
@@ -514,14 +523,18 @@ void SmearProcessor::startGrain(float amount) noexcept
     destination->readPosition = wrap(static_cast<double>(writePosition - delay),
                                      static_cast<double>(delayBuffer.getNumSamples()));
     destination->increment = increment;
-    destination->pan = static_cast<float>(random.unit() * 2.0 - 1.0);
+    const auto panChoice = random.unit();
+    destination->pan = (features & SmearFeatures::stereo) != 0
+        ? static_cast<float>(panChoice * 2.0 - 1.0) : 0.0f;
     destination->pitchPhase = static_cast<float>(random.unit());
     destination->pitchRate = static_cast<float>((0.22 + 0.50 * random.unit())
                                                  / static_cast<double>(length));
     destination->panPhase = static_cast<float>(random.unit());
     destination->panRate = static_cast<float>((0.18 + 0.44 * random.unit())
                                                / static_cast<double>(length));
-    destination->brightness = static_cast<float>(0.72 + 0.56 * random.unit());
+    const auto brightnessChoice = random.unit();
+    destination->brightness = (features & SmearFeatures::brightness) != 0
+        ? static_cast<float>(0.72 + 0.56 * brightnessChoice) : 1.0f;
     destination->age = 0;
     destination->length = length;
     destination->active = true;
@@ -534,7 +547,8 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
 {
     if (delayBuffer.getNumSamples() <= 1 || buffer.getNumChannels() < 1)
         return;
-    const auto targetAmount = normalisePercent(settings.amount);
+    const auto features = settings.features & SmearFeatures::all;
+    const auto targetAmount = features != 0 ? normalisePercent(settings.amount) : 0.0f;
     amountSmoother.setTargetValue(targetAmount);
     const auto channels = std::min(2, buffer.getNumChannels());
     const auto fastCoefficient = 1.0f - std::exp(-1.0f
@@ -556,9 +570,12 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
             -juce::MathConstants<float>::twoPi * highPassCutoff
             / static_cast<float>(sampleRate));
         const auto wetBase = std::pow(amount, 0.72f);
-        const auto feedbackGain = 0.20f * std::pow(amount, 1.45f);
-        const auto pitchOrbitCents = 3.0f + 11.0f * amount;
-        const auto panOrbitDepth = 0.16f + 0.40f * amount;
+        const auto feedbackGain = (features & SmearFeatures::feedback) != 0
+            ? 0.20f * std::pow(amount, 1.45f) : 0.0f;
+        const auto pitchOrbitCents = (features & SmearFeatures::orbit) != 0
+            ? 3.0f + 11.0f * amount : 0.0f;
+        const auto panOrbitDepth = (features & SmearFeatures::orbit) != 0
+            ? 0.16f + 0.40f * amount : 0.0f;
         float dry[2] {
             sanitise(buffer.getSample(0, frame)),
             sanitise(buffer.getSample(std::min(1, channels - 1), frame))
@@ -595,7 +612,7 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
                 static_cast<double>(maximumGrains - 2) * densityCurve)),
                 2, maximumGrains);
             if (activeGrainCount < targetGrains)
-                startGrain(amount);
+                startGrain(amount, features);
             peakActiveGrainCount = std::max(peakActiveGrainCount, activeGrainCount);
             const auto nominalLength = sampleRate
                 * (0.088 - 0.072 * std::pow(static_cast<double>(amount), 0.85));
@@ -661,8 +678,10 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
             auto& low = lowState[static_cast<std::size_t>(channel)];
             low = sanitise(low + lowCoefficient * (texture[channel] - low));
             const auto bright = sanitise(texture[channel] - low);
-            const auto crystal = sanitise(0.10f * texture[channel]
-                + (1.34f + 0.72f * amount) * bright);
+            const auto crystal = (features & SmearFeatures::brightness) != 0
+                ? sanitise(0.10f * texture[channel]
+                    + (1.34f + 0.72f * amount) * bright)
+                : texture[channel];
             auto& feedback = feedbackState[static_cast<std::size_t>(channel)];
             feedback += feedbackCoefficient
                 * (std::tanh(bright * (1.0f + 0.65f * amount)) - feedback);
