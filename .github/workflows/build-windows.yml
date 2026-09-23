@@ -20,6 +20,14 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v7
 
+      - name: Install WebView2 SDK
+        shell: pwsh
+        run: >-
+          nuget install Microsoft.Web.WebView2
+          -Version 1.0.3485.44
+          -OutputDirectory "$env:RUNNER_TEMP\webview2"
+          -NonInteractive
+
       - name: Configure Release build
         run: >-
           cmake -S . -B build
@@ -28,6 +36,7 @@ jobs:
           -DCMAKE_BUILD_TYPE=Release
           -DJUCE_BUILD_EXAMPLES=OFF
           -DJUCE_BUILD_EXTRAS=OFF
+          -DJUCE_WEBVIEW2_PACKAGE_LOCATION="${{ runner.temp }}\webview2"
 
       - name: Build VST3, standalone, and tests
         run: cmake --build build --config Release --target RandomChopSampler_VST3 RandomChopSampler_Standalone RandomChopSamplerTests --parallel
