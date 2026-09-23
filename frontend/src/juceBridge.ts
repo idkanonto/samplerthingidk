@@ -12,6 +12,7 @@ export type ParameterDescriptor = {
   numSteps: number
   isDiscrete: boolean
   isBoolean: boolean
+  choices?: string[]
 }
 
 export type SampleSummary = {
@@ -41,6 +42,10 @@ export type BackendState = {
   spectralWidth: number
   spectralHeight: number
   spectralCanvas: number[]
+  scrambleFeatures: number
+  meltFeatures: number
+  smearFeatures: number
+  effectEnabled: boolean[]
 }
 
 export type VisualisationState = {
