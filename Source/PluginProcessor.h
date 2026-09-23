@@ -83,6 +83,14 @@ public:
     {
         return outputPeak.load(std::memory_order_relaxed);
     }
+    float getOutputPeakLeft() const noexcept
+    {
+        return outputPeakLeft.load(std::memory_order_relaxed);
+    }
+    float getOutputPeakRight() const noexcept
+    {
+        return outputPeakRight.load(std::memory_order_relaxed);
+    }
     void setOutputMuted(bool muted) noexcept
     {
         outputMuted.store(muted, std::memory_order_relaxed);
@@ -169,6 +177,8 @@ private:
     std::atomic<uint64_t> previewRequestSerial { 0 };
     std::atomic<uint64_t> previewingRuntimeId { 0 };
     std::atomic<float> outputPeak { 0.0f };
+    std::atomic<float> outputPeakLeft { 0.0f };
+    std::atomic<float> outputPeakRight { 0.0f };
     std::atomic<int> activeVoiceCount { 0 };
     std::atomic<bool> outputMuted { false };
     std::atomic<uint32_t> scrambleFeatures { randomchop::ScrambleFeatures::all };

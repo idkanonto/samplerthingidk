@@ -50,10 +50,14 @@ export type BackendState = {
 
 export type VisualisationState = {
   outputPeak: number
+  outputPeakLeft: number
+  outputPeakRight: number
   voiceCount: number
   scramblePhase: number
+  scrambleFlags: number
   meltStretch: number
   meltProgress: number
+  meltFlags: number
   smearActivity: number
   smearGain: number
   spectralScan: number
@@ -90,8 +94,9 @@ const descriptors = new Map<string, ParameterDescriptor>(
 const parameterSubscribers = new Map<string, Set<(value: number) => void>>()
 let backendState: BackendState | null = null
 let visualisationState: VisualisationState = {
-  outputPeak: 0, voiceCount: 0, scramblePhase: 0, meltStretch: 0,
-  meltProgress: 0, smearActivity: 0, smearGain: 0, spectralScan: 0
+  outputPeak: 0, outputPeakLeft: 0, outputPeakRight: 0, voiceCount: 0,
+  scramblePhase: 0, scrambleFlags: 0, meltStretch: 0,
+  meltProgress: 0, meltFlags: 0, smearActivity: 0, smearGain: 0, spectralScan: 0
 }
 const backendSubscribers = new Set<(state: BackendState) => void>()
 const visualisationSubscribers = new Set<(state: VisualisationState) => void>()

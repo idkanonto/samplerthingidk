@@ -101,6 +101,7 @@ if (RECOMPILER_REBUILD_FRONTEND)
                 "${frontend_directory}/vite.config.ts"
                 "${frontend_directory}/tsconfig.app.json"
                 "${frontend_directory}/src/App.tsx"
+                "${frontend_directory}/src/VisualCanvases.tsx"
                 "${frontend_directory}/src/juceBridge.ts"
                 "${frontend_directory}/src/main.tsx"
                 "${frontend_directory}/src/styles.css"

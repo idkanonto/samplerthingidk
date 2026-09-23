@@ -210,6 +210,8 @@ juce::var RandomChopSamplerWebViewEditor::createVisualisationState() const
     auto result = objectWithType("frame");
     auto* object = result.getDynamicObject();
     object->setProperty("outputPeak", processor.getOutputPeak());
+    object->setProperty("outputPeakLeft", processor.getOutputPeakLeft());
+    object->setProperty("outputPeakRight", processor.getOutputPeakRight());
     object->setProperty("voiceCount", processor.getActiveVoiceCount());
     object->setProperty("scramblePhase", processor.getScrambleVisualPhase());
     object->setProperty("scrambleFlags", static_cast<int>(processor.getScrambleVisualFlags()));

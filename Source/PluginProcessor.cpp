@@ -281,7 +281,8 @@ void RandomChopSamplerAudioProcessor::processBlock(
     outputGain.setTargetValue(juce::Decibels::decibelsToGain(
         parameters.getRawParameterValue(IDs::output)->load()));
     muteGain.setTargetValue(outputMuted.load(std::memory_order_relaxed) ? 0.0f : 1.0f);
-    float peak = 0.0f;
+    float leftPeak = 0.0f;
+    float rightPeak = 0.0f;
     for (int frame = 0; frame < buffer.getNumSamples(); ++frame)
     {
         const auto gain = outputGain.getNextValue() * muteGain.getNextValue();
@@ -289,10 +290,19 @@ void RandomChopSamplerAudioProcessor::processBlock(
         {
             const auto sample = buffer.getSample(channel, frame) * gain;
             buffer.setSample(channel, frame, sample);
-            peak = juce::jmax(peak, std::abs(sample));
+            if (channel == 0)
+                leftPeak = juce::jmax(leftPeak, std::abs(sample));
+            else if (channel == 1)
+                rightPeak = juce::jmax(rightPeak, std::abs(sample));
         }
     }
-    outputPeak.store(juce::jlimit(0.0f, 1.0f, peak), std::memory_order_relaxed);
+    if (buffer.getNumChannels() < 2)
+        rightPeak = leftPeak;
+    const auto limitedLeft = juce::jlimit(0.0f, 1.0f, leftPeak);
+    const auto limitedRight = juce::jlimit(0.0f, 1.0f, rightPeak);
+    outputPeakLeft.store(limitedLeft, std::memory_order_relaxed);
+    outputPeakRight.store(limitedRight, std::memory_order_relaxed);
+    outputPeak.store(juce::jmax(limitedLeft, limitedRight), std::memory_order_relaxed);
     activeVoiceCount.store(static_cast<int>(voices.activeCount()),
                            std::memory_order_relaxed);
 }
