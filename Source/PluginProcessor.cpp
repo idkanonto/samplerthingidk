@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "WebViewEditor.h"
 #include <algorithm>
 #include <cmath>
 
@@ -62,6 +63,11 @@ void RandomChopSamplerAudioProcessor::prepareToPlay(double rate, int maximumBloc
     juce::ignoreUnused(maximumBlockSize);
     currentRate = std::clamp(randomchop::finiteOr(rate, 44100.0), 1.0, 768000.0);
     voices.prepare(currentRate);
+    activeVoiceCount.store(0, std::memory_order_relaxed);
+    previewVoice.forceStop();
+    previewVoice.prepare(currentRate);
+    previewingRuntimeId.store(0, std::memory_order_relaxed);
+    handledPreviewSerial = previewRequestSerial.load(std::memory_order_relaxed);
     hostGrid.reset();
     scrambleProcessor.prepare(currentRate);
     meltProcessor.prepare(currentRate);
@@ -71,6 +77,8 @@ void RandomChopSamplerAudioProcessor::prepareToPlay(double rate, int maximumBloc
     outputGain.reset(currentRate, 0.010);
     outputGain.setCurrentAndTargetValue(juce::Decibels::decibelsToGain(
         parameters.getRawParameterValue(IDs::output)->load()));
+    muteGain.reset(currentRate, 0.010);
+    muteGain.setCurrentAndTargetValue(outputMuted.load(std::memory_order_relaxed) ? 0.0f : 1.0f);
     lastGridBoundaries = {};
     const auto seed = internalSeed.load(std::memory_order_relaxed);
     random.setSeed(seed);
@@ -78,6 +86,19 @@ void RandomChopSamplerAudioProcessor::prepareToPlay(double rate, int maximumBloc
     meltProcessor.setSeed(seed);
     smearProcessor.setSeed(seed);
     lastSeed = seed;
+}
+
+void RandomChopSamplerAudioProcessor::requestSourcePreview(uint64_t runtimeId) noexcept
+{
+    previewRequestId.store(runtimeId, std::memory_order_relaxed);
+    previewRequestSerial.fetch_add(1, std::memory_order_release);
+}
+
+void RandomChopSamplerAudioProcessor::regenerateCreativeSeed()
+{
+    const auto generated = static_cast<uint64_t>(
+        juce::Random::getSystemRandom().nextInt64()) & 0x7fffffffffffffffULL;
+    internalSeed.store(generated != 0 ? generated : 1, std::memory_order_relaxed);
 }
 
 bool RandomChopSamplerAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
@@ -163,6 +184,37 @@ void RandomChopSamplerAudioProcessor::processBlock(
         lastSeed = seed;
     }
 
+    const auto previewSerial = previewRequestSerial.load(std::memory_order_acquire);
+    if (previewSerial != handledPreviewSerial)
+    {
+        handledPreviewSerial = previewSerial;
+        previewVoice.release(0.005f);
+        previewingRuntimeId.store(0, std::memory_order_relaxed);
+        const auto requestedId = previewRequestId.load(std::memory_order_relaxed);
+        if (requestedId != 0)
+        {
+            const auto pool = samples.getSnapshot();
+            for (const auto& source : *pool)
+            {
+                if (source->runtimeId != requestedId || source->prepared == nullptr
+                    || source->prepared->audio == nullptr)
+                    continue;
+                const auto region = randomchop::makeFrameRegion(
+                    source->prepared->audio->getNumSamples(),
+                    source->settings.startNormalised, source->settings.endNormalised);
+                if (region.canInterpolate())
+                {
+                    previewVoice.start(source->prepared, 60, 1.0f,
+                        static_cast<double>(region.firstFrame), region,
+                        1.0, juce::Decibels::decibelsToGain(source->settings.gainDb),
+                        internalAttackSeconds, internalReleaseSeconds, ++voiceCounter, 0.0f);
+                    previewingRuntimeId.store(requestedId, std::memory_order_relaxed);
+                }
+                break;
+            }
+        }
+    }
+
     const auto hostTiming = readHostTiming();
     const auto timingBpm = hostTiming.hasBpm ? hostTiming.bpm : lastGridBoundaries.bpm;
     const auto gridChoice = randomchop::HostGrid::automaticDivisionChoice(timingBpm);
@@ -185,9 +237,13 @@ void RandomChopSamplerAudioProcessor::processBlock(
     }
     if (rendered < buffer.getNumSamples())
         voices.render(buffer, rendered, buffer.getNumSamples() - rendered);
+    previewVoice.render(buffer, 0, buffer.getNumSamples());
+    if (!previewVoice.isActive())
+        previewingRuntimeId.store(0, std::memory_order_relaxed);
 
     scrambleProcessor.process(buffer, lastGridBoundaries, gridChoice,
-        { parameters.getRawParameterValue(IDs::scrambleAmount)->load() });
+        { isEffectEnabled(0) ? parameters.getRawParameterValue(IDs::scrambleAmount)->load() : 0.0f,
+          scrambleFeatures.load(std::memory_order_relaxed) });
     const auto scrambleFlags = scrambleProcessor.getActiveSliceMask()
         | (scrambleProcessor.isActive() ? uint32_t { 1 } << 8 : 0)
         | (scrambleProcessor.isArmed() ? uint32_t { 1 } << 9 : 0);
@@ -195,7 +251,8 @@ void RandomChopSamplerAudioProcessor::processBlock(
     scrambleVisualPhase.store(scrambleProcessor.getEventProgress(),
                               std::memory_order_relaxed);
     meltProcessor.process(buffer, lastGridBoundaries, gridChoice,
-        { parameters.getRawParameterValue(IDs::meltAmount)->load() });
+        { isEffectEnabled(1) ? parameters.getRawParameterValue(IDs::meltAmount)->load() : 0.0f,
+          meltFeatures.load(std::memory_order_relaxed) });
     const auto meltStretch = std::clamp(
         (meltProcessor.getLastStretchRatio() - 1.0f) / 3.0f, 0.0f, 1.0f);
     const auto meltFlags = meltProcessor.getActiveReverseMask()
@@ -206,14 +263,15 @@ void RandomChopSamplerAudioProcessor::processBlock(
                              std::memory_order_relaxed);
     meltVisualFlags.store(meltFlags, std::memory_order_relaxed);
     spectralDrawProcessor.process(buffer, spectralMaskStore,
-        { parameters.getRawParameterValue(IDs::spectralDepth)->load(),
+        { isEffectEnabled(3) ? parameters.getRawParameterValue(IDs::spectralDepth)->load() : 0.0f,
           randomchop::SpectralDrawProcessor::automaticCycleChoice(lastGridBoundaries.bpm),
           lastGridBoundaries.bpm,
           hostTiming.ppq,
           lastGridBoundaries.usedHostClock && hostTiming.hasPpq,
           lastGridBoundaries.transportDiscontinuity });
     smearProcessor.process(buffer,
-        { parameters.getRawParameterValue(IDs::smearAmount)->load() });
+        { isEffectEnabled(2) ? parameters.getRawParameterValue(IDs::smearAmount)->load() : 0.0f,
+          smearFeatures.load(std::memory_order_relaxed) });
     smearVisualActivity.store(static_cast<float>(smearProcessor.getActiveGrainCount())
                                   / static_cast<float>(
                                       randomchop::SmearProcessor::maximumGrains),
@@ -222,12 +280,21 @@ void RandomChopSamplerAudioProcessor::processBlock(
                           std::memory_order_relaxed);
     outputGain.setTargetValue(juce::Decibels::decibelsToGain(
         parameters.getRawParameterValue(IDs::output)->load()));
+    muteGain.setTargetValue(outputMuted.load(std::memory_order_relaxed) ? 0.0f : 1.0f);
+    float peak = 0.0f;
     for (int frame = 0; frame < buffer.getNumSamples(); ++frame)
     {
-        const auto gain = outputGain.getNextValue();
+        const auto gain = outputGain.getNextValue() * muteGain.getNextValue();
         for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
-            buffer.setSample(channel, frame, buffer.getSample(channel, frame) * gain);
+        {
+            const auto sample = buffer.getSample(channel, frame) * gain;
+            buffer.setSample(channel, frame, sample);
+            peak = juce::jmax(peak, std::abs(sample));
+        }
     }
+    outputPeak.store(juce::jlimit(0.0f, 1.0f, peak), std::memory_order_relaxed);
+    activeVoiceCount.store(static_cast<int>(voices.activeCount()),
+                           std::memory_order_relaxed);
 }
 
 void RandomChopSamplerAudioProcessor::getStateInformation(juce::MemoryBlock& destination)
@@ -238,6 +305,17 @@ void RandomChopSamplerAudioProcessor::getStateInformation(juce::MemoryBlock& des
         juce::String(static_cast<int64_t>(
             internalSeed.load(std::memory_order_relaxed))), nullptr);
     state.setProperty("spectralCanvas", spectralMaskStore.encodeCanvas(), nullptr);
+    state.setProperty("outputMuted", outputMuted.load(std::memory_order_relaxed), nullptr);
+    state.setProperty("selectedSampleId", getSelectedSampleId(), nullptr);
+    state.setProperty("scrambleFeatures",
+        static_cast<int>(scrambleFeatures.load(std::memory_order_relaxed)), nullptr);
+    state.setProperty("meltFeatures",
+        static_cast<int>(meltFeatures.load(std::memory_order_relaxed)), nullptr);
+    state.setProperty("smearFeatures",
+        static_cast<int>(smearFeatures.load(std::memory_order_relaxed)), nullptr);
+    for (int effect = 0; effect < 4; ++effect)
+        state.setProperty(juce::Identifier("effectEnabled" + juce::String(effect)),
+                          isEffectEnabled(effect), nullptr);
     state.appendChild(samples.createState(), nullptr);
     if (auto xml = state.createXml())
         copyXmlToBinary(*xml, destination);
@@ -252,6 +330,18 @@ void RandomChopSamplerAudioProcessor::setStateInformation(const void* data, int 
             return;
         const auto files = state.getChildWithName("SAMPLES");
         const auto spectralCanvas = state.getProperty("spectralCanvas").toString();
+        outputMuted.store(static_cast<bool>(state.getProperty("outputMuted", false)),
+                          std::memory_order_relaxed);
+        setSelectedSampleId(state.getProperty("selectedSampleId").toString());
+        setScrambleFeatures(static_cast<uint32_t>(static_cast<int>(
+            state.getProperty("scrambleFeatures", static_cast<int>(randomchop::ScrambleFeatures::all)))));
+        setMeltFeatures(static_cast<uint32_t>(static_cast<int>(
+            state.getProperty("meltFeatures", static_cast<int>(randomchop::MeltFeatures::all)))));
+        setSmearFeatures(static_cast<uint32_t>(static_cast<int>(
+            state.getProperty("smearFeatures", static_cast<int>(randomchop::SmearFeatures::all)))));
+        for (int effect = 0; effect < 4; ++effect)
+            setEffectEnabled(effect, static_cast<bool>(state.getProperty(
+                juce::Identifier("effectEnabled" + juce::String(effect)), true)));
         const auto restoredVersion = static_cast<int>(state.getProperty("stateVersion", 0));
         const auto restoredSeedText = state.getProperty("creativeSeed").toString();
         const auto legacySeed = static_cast<int64_t>(state.getProperty("seed", 0));
@@ -280,6 +370,13 @@ void RandomChopSamplerAudioProcessor::setStateInformation(const void* data, int 
         if (files.isValid())
             state.removeChild(files, nullptr);
         state.removeProperty("spectralCanvas", nullptr);
+        state.removeProperty("outputMuted", nullptr);
+        state.removeProperty("selectedSampleId", nullptr);
+        state.removeProperty("scrambleFeatures", nullptr);
+        state.removeProperty("meltFeatures", nullptr);
+        state.removeProperty("smearFeatures", nullptr);
+        for (int effect = 0; effect < 4; ++effect)
+            state.removeProperty(juce::Identifier("effectEnabled" + juce::String(effect)), nullptr);
         state.removeProperty("creativeSeed", nullptr);
         randomchop::removeLegacyState(state);
         const auto ensureParameter = [&state](const char* id, float value)
@@ -325,9 +422,25 @@ float RandomChopSamplerAudioProcessor::getSpectralScanPosition() const noexcept
     return spectralDrawProcessor.getScanPosition();
 }
 
+juce::String RandomChopSamplerAudioProcessor::getSelectedSampleId() const
+{
+    const juce::ScopedLock lock(editorStateLock);
+    return selectedSampleId;
+}
+
+void RandomChopSamplerAudioProcessor::setSelectedSampleId(const juce::String& id)
+{
+    const juce::ScopedLock lock(editorStateLock);
+    selectedSampleId = id;
+}
+
 juce::AudioProcessorEditor* RandomChopSamplerAudioProcessor::createEditor()
 {
+#if RECOMPILER_USE_NATIVE_EDITOR
     return new RandomChopSamplerAudioProcessorEditor(*this);
+#else
+    return new RandomChopSamplerWebViewEditor(*this);
+#endif
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

@@ -192,6 +192,7 @@ SampleManager::SamplePtr SampleManager::loadFile(const juce::File& file,
         sample->waveformPeaks = buildWaveformPeaks(*buffer);
         sample->audio = std::move(buffer);
         sample->sampleRate = reader->sampleRate;
+        sample->bitDepth = static_cast<int>(reader->bitsPerSample);
         auto prepared = std::make_shared<PreparedSampleData>();
         prepared->audio = sample->audio;
         prepared->sampleRate = sample->sampleRate;

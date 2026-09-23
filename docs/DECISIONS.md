@@ -30,7 +30,11 @@ These decisions govern implementation together with [[PRODUCT_SPEC_V2]].
 - Report only Spectral Draw's fixed 1024-sample latency; MELT adds no host latency.
 - Publish only bounded scalar creative telemetry from the callback; visualizers paint live DSP state on the message thread and never inspect audio buffers.
 - Publish future Windows test builds as a raw complete VST3 bundle. Do not rebuild or replace the already published unsigned installer, and do not create new unsigned installer executables.
-- Use a complete code-native early-2000s Windows XP visual system: bright blue application bar, silver beveled panels, pale-blue controls, navy waveform/effect displays, metallic macro knobs, and a responsive compact layout. The information dialog is an addition to this shared editor theme rather than the only themed surface.
+- Supersede the blue XP skin with the user's monochrome, beveled desktop reference across the complete editor. Keep it responsive and compact; match the reference's hierarchy, source browser, waveform tools, five effect cards, and footer. The information dialog remains available from Settings or menus and uses the same monochrome treatment.
+- Migrate the final editor surface to a self-contained React, TypeScript, Vite, and CSS frontend hosted by JUCE WebView. Keep the native JUCE editor buildable as a fallback until migration is complete; C++ remains authoritative for parameters, sample/state mutation, and bounded realtime telemetry, and release artifacts embed all frontend files without a localhost or internet dependency.
+- Restore Add Samples through a file picker; keep drag-and-drop. Move individual source removal into the sample menu and add per-row audition. Do not restore bulk Clear/Enable All/Disable All.
+- Give SCRAMBLE, MELT, and SMEAR Mode menus of checkable creative gestures. Their Amount knobs remain the intensity controls; every gesture defaults on so the engine's prior sound is unchanged. Persist the checklists and effect power states without changing existing parameter IDs.
+- Treat the reference's SEQ tab as an automatic-timing explanation, not a new programmable sequencer. Main and FX tabs navigate actual editor surfaces; Settings exposes information.
 
 ## Removed
 
@@ -43,7 +47,7 @@ These decisions govern implementation together with [[PRODUCT_SPEC_V2]].
 - Start Range, Final Length, public Attack/Release, FRACTURE RATE, and the FRACTURE preset browser. `fractureCharacter` and `fractureMix` are retired in state version 9 and are not mapped onto MELT.
 - Exposed MELT Reverse Chance. `meltReverseChance` is retired in state version 10 and is not mapped onto the one-knob MELT macro.
 - Per-source Selection Weight and manual Stretch; enabled playable sources are selected equally and MELT owns creative stretching.
-- Add Samples, Clear All, Enable All, and Disable All. Loading is drag-and-drop; removal and enable state remain per source.
+- Clear All, Enable All, and Disable All. Add Samples is restored by the later monochrome-reference decision above; removal and enable state remain per source.
 - Root MIDI Note, manual Global Grid, and Spectral Scan Rate. Chords derives its root from Play In Key, while musical timing is automatic.
 - Separate Spectral Draw and Erase modes. Dragging draws; one Reset action clears the canvas.
 - Any Loop/One-shot mode. The user chooses only whether Chords follows MIDI pitch.
