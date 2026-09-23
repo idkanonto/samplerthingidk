@@ -185,4 +185,3 @@ private:
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> muteGain { 1.0f };
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(RandomChopSamplerAudioProcessor)
 };
-
