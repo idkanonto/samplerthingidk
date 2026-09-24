@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 export type ParameterDescriptor = {
   id: string
@@ -42,9 +42,6 @@ export type BackendState = {
   spectralWidth: number
   spectralHeight: number
   spectralCanvas: number[]
-  scrambleFeatures: number
-  meltFeatures: number
-  smearFeatures: number
   effectEnabled: boolean[]
 }
 
@@ -67,7 +64,6 @@ export type VisualisationState = {
 type JuceBackend = {
   emitEvent: (eventId: string, payload: unknown) => void
   addEventListener: (eventId: string, callback: (payload: any) => void) => string
-  removeEventListener: (token: string) => void
 }
 
 declare global {
@@ -80,10 +76,22 @@ declare global {
 }
 
 const fallbackParameters: ParameterDescriptor[] = [
+  { id: 'scrambleAmount', name: 'Scramble', label: '%', value: 42, defaultValue: 42,
+    min: 0, max: 100, interval: 1, numSteps: 101, isDiscrete: false, isBoolean: false },
+  { id: 'meltAmount', name: 'Melt', label: '%', value: 63, defaultValue: 63,
+    min: 0, max: 100, interval: 1, numSteps: 101, isDiscrete: false, isBoolean: false },
+  { id: 'smearAmount', name: 'Smear', label: '%', value: 28, defaultValue: 28,
+    min: 0, max: 100, interval: 1, numSteps: 101, isDiscrete: false, isBoolean: false },
+  { id: 'spectralDepth', name: 'Spectral Depth', label: '%', value: 71, defaultValue: 71,
+    min: 0, max: 100, interval: 1, numSteps: 101, isDiscrete: false, isBoolean: false },
   { id: 'output', name: 'Output', label: 'dB', value: 0, defaultValue: 0,
     min: -60, max: 6, interval: 0.1, numSteps: 661, isDiscrete: false, isBoolean: false },
   { id: 'midiPitch', name: 'Chords', label: '', value: 0, defaultValue: 0,
-    min: 0, max: 1, interval: 1, numSteps: 2, isDiscrete: true, isBoolean: true }
+    min: 0, max: 1, interval: 1, numSteps: 2, isDiscrete: true, isBoolean: true },
+  { id: 'voiceMode', name: 'Voice Mode', label: '', value: 0, defaultValue: 0,
+    min: 0, max: 1, interval: 1, numSteps: 2, isDiscrete: true, isBoolean: true },
+  { id: 'targetKey', name: 'Play In Key', label: '', value: 0, defaultValue: 0,
+    min: 0, max: 12, interval: 1, numSteps: 13, isDiscrete: true, isBoolean: false }
 ]
 
 const descriptors = new Map<string, ParameterDescriptor>(
@@ -120,22 +128,40 @@ backend?.addEventListener('visualisationState', (state: VisualisationState) => {
 export function usePluginParameter(id: string) {
   const descriptor = descriptors.get(id)
   const [value, setLocalValue] = useState(descriptor?.value ?? 0)
+  const gestureActive = useRef(false)
 
   useEffect(() => {
     const listeners = parameterSubscribers.get(id) ?? new Set<(value: number) => void>()
     listeners.add(setLocalValue)
     parameterSubscribers.set(id, listeners)
-    return () => { listeners.delete(setLocalValue) }
+    return () => {
+      listeners.delete(setLocalValue)
+      if (gestureActive.current) {
+        gestureActive.current = false
+        backend?.emitEvent('parameterGesture', { id, phase: 'end' })
+      }
+    }
   }, [id])
 
   const beginGesture = useCallback(() => {
+    if (gestureActive.current) return
+    gestureActive.current = true
     backend?.emitEvent('parameterGesture', { id, phase: 'begin' })
   }, [id])
   const setValue = useCallback((nextValue: number) => {
-    setLocalValue(nextValue)
-    backend?.emitEvent('parameterValue', { id, value: nextValue })
+    const currentDescriptor = descriptors.get(id)
+    const finiteValue = Number.isFinite(nextValue) ? nextValue
+      : (currentDescriptor?.defaultValue ?? 0)
+    const safeValue = currentDescriptor
+      ? Math.max(currentDescriptor.min, Math.min(currentDescriptor.max, finiteValue))
+      : finiteValue
+    if (currentDescriptor) currentDescriptor.value = safeValue
+    setLocalValue(safeValue)
+    backend?.emitEvent('parameterValue', { id, value: safeValue })
   }, [id])
   const endGesture = useCallback(() => {
+    if (!gestureActive.current) return
+    gestureActive.current = false
     backend?.emitEvent('parameterGesture', { id, phase: 'end' })
   }, [id])
 
@@ -164,11 +190,3 @@ export function useVisualisationState() {
 export function sendPluginCommand(type: string, payload: Record<string, unknown> = {}) {
   backend?.emitEvent('backendCommand', { type, ...payload })
 }
-
-export function onCommandResult(callback: (payload: any) => void) {
-  if (!backend) return () => undefined
-  const token = backend.addEventListener('commandResult', callback)
-  return () => backend.removeEventListener(token)
-}
-
-export const isRunningInJuce = Boolean(backend)

@@ -265,6 +265,10 @@ void testRegionsAndVoices()
     const auto clamped = randomchop::clampNormalisedRegion(-1.0, 2.0);
     check(clamped.start == 0.0 && clamped.end == 1.0,
           "source region bounds were not clamped");
+    const auto crossed = randomchop::clampNormalisedRegion(0.8, 0.2);
+    check(crossed.start >= 0.0 && crossed.end <= 1.0
+              && crossed.start < crossed.end,
+          "crossed source region handles were not separated safely");
     const randomchop::FrameRegion region { 3, 20 };
     const auto start = randomchop::resolveRandomStart(region, 1000.0, 1.0, 0.999999);
     check(randomchop::isInterpolationPositionLegal(region, start)
@@ -1367,4 +1371,3 @@ int main()
         std::cout << "All recompiler.dll foundation tests passed.\n";
     return failures == 0 ? 0 : 1;
 }
-

@@ -55,7 +55,6 @@ private:
     juce::String selectedSampleId;
     std::unique_ptr<juce::FileChooser> fileChooser;
     uint64_t lastSpectralGeneration = 0;
-    int proofCommandCount = 0;
     bool backendStateDirty = true;
     juce::WebBrowserComponent browser;
 

@@ -1,6 +1,5 @@
-import { type CSSProperties, type MouseEvent, type ReactNode, useMemo, useState } from 'react'
+import { type CSSProperties, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  isRunningInJuce,
   sendPluginCommand,
   type SampleSummary,
   useBackendState,
@@ -61,7 +60,8 @@ function PixelKnob({ id, label }: { id: string, label: string }) {
       <input aria-label={label} type="range" min={min} max={max} step={descriptor?.interval || 0.1}
         value={parameter.value} onPointerDown={parameter.beginGesture}
         onChange={(event) => parameter.setValue(Number(event.target.value))}
-        onPointerUp={finish} onPointerCancel={finish} />
+        onPointerUp={finish} onPointerCancel={finish}
+        onKeyDown={parameter.beginGesture} onKeyUp={finish} />
     </div>
     <div className="knob-scale"><span>{min}</span><span>{max}</span></div>
     <NumericReadout value={parameter.value} digits={0} />
@@ -94,21 +94,57 @@ function SampleRow({ sample, selected }: { sample: SampleSummary, selected: bool
 }
 
 function Waveform({ sample }: { sample?: SampleSummary }) {
-  const start = sample?.start ?? 0
-  const end = sample?.end ?? 1
-  const update = (nextStart: number, nextEnd: number) => sample && sendPluginCommand('setSampleRegion', {
-    id: sample.id, start: Math.min(nextStart, nextEnd - 0.01), end: Math.max(nextEnd, nextStart + 0.01)
-  })
+  const [region, setRegion] = useState({ start: sample?.start ?? 0, end: sample?.end ?? 1 })
+  const dragging = useRef<'start' | 'end' | null>(null)
+  const minimumRegion = 0.002
+
+  useEffect(() => {
+    setRegion({ start: sample?.start ?? 0, end: sample?.end ?? 1 })
+    dragging.current = null
+  }, [sample?.id, sample?.start, sample?.end])
+
+  const pointerPosition = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect()
+    return Math.max(0, Math.min(1, (event.clientX - bounds.left) / Math.max(1, bounds.width)))
+  }
+  const moveHandle = (position: number, handle: 'start' | 'end') => setRegion((current) => handle === 'start'
+    ? { ...current, start: Math.min(position, current.end - minimumRegion) }
+    : { ...current, end: Math.max(position, current.start + minimumRegion) })
+  const beginDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const position = pointerPosition(event)
+    dragging.current = Math.abs(position - region.start) <= Math.abs(position - region.end) ? 'start' : 'end'
+    event.currentTarget.setPointerCapture(event.pointerId)
+    moveHandle(position, dragging.current)
+  }
+  const continueDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (dragging.current) moveHandle(pointerPosition(event), dragging.current)
+  }
+  const finishDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!dragging.current || !sample) return
+    const position = pointerPosition(event)
+    const finalRegion = dragging.current === 'start'
+      ? { ...region, start: Math.min(position, region.end - minimumRegion) }
+      : { ...region, end: Math.max(position, region.start + minimumRegion) }
+    setRegion(finalRegion)
+    sendPluginCommand('setSampleRegion', { id: sample.id, ...finalRegion })
+    dragging.current = null
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+  }
+  const cancelDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    dragging.current = null
+    setRegion({ start: sample?.start ?? 0, end: sample?.end ?? 1 })
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+  }
   return <PixelDisplay className="waveform-display">
     <WaveformCanvas waveform={sample?.waveform} />
     {!sample && <span className="waveform-empty">NO WAVEFORM DATA</span>}
     {sample && <>
-      <div className="region-shade left" style={{ width: `${start * 100}%` }} />
-      <div className="region-shade right" style={{ width: `${(1 - end) * 100}%` }} />
-      <div className="marker start" style={{ left: `${start * 100}%` }}><b>START</b><i /></div>
-      <div className="marker end" style={{ left: `${end * 100}%` }}><b>END</b><i /></div>
-      <input className="region-input start-input" aria-label="Sample start" type="range" min="0" max="1" step="0.001" value={start} onChange={(event) => update(Number(event.target.value), end)} />
-      <input className="region-input end-input" aria-label="Sample end" type="range" min="0" max="1" step="0.001" value={end} onChange={(event) => update(start, Number(event.target.value))} />
+      <div className="region-shade left" style={{ width: `${region.start * 100}%` }} />
+      <div className="region-shade right" style={{ width: `${(1 - region.end) * 100}%` }} />
+      <div className="marker start" style={{ left: `${region.start * 100}%` }}><b>START</b><i /></div>
+      <div className="marker end" style={{ left: `${region.end * 100}%` }}><b>END</b><i /></div>
+      <div className="waveform-interaction" role="group" aria-label="Sample playback region"
+        onPointerDown={beginDrag} onPointerMove={continueDrag} onPointerUp={finishDrag} onPointerCancel={cancelDrag} />
     </>}
   </PixelDisplay>
 }
@@ -138,44 +174,67 @@ function SourceControls({ sample }: { sample?: SampleSummary }) {
   </div>
 }
 
-function EffectModule({ title, id, type, visualisation }: {
-  title: string, id: string, type: 'scramble' | 'melt' | 'smear', visualisation: ReturnType<typeof useVisualisationState>
+function EffectActivityDisplay({ type, amount }: { type: 'scramble' | 'melt' | 'smear', amount: number }) {
+  const visualisation = useVisualisationState()
+  return <PixelDisplay className="effect-display"><EffectCanvas type={type} amount={amount} visualisation={visualisation} /></PixelDisplay>
+}
+
+function EffectModule({ title, id, type }: {
+  title: string, id: string, type: 'scramble' | 'melt' | 'smear'
 }) {
   const parameter = usePluginParameter(id)
   return <RecompilerPanel title={title} className="effect-module"><PixelKnob id={id} label={title} />
-    <PixelDisplay className="effect-display"><EffectCanvas type={type} amount={parameter.value} visualisation={visualisation} /></PixelDisplay>
+    <EffectActivityDisplay type={type} amount={parameter.value} />
   </RecompilerPanel>
 }
 
-function SpectralModule({ values, width, height, scan, spectrum }: {
-  values: number[], width: number, height: number, scan: number, spectrum?: number[]
+function SpectralActivityDisplay({ values, width, height }: { values: number[], width: number, height: number }) {
+  const visualisation = useVisualisationState()
+  return <PixelDisplay className="effect-display"><SpectralDrawCanvas values={values} width={width} height={height}
+    scan={visualisation.spectralScan} spectrum={visualisation.spectrum} /></PixelDisplay>
+}
+
+function SpectralModule({ values, width, height }: {
+  values: number[], width: number, height: number
 }) {
   return <RecompilerPanel title="SPECTRAL DRAW" className="effect-module spectral-module">
     <PixelKnob id="spectralDepth" label="Spectral Depth" />
-    <PixelDisplay className="effect-display"><SpectralDrawCanvas values={values} width={width} height={height} scan={scan} spectrum={spectrum} /></PixelDisplay>
+    <SpectralActivityDisplay values={values} width={width} height={height} />
   </RecompilerPanel>
 }
 
-function OutputModule({ leftPeak, rightPeak, muted }: { leftPeak: number, rightPeak: number, muted: boolean }) {
+function StereoMeter() {
+  const visualisation = useVisualisationState()
+  return <PixelDisplay className="stereo-meter"><StereoMeterCanvas left={visualisation.outputPeakLeft ?? visualisation.outputPeak}
+    right={visualisation.outputPeakRight ?? visualisation.outputPeak} /></PixelDisplay>
+}
+
+function OutputModule({ muted }: { muted: boolean }) {
   const output = usePluginParameter('output')
   const min = output.descriptor?.min ?? -60
   const max = 4
   const shown = Math.max(min, Math.min(max, output.value))
   const finish = () => output.endGesture()
   return <RecompilerPanel title="OUTPUT" className="output-module"><div className="output-body">
-    <PixelDisplay className="stereo-meter"><StereoMeterCanvas left={leftPeak} right={rightPeak} /></PixelDisplay>
+    <StereoMeter />
     <div className="meter-ticks"><span>+4</span><span>0</span><span>-6</span><span>-12</span><span>-24</span><span>-36</span><span>dB</span></div>
     <div className="output-fader"><b>LEVEL</b><div className="fader-track"><input aria-label="Output level" type="range" min={min} max={max} step={output.descriptor?.interval || 0.1}
-      value={shown} onPointerDown={output.beginGesture} onPointerUp={finish} onPointerCancel={finish} onChange={(event) => output.setValue(Number(event.target.value))} /></div>
+      value={shown} onPointerDown={output.beginGesture} onPointerUp={finish} onPointerCancel={finish}
+      onKeyDown={output.beginGesture} onKeyUp={finish} onChange={(event) => output.setValue(Number(event.target.value))} /></div>
       <PixelButton className="mute-button" active={muted} onClick={() => sendPluginCommand('setOutputMuted', { enabled: !muted })}>{muted ? 'UNMUTE' : 'MUTE'}</PixelButton>
     </div>
   </div></RecompilerPanel>
 }
 
-function Header({ page, setPage, sampleCount, voices, maxSamples }: { page: string, setPage: (page: string) => void, sampleCount: number, voices: number, maxSamples: number }) {
+function VoiceCounter({ maximum }: { maximum: number }) {
+  const visualisation = useVisualisationState()
+  return <div className="voice-counter">{String(visualisation.voiceCount).padStart(2, '0')} / {maximum} VOICES</div>
+}
+
+function Header({ page, setPage, maxSamples }: { page: string, setPage: (page: string) => void, maxSamples: number }) {
   return <header className="app-header">
     <div className="brand"><div className="logo-mark">⌁╳</div><h1>recompiler.dll</h1><Divider /><span>random sample instrument</span></div>
-    <div className="header-actions"><div className="voice-counter">{String(Math.max(sampleCount, voices)).padStart(2, '0')} / {maxSamples} VOICES</div>
+    <div className="header-actions"><VoiceCounter maximum={maxSamples} />
       <nav><PixelButton active={page === 'main'} onClick={() => setPage('main')}>MAIN</PixelButton><PixelButton active={page === 'settings'} onClick={() => setPage('settings')}>SETTINGS</PixelButton></nav>
     </div>
   </header>
@@ -186,7 +245,7 @@ function SettingsPage({ sampleCount, maximumSampleCount, effectEnabled }: {
 }) {
   const effects = ['SCRAMBLE', 'MELT', 'SMEAR', 'SPECTRAL DRAW']
   return <div className="settings-page">
-    <RecompilerPanel title="RUNTIME" className="settings-block"><dl><dt>EDITOR</dt><dd>{isRunningInJuce ? 'WEBVIEW2 CONNECTED' : 'BROWSER PREVIEW'}</dd><dt>VISUAL RATE</dt><dd>30 FPS</dd><dt>SPECTRAL MASK</dt><dd>128 × 64 CELLS</dd></dl></RecompilerPanel>
+    <RecompilerPanel title="ENGINE" className="settings-block"><dl><dt>AUDIO</dt><dd>NATIVE C++</dd><dt>EDITOR</dt><dd>EMBEDDED / OFFLINE</dd><dt>PROJECT STATE</dt><dd>AUTOMATIC</dd></dl></RecompilerPanel>
     <RecompilerPanel title="SAMPLE LIBRARY" className="settings-block"><dl><dt>LOADED</dt><dd>{sampleCount} / {maximumSampleCount}</dd><dt>FORMATS</dt><dd>WAV / AIFF / MP3 / FLAC</dd></dl><PixelButton onClick={() => sendPluginCommand('importSamples')}>ADD SAMPLES…</PixelButton></RecompilerPanel>
     <RecompilerPanel title="EFFECT ENGINES" className="settings-block effect-settings">
       {effects.map((name, effect) => <PixelButton key={name} active={effectEnabled[effect] !== false}
@@ -200,12 +259,11 @@ function SettingsPage({ sampleCount, maximumSampleCount, effectEnabled }: {
 
 export default function App() {
   const backendState = useBackendState()
-  const visualisation = useVisualisationState()
   const [page, setPage] = useState('main')
   const samples = backendState?.samples ?? []
   const selectedSample = useMemo(() => samples.find((sample) => sample.id === backendState?.selectedSampleId), [samples, backendState?.selectedSampleId])
   return <main className="recompiler-shell">
-    <Header page={page} setPage={setPage} sampleCount={backendState?.sampleCount ?? 0} voices={visualisation.voiceCount} maxSamples={backendState?.maximumSampleCount ?? 20} />
+    <Header page={page} setPage={setPage} maxSamples={backendState?.maximumSampleCount ?? 20} />
     {page === 'settings' ? <SettingsPage sampleCount={backendState?.sampleCount ?? 0} maximumSampleCount={backendState?.maximumSampleCount ?? 20} effectEnabled={backendState?.effectEnabled ?? [true, true, true, true]} /> : <>
       <div className="source-zone">
         <RecompilerPanel title="SAMPLES" className="samples-panel">
@@ -219,11 +277,11 @@ export default function App() {
       </div>
       <div className="global-strip"><strong>GLOBAL</strong><label>PLAY IN KEY <PixelSelect id="targetKey" /></label><Divider /><label>CHORDS <PixelToggle id="midiPitch" left="OFF" right="ON" /></label><Divider /><label>POLY / MONO <PixelToggle id="voiceMode" left="POLY" right="MONO" /></label></div>
       <div className="effects-zone">
-        <EffectModule title="SCRAMBLE" id="scrambleAmount" type="scramble" visualisation={visualisation} />
-        <EffectModule title="MELT" id="meltAmount" type="melt" visualisation={visualisation} />
-        <EffectModule title="SMEAR" id="smearAmount" type="smear" visualisation={visualisation} />
-        <SpectralModule values={backendState?.spectralCanvas ?? []} width={backendState?.spectralWidth ?? 128} height={backendState?.spectralHeight ?? 64} scan={visualisation.spectralScan} spectrum={visualisation.spectrum} />
-        <OutputModule leftPeak={visualisation.outputPeakLeft ?? visualisation.outputPeak} rightPeak={visualisation.outputPeakRight ?? visualisation.outputPeak} muted={backendState?.outputMuted ?? false} />
+        <EffectModule title="SCRAMBLE" id="scrambleAmount" type="scramble" />
+        <EffectModule title="MELT" id="meltAmount" type="melt" />
+        <EffectModule title="SMEAR" id="smearAmount" type="smear" />
+        <SpectralModule values={backendState?.spectralCanvas ?? []} width={backendState?.spectralWidth ?? 128} height={backendState?.spectralHeight ?? 64} />
+        <OutputModule muted={backendState?.outputMuted ?? false} />
       </div>
     </>}
   </main>

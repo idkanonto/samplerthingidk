@@ -95,7 +95,8 @@ jobs:
           $requiredNotices = @(
             'THIRD_PARTY_NOTICES.md',
             'JUCE_LICENSE.md',
-            'SIGNALSMITH_LINEAR_LICENSE.txt'
+            'SIGNALSMITH_LINEAR_LICENSE.txt',
+            'ANTON_OFL.txt'
           )
           foreach ($noticeName in $requiredNotices) {
             $notice = Join-Path $plugin "Contents\Resources\$noticeName"

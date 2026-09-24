@@ -11,7 +11,6 @@ constexpr auto parameterChangedEvent = "parameterChanged";
 constexpr auto backendCommandEvent = "backendCommand";
 constexpr auto backendStateEvent = "backendState";
 constexpr auto visualisationEvent = "visualisationState";
-constexpr auto commandResultEvent = "commandResult";
 
 juce::var objectWithType(const juce::String& type)
 {
@@ -38,6 +37,9 @@ std::optional<juce::WebBrowserComponent::Resource> makeResource(
     if (path == "/assets/app.css")
         return juce::WebBrowserComponent::Resource {
             bytesFrom(BinaryData::app_css, BinaryData::app_cssSize), "text/css" };
+    if (path == "/assets/anton.ttf")
+        return juce::WebBrowserComponent::Resource {
+            bytesFrom(BinaryData::anton_ttf, BinaryData::anton_ttfSize), "font/ttf" };
     return std::nullopt;
 }
 }
@@ -147,9 +149,6 @@ juce::var RandomChopSamplerWebViewEditor::createBackendState()
     object->setProperty("maximumSampleCount", SampleManager::maximumSamples);
     object->setProperty("voiceCount", processor.getActiveVoiceCount());
     object->setProperty("outputMuted", processor.isOutputMuted());
-    object->setProperty("scrambleFeatures", static_cast<int>(processor.getScrambleFeatures()));
-    object->setProperty("meltFeatures", static_cast<int>(processor.getMeltFeatures()));
-    object->setProperty("smearFeatures", static_cast<int>(processor.getSmearFeatures()));
     juce::Array<juce::var> effectEnabled;
     for (int effect = 0; effect < 4; ++effect)
         effectEnabled.add(processor.isEffectEnabled(effect));
@@ -258,14 +257,7 @@ void RandomChopSamplerWebViewEditor::handleCommand(const juce::var& payload)
 {
     const auto type = payload.getProperty("type", {}).toString();
     const auto id = payload.getProperty("id", {}).toString();
-    if (type == "proof")
-    {
-        ++proofCommandCount;
-        auto result = objectWithType("proofAcknowledged");
-        result.getDynamicObject()->setProperty("count", proofCommandCount);
-        browser.emitEventIfBrowserIsVisible(commandResultEvent, result);
-    }
-    else if (type == "requestState")
+    if (type == "requestState")
     {
         backendStateDirty = true;
     }
@@ -286,15 +278,6 @@ void RandomChopSamplerWebViewEditor::handleCommand(const juce::var& payload)
         processor.requestSourcePreview(0);
         processor.samples.remove(id);
         backendStateDirty = true;
-    }
-    else if (type == "previewSample")
-    {
-        const auto pool = processor.samples.getSnapshot();
-        for (const auto& sample : *pool)
-            if (sample->settings.id == id)
-                processor.requestSourcePreview(
-                    processor.getPreviewingSourceId() == sample->runtimeId ? 0
-                                                                           : sample->runtimeId);
     }
     else if (type == "importSamples")
     {
@@ -355,16 +338,6 @@ void RandomChopSamplerWebViewEditor::handleCommand(const juce::var& payload)
     {
         processor.setEffectEnabled(static_cast<int>(payload.getProperty("effect", -1)),
             static_cast<bool>(payload.getProperty("enabled", true)));
-        backendStateDirty = true;
-    }
-    else if (type == "setEffectFeatures")
-    {
-        const auto effect = static_cast<int>(payload.getProperty("effect", -1));
-        const auto features = static_cast<uint32_t>(static_cast<int>(
-            payload.getProperty("features", 0)));
-        if (effect == 0) processor.setScrambleFeatures(features);
-        else if (effect == 1) processor.setMeltFeatures(features);
-        else if (effect == 2) processor.setSmearFeatures(features);
         backendStateDirty = true;
     }
 }

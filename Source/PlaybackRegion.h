@@ -19,10 +19,16 @@ inline double finiteOr(double value, double fallback) noexcept
 
 inline NormalisedRegion clampNormalisedRegion(double start, double end) noexcept
 {
+    constexpr double minimumLength = 0.0001;
     start = std::clamp(finiteOr(start, 0.0), 0.0, 1.0);
     end = std::clamp(finiteOr(end, 1.0), 0.0, 1.0);
-    if (end < start)
-        end = start;
+    if (end - start < minimumLength)
+    {
+        if (start <= 1.0 - minimumLength)
+            end = start + minimumLength;
+        else
+            start = end - minimumLength;
+    }
     return { start, end };
 }
 
