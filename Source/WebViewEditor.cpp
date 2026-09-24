@@ -39,13 +39,13 @@ std::optional<juce::WebBrowserComponent::Resource> makeResource(
             bytesFrom(BinaryData::app_css, BinaryData::app_cssSize), "text/css" };
     if (path == "/assets/pixelify-sans.ttf")
         return juce::WebBrowserComponent::Resource {
-            bytesFrom(BinaryData::pixelify_sans_ttf, BinaryData::pixelify_sans_ttfSize), "font/ttf" };
+            bytesFrom(BinaryData::pixelifysans_ttf, BinaryData::pixelifysans_ttfSize), "font/ttf" };
     if (path == "/assets/space-mono-regular.ttf")
         return juce::WebBrowserComponent::Resource {
-            bytesFrom(BinaryData::space_mono_regular_ttf, BinaryData::space_mono_regular_ttfSize), "font/ttf" };
+            bytesFrom(BinaryData::spacemonoregular_ttf, BinaryData::spacemonoregular_ttfSize), "font/ttf" };
     if (path == "/assets/space-mono-bold.ttf")
         return juce::WebBrowserComponent::Resource {
-            bytesFrom(BinaryData::space_mono_bold_ttf, BinaryData::space_mono_bold_ttfSize), "font/ttf" };
+            bytesFrom(BinaryData::spacemonobold_ttf, BinaryData::spacemonobold_ttfSize), "font/ttf" };
     return std::nullopt;
 }
 }
