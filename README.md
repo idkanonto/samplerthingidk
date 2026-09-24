@@ -2,7 +2,7 @@
 
 `recompiler.dll` is a JUCE VST3/standalone sampler instrument. Drag in up to 20 WAV, AIFF/AIF, MP3, or FLAC sources; each note chooses an enabled source with equal probability and plays through a fixed 16-voice POLY/MONO engine.
 
-The visible product name intentionally contains `.dll`; the Windows plug-in is still distributed as the standards-compliant `recompiler.dll.vst3` bundle, not as a loose DLL.
+The host-visible product name intentionally contains `.dll`; the editor itself reserves a quiet, unbranded header bay. The Windows plug-in is still distributed as the standards-compliant `recompiler.dll.vst3` bundle, not as a loose DLL.
 
 ## Build with GitHub Actions
 

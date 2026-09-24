@@ -9,6 +9,7 @@
 #include "SpectralDraw.h"
 #include "TemporalEffects.h"
 #include "VoicePool.h"
+#include <algorithm>
 #include <array>
 
 class RandomChopSamplerAudioProcessor final : public juce::AudioProcessor
@@ -103,6 +104,14 @@ public:
     {
         return activeVoiceCount.load(std::memory_order_relaxed);
     }
+    int getUiScaleIndex() const noexcept
+    {
+        return uiScaleIndex.load(std::memory_order_relaxed);
+    }
+    void setUiScaleIndex(int index) noexcept
+    {
+        uiScaleIndex.store(std::clamp(index, 0, 3), std::memory_order_relaxed);
+    }
     juce::String getSelectedSampleId() const;
     void setSelectedSampleId(const juce::String&);
     void regenerateCreativeSeed();
@@ -181,6 +190,7 @@ private:
     std::atomic<float> outputPeakRight { 0.0f };
     std::atomic<int> activeVoiceCount { 0 };
     std::atomic<bool> outputMuted { false };
+    std::atomic<int> uiScaleIndex { 1 };
     std::atomic<uint32_t> scrambleFeatures { randomchop::ScrambleFeatures::all };
     std::atomic<uint32_t> meltFeatures { randomchop::MeltFeatures::all };
     std::atomic<uint32_t> smearFeatures { randomchop::SmearFeatures::all };

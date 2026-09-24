@@ -1,0 +1,232 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-24T18:25:19.4106444Z",
+  "title": "Design System: recompiler.dll — Black Calibration Bench",
+  "extensions": {
+    "colorMeta": {
+      "bench-black": {
+        "role": "neutral",
+        "displayName": "Bench Black",
+        "canonical": "#090a09",
+        "tonalRamp": ["#090a09", "#171917", "#282b28", "#3d413c", "#5a5e57", "#81857c", "#b5b8ad", "#eef0e8"]
+      },
+      "panel-black": {
+        "role": "neutral",
+        "displayName": "Panel Black",
+        "canonical": "#111210",
+        "tonalRamp": ["#111210", "#1e201d", "#30332f", "#454942", "#60655c", "#858a80", "#b8bbb2", "#eff0ea"]
+      },
+      "raised-black": {
+        "role": "neutral",
+        "displayName": "Raised Black",
+        "canonical": "#191a17",
+        "tonalRamp": ["#151613", "#252721", "#373a32", "#4d5147", "#686d61", "#8c9185", "#bec1b8", "#f0f1ec"]
+      },
+      "control-black": {
+        "role": "neutral",
+        "displayName": "Control Black",
+        "canonical": "#242520",
+        "tonalRamp": ["#161713", "#292b25", "#3c3f36", "#53574c", "#70756a", "#94998e", "#c2c5bc", "#f1f2ed"]
+      },
+      "warm-ivory": {
+        "role": "primary",
+        "displayName": "Warm Ivory",
+        "canonical": "#e8e4d8",
+        "tonalRamp": ["#29271f", "#464238", "#625e52", "#807b6d", "#a09b8c", "#c1bcad", "#e8e4d8", "#faf8f1"]
+      },
+      "calibration-line": {
+        "role": "neutral",
+        "displayName": "Calibration Line",
+        "canonical": "#d7d3c8",
+        "tonalRamp": ["#25241e", "#403e35", "#5b584e", "#777369", "#969187", "#b6b1a6", "#d7d3c8", "#f7f5ee"]
+      },
+      "muted-marking": {
+        "role": "neutral",
+        "displayName": "Muted Marking",
+        "canonical": "#96958d",
+        "tonalRamp": ["#22221f", "#383834", "#4e4e49", "#66655f", "#7e7d76", "#96958d", "#c3c1b9", "#efede7"]
+      },
+      "dim-rule": {
+        "role": "neutral",
+        "displayName": "Dim Rule",
+        "canonical": "#5e605a",
+        "tonalRamp": ["#1d1e1b", "#30312d", "#43443f", "#5e605a", "#797b74", "#999b93", "#c4c6be", "#eff0eb"]
+      },
+      "graticule": {
+        "role": "neutral",
+        "displayName": "Etched Graticule",
+        "canonical": "#3e413a",
+        "tonalRamp": ["#171815", "#292b26", "#3e413a", "#555950", "#71766b", "#94998e", "#c2c5bc", "#f0f1ec"]
+      },
+      "telemetry-white": {
+        "role": "primary",
+        "displayName": "Telemetry White",
+        "canonical": "#eeede5",
+        "tonalRamp": ["#292821", "#46453d", "#636159", "#817f75", "#a19f95", "#c3c1b7", "#eeede5", "#fbfaf5"]
+      }
+    },
+    "typographyMeta": {
+      "module-title": {
+        "displayName": "Module Title",
+        "purpose": "Uppercase 28px module headers and the primary rack hierarchy."
+      },
+      "control": {
+        "displayName": "Control",
+        "purpose": "Buttons, tabs, and direct operational actions."
+      },
+      "data": {
+        "displayName": "Data",
+        "purpose": "Values, filenames, selects, and compact technical labels."
+      },
+      "micro-data": {
+        "displayName": "Micro Data",
+        "purpose": "Scales, axis labels, meter ticks, and subordinate telemetry."
+      }
+    },
+    "shadows": [
+      {
+        "name": "selected-row-inset",
+        "value": "inset 2px 0 var(--ivory)",
+        "purpose": "Marks the selected sample without lifting the row."
+      },
+      {
+        "name": "primary-knob-rings",
+        "value": "0 0 0 1px var(--black), 0 0 0 2px var(--muted)",
+        "purpose": "Hard concentric calibration rings around primary 66px macro knobs."
+      },
+      {
+        "name": "source-gain-ring",
+        "value": "0 0 0 1px var(--muted)",
+        "purpose": "Subordinate calibration ring around the 38px source gain knob."
+      },
+      {
+        "name": "fader-cap-groove",
+        "value": "inset 0 3px 0 var(--muted)",
+        "purpose": "Engraved hard line across the output fader cap."
+      }
+    ],
+    "motion": [
+      {
+        "name": "signal-telemetry",
+        "value": "requestAnimationFrame capped near 30fps",
+        "purpose": "Waveform-adjacent effect traces and stereo meters move only from real bounded audio telemetry."
+      },
+      {
+        "name": "pressed-step",
+        "value": "translateY(1px)",
+        "purpose": "Immediate mechanical displacement while a button is active; no easing."
+      },
+      {
+        "name": "state-inversion",
+        "value": "none",
+        "purpose": "Hover, selected, and active colors switch immediately with no transition."
+      }
+    ],
+    "breakpoints": [
+      { "name": "scale-75", "value": "720px × 485.25px" },
+      { "name": "scale-100", "value": "960px × 647px" },
+      { "name": "scale-125", "value": "1200px × 808.75px" },
+      { "name": "scale-150", "value": "1440px × 970.5px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Pixel Button",
+      "kind": "button",
+      "refersTo": "pixel-button",
+      "description": "The canonical square action used for navigation, mode switching, and local commands.",
+      "html": "<button class=\"ds-pixel-button\" type=\"button\">MAIN</button>",
+      "css": ".ds-pixel-button { min-height:28px; padding:2px 10px; border:1px solid var(--line, #d7d3c8); border-radius:0; color:var(--ivory, #e8e4d8); background:var(--surface, #111210); font:700 13px/1 var(--display-font, 'Pixelify Local', sans-serif); cursor:pointer; } .ds-pixel-button:hover, .ds-pixel-button[aria-pressed='true'] { color:var(--black, #090a09); background:var(--ivory, #e8e4d8); } .ds-pixel-button:active { transform:translateY(1px); } .ds-pixel-button:focus-visible { outline:1px dashed var(--ivory, #e8e4d8); outline-offset:-4px; }"
+    },
+    {
+      "name": "Two-State Toggle",
+      "kind": "button",
+      "refersTo": "pixel-button-active",
+      "description": "A joined binary switch whose selected half uses hard ivory inversion.",
+      "html": "<div class=\"ds-toggle\" role=\"group\" aria-label=\"Voice mode\"><button class=\"ds-toggle-button is-active\" type=\"button\">POLY</button><button class=\"ds-toggle-button\" type=\"button\">MONO</button></div>",
+      "css": ".ds-toggle { min-width:128px; display:grid; grid-template-columns:1fr 1fr; } .ds-toggle-button { min-height:28px; padding:1px 8px; border:1px solid var(--line, #d7d3c8); border-left:0; border-radius:0; color:var(--ivory, #e8e4d8); background:var(--surface, #111210); font:700 13px/1 var(--display-font, 'Pixelify Local', sans-serif); cursor:pointer; } .ds-toggle-button:first-child { border-left:1px solid var(--line, #d7d3c8); } .ds-toggle-button:hover, .ds-toggle-button.is-active { color:var(--black, #090a09); background:var(--ivory, #e8e4d8); } .ds-toggle-button:focus-visible { outline:1px dashed var(--ivory, #e8e4d8); outline-offset:-4px; }"
+    },
+    {
+      "name": "Calibration Select",
+      "kind": "input",
+      "description": "A square black choice field for source and global settings.",
+      "html": "<label class=\"ds-select-label\">PLAY IN KEY<select class=\"ds-select\"><option>NONE</option><option>C</option></select></label>",
+      "css": ".ds-select-label { display:grid; gap:6px; color:var(--ivory, #e8e4d8); font:700 11px/1 var(--display-font, 'Pixelify Local', sans-serif); } .ds-select { width:160px; height:32px; padding:1px 22px 1px 7px; border:1px solid var(--line, #d7d3c8); border-radius:0; color:var(--ivory, #e8e4d8); background:var(--black, #090a09); font:700 10px/1 var(--mono-font, 'Space Mono Local', monospace); } .ds-select:focus-visible { outline:1px dashed var(--ivory, #e8e4d8); outline-offset:-4px; }"
+    },
+    {
+      "name": "Voice Counter",
+      "kind": "chip",
+      "description": "A compact tabular telemetry badge in the header.",
+      "html": "<output class=\"ds-voice-counter\">00 / 20 VOICES</output>",
+      "css": ".ds-voice-counter { height:30px; display:grid; place-items:center; padding:0 10px; border:1px solid var(--line, #d7d3c8); border-radius:0; color:var(--ivory, #e8e4d8); background:var(--black, #090a09); font:700 12px/1 var(--mono-font, 'Space Mono Local', monospace); font-variant-numeric:tabular-nums; white-space:nowrap; }"
+    },
+    {
+      "name": "Instrument Panel",
+      "kind": "card",
+      "description": "The square module container with a 28px equipment header and etched hatch.",
+      "html": "<section class=\"ds-panel\"><header class=\"ds-module-header\"><strong>SCRAMBLE</strong><span class=\"ds-hatch\" aria-hidden=\"true\"></span></header><div class=\"ds-panel-body\">MODULE CONTENT</div></section>",
+      "css": ".ds-panel { overflow:hidden; border:1px solid var(--line, #d7d3c8); border-radius:0; color:var(--ivory, #e8e4d8); background:var(--surface, #111210); } .ds-module-header { height:28px; display:flex; align-items:center; gap:9px; padding:1px 7px 0; border-bottom:1px solid var(--line, #d7d3c8); font:700 17px/1 var(--display-font, 'Pixelify Local', sans-serif); letter-spacing:.01em; white-space:nowrap; } .ds-hatch { flex:1; height:9px; opacity:.7; background:repeating-linear-gradient(112deg, transparent 0 3px, var(--muted, #96958d) 3px 4px); } .ds-panel-body { min-height:72px; padding:6px; color:var(--muted, #96958d); background:var(--surface, #111210); font:700 10px/1 var(--mono-font, 'Space Mono Local', monospace); }"
+    },
+    {
+      "name": "Primary Macro Knob",
+      "kind": "custom",
+      "refersTo": "primary-knob",
+      "description": "A 66px rotary macro with ivory ring, dashed calibration orbit, and hard pointer.",
+      "html": "<div class=\"ds-knob\" role=\"slider\" aria-label=\"Scramble amount\" aria-valuemin=\"0\" aria-valuemax=\"100\" aria-valuenow=\"42\"><i></i></div>",
+      "css": ".ds-knob { --ds-angle:-22deg; position:relative; width:66px; height:66px; border:9px solid var(--ivory, #e8e4d8); border-radius:50%; background:var(--surface, #111210); box-shadow:0 0 0 1px var(--black, #090a09), 0 0 0 2px var(--muted, #96958d); } .ds-knob::before { content:''; position:absolute; inset:-13px; border:1px dashed var(--muted, #96958d); border-radius:50%; } .ds-knob:hover, .ds-knob:focus-visible { background:var(--control, #242520); outline:none; } .ds-knob i { position:absolute; left:50%; top:50%; width:3px; height:25px; transform-origin:50% 0; transform:rotate(var(--ds-angle)) translateY(-1px); background:var(--ivory, #e8e4d8); }"
+    },
+    {
+      "name": "Signal Display Chamber",
+      "kind": "custom",
+      "refersTo": "display-chamber",
+      "description": "A black, gridded instrument field for waveform, spectral, effect, or meter telemetry.",
+      "html": "<div class=\"ds-display\" role=\"img\" aria-label=\"Signal display\"><span class=\"ds-trace\"></span></div>",
+      "css": ".ds-display { position:relative; width:220px; height:96px; overflow:hidden; border:1px solid var(--dim, #5e605a); border-radius:0; background-color:var(--black, #090a09); background-image:linear-gradient(to right, transparent 49.6%, var(--graticule, #3e413a) 50%, transparent 50.4%), linear-gradient(to bottom, transparent 49.3%, var(--graticule, #3e413a) 50%, transparent 50.7%); background-size:12.5% 100%, 100% 33.333%; } .ds-trace { position:absolute; left:6px; right:6px; top:47px; height:2px; background:var(--telemetry, #eeede5); box-shadow:14px -8px 0 var(--telemetry, #eeede5), 28px 5px 0 var(--telemetry, #eeede5), 42px -14px 0 var(--telemetry, #eeede5), 56px 10px 0 var(--telemetry, #eeede5), 70px -4px 0 var(--telemetry, #eeede5), 84px 7px 0 var(--telemetry, #eeede5), 98px -11px 0 var(--telemetry, #eeede5); } .ds-display:focus-visible { outline:1px dashed var(--ivory, #e8e4d8); outline-offset:2px; }"
+    },
+    {
+      "name": "Sample Row",
+      "kind": "custom",
+      "description": "A 30px source entry with square enable state, ellipsized filename, and compact action.",
+      "html": "<div class=\"ds-sample-row is-selected\"><button class=\"ds-check\" type=\"button\" aria-pressed=\"true\">✓</button><span>vox_chop_b2.aiff</span><button class=\"ds-row-action\" type=\"button\">REMOVE</button></div>",
+      "css": ".ds-sample-row { height:30px; display:grid; grid-template-columns:22px minmax(0, 1fr) 57px; align-items:center; gap:5px; padding:2px; border-bottom:1px solid #33352f; color:var(--ivory, #e8e4d8); background:var(--surface, #111210); font:400 10px/1 var(--mono-font, 'Space Mono Local', monospace); } .ds-sample-row:hover, .ds-sample-row.is-selected { background:var(--raised, #191a17); } .ds-sample-row.is-selected { box-shadow:inset 2px 0 var(--ivory, #e8e4d8); } .ds-sample-row > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .ds-check, .ds-row-action { border:1px solid var(--line, #d7d3c8); border-radius:0; color:var(--black, #090a09); background:var(--ivory, #e8e4d8); font:700 10px/1 var(--display-font, 'Pixelify Local', sans-serif); } .ds-check { width:20px; height:20px; padding:0; } .ds-row-action { min-height:21px; padding:1px 4px; } .ds-check:focus-visible, .ds-row-action:focus-visible { outline:1px dashed var(--ivory, #e8e4d8); outline-offset:2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Black Calibration Bench",
+    "overview": "This is a compact operating surface, not a branded landing page: a near-black machined panel whose hierarchy comes from exact partitions, warm ivory calibration marks, and instrument-like readouts. Display chambers are the dominant black masses. Their waveform, particle, spectral, and meter graphics carry the visual energy while the surrounding hardware stays quiet, dense, and mechanically legible.\n\nThe interface preserves the approved fixed 960×647 logical geometry and treats every line as functional construction. Type is deliberately split between a pixel-built display face and a tabular data face. The left side of the header is an intentionally empty, unbranded equipment bay; its restraint is part of the identity, not missing content.",
+    "keyCharacteristics": [
+      "Fixed 960×647 logical instrument canvas with whole-UI scale presets only.",
+      "Near-black tiered surfaces with warm ivory labels, rules, and state inversion.",
+      "Dense 4px top-level rhythm and one-pixel construction lines.",
+      "Square controls and containers; circles belong only to rotary controls.",
+      "Black display chambers with etched graticules and crisp, pixel-rendered telemetry.",
+      "Motion is evidence of audio activity, never ambient decoration."
+    ],
+    "rules": [
+      { "name": "The Ivory Inversion Rule", "body": "Interactive selection and active states invert hard to warm ivory with bench-black text; do not introduce colored accents or soft tinted states.", "section": "colors" },
+      { "name": "The Two Whites Rule", "body": "Warm ivory belongs to the panel hardware; telemetry white belongs to live signal pixels inside display chambers.", "section": "colors" },
+      { "name": "The Face Split Rule", "body": "Pixelify Sans names and commands; Space Mono measures and reports. Do not swap their jobs.", "section": "typography" },
+      { "name": "The Uppercase Panel Rule", "body": "Operational labels are terse uppercase equipment markings, not sentence-case application copy.", "section": "typography" },
+      { "name": "The One Instrument Rule", "body": "Scale the complete 960×647 bench; never rearrange, wrap, collapse, or independently resize its modules.", "section": "layout" },
+      { "name": "The Four-Pixel Rhythm Rule", "body": "Top-level separation is 4px. Use smaller values only for internal optical fitting, not to create a competing spacing system.", "section": "layout" },
+      { "name": "The Structural Depth Rule", "body": "Use rules, tonal nesting, and calibration rings for depth; never add blur, glass, glow, or floating-card shadows.", "section": "elevation" },
+      { "name": "The Square Hardware Rule", "body": "A zero-radius rectangle is the default silhouette. Radius is not a softness control; it is reserved for rotary mechanics.", "section": "shapes" }
+    ],
+    "dos": [
+      "Do preserve the 960×647 logical canvas and the 75/100/125/150 whole-interface scale presets.",
+      "Do keep top-level gaps at 4px, module headers at 28px, and sample rows at 30px.",
+      "Do reserve the header’s left equipment bay as intentionally empty and unbranded.",
+      "Do use hard black/ivory inversion for active, selected, and hover states.",
+      "Do render waveform and telemetry canvases with image smoothing disabled.",
+      "Do let real signal telemetry be the only continuous motion on the surface."
+    ],
+    "donts": [
+      "Don't add responsive reflow, breakpoint-specific rearrangement, or fluid typography.",
+      "Don't introduce accent hues, gradients outside the recessed equipment bay, or more white variants.",
+      "Don't round panels, buttons, fields, rows, readouts, or display chambers.",
+      "Don't add ambient animation, decorative pulses, loading shimmer, or easing to audio controls.",
+      "Don't add a wordmark, subtitle, icon, or placeholder copy to the empty header bay.",
+      "Don't soften construction with blurred shadows, glass effects, glow, or anti-aliased canvas graphics."
+    ]
+  }
+}

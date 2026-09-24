@@ -84,7 +84,9 @@ set(frontend_dist_files
     "${frontend_directory}/dist/index.html"
     "${frontend_directory}/dist/assets/app.js"
     "${frontend_directory}/dist/assets/app.css"
-    "${frontend_directory}/dist/assets/anton.ttf")
+    "${frontend_directory}/dist/assets/pixelify-sans.ttf"
+    "${frontend_directory}/dist/assets/space-mono-regular.ttf"
+    "${frontend_directory}/dist/assets/space-mono-bold.ttf")
 
 if (RECOMPILER_REBUILD_FRONTEND)
     find_program(NPM_EXECUTABLE npm)
@@ -106,7 +108,9 @@ if (RECOMPILER_REBUILD_FRONTEND)
                 "${frontend_directory}/src/juceBridge.ts"
                 "${frontend_directory}/src/main.tsx"
                 "${frontend_directory}/src/styles.css"
-                "${frontend_directory}/src/assets/anton.ttf"
+                "${frontend_directory}/src/assets/pixelify-sans.ttf"
+                "${frontend_directory}/src/assets/space-mono-regular.ttf"
+                "${frontend_directory}/src/assets/space-mono-bold.ttf"
             BYPRODUCTS ${frontend_dist_files}
             COMMENT "Building embedded React WebView frontend"
             VERBATIM)
@@ -162,8 +166,11 @@ add_custom_command(TARGET RandomChopSampler_VST3 POST_BUILD
         "${signalsmith_linear_source_dir}/LICENSE.txt"
         "$<TARGET_FILE_DIR:RandomChopSampler_VST3>/../Resources/SIGNALSMITH_LINEAR_LICENSE.txt"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_CURRENT_SOURCE_DIR}/Licenses/ANTON_OFL.txt"
-        "$<TARGET_FILE_DIR:RandomChopSampler_VST3>/../Resources/ANTON_OFL.txt"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Licenses/PIXELIFY_SANS_OFL.txt"
+        "$<TARGET_FILE_DIR:RandomChopSampler_VST3>/../Resources/PIXELIFY_SANS_OFL.txt"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/Licenses/SPACE_MONO_OFL.txt"
+        "$<TARGET_FILE_DIR:RandomChopSampler_VST3>/../Resources/SPACE_MONO_OFL.txt"
     COMMENT "Copying third-party notices into the VST3 bundle")
 
 if (BUILD_TESTING)

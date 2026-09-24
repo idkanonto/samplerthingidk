@@ -316,6 +316,7 @@ void RandomChopSamplerAudioProcessor::getStateInformation(juce::MemoryBlock& des
             internalSeed.load(std::memory_order_relaxed))), nullptr);
     state.setProperty("spectralCanvas", spectralMaskStore.encodeCanvas(), nullptr);
     state.setProperty("outputMuted", outputMuted.load(std::memory_order_relaxed), nullptr);
+    state.setProperty("uiScale", uiScaleIndex.load(std::memory_order_relaxed), nullptr);
     state.setProperty("selectedSampleId", getSelectedSampleId(), nullptr);
     state.setProperty("scrambleFeatures",
         static_cast<int>(scrambleFeatures.load(std::memory_order_relaxed)), nullptr);
@@ -342,6 +343,7 @@ void RandomChopSamplerAudioProcessor::setStateInformation(const void* data, int 
         const auto spectralCanvas = state.getProperty("spectralCanvas").toString();
         outputMuted.store(static_cast<bool>(state.getProperty("outputMuted", false)),
                           std::memory_order_relaxed);
+        setUiScaleIndex(static_cast<int>(state.getProperty("uiScale", 1)));
         setSelectedSampleId(state.getProperty("selectedSampleId").toString());
         setScrambleFeatures(static_cast<uint32_t>(static_cast<int>(
             state.getProperty("scrambleFeatures", static_cast<int>(randomchop::ScrambleFeatures::all)))));
@@ -381,6 +383,7 @@ void RandomChopSamplerAudioProcessor::setStateInformation(const void* data, int 
             state.removeChild(files, nullptr);
         state.removeProperty("spectralCanvas", nullptr);
         state.removeProperty("outputMuted", nullptr);
+        state.removeProperty("uiScale", nullptr);
         state.removeProperty("selectedSampleId", nullptr);
         state.removeProperty("scrambleFeatures", nullptr);
         state.removeProperty("meltFeatures", nullptr);

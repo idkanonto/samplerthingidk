@@ -87,17 +87,18 @@ export function EffectCanvas({ type, amount, visualisation }: {
       } else {
         const activity = Math.max(strength * .45, telemetry.smearActivity)
         const gain = Math.max(.2, telemetry.smearGain)
+        const liveTime = telemetry.smearActivity > .002 || telemetry.smearGain > .002 ? time : 0
         for (let particle = 0; particle < 62; particle += 1) {
-          const drift = (time * .012 * (1 + activity) + particle * 19) % 148
+          const drift = (liveTime * .012 * (1 + activity) + particle * 19) % 148
           const x = Math.floor(drift - 10)
-          const y = 8 + ((particle * 29 + Math.floor(time * .018)) % 52)
+          const y = 8 + ((particle * 29 + Math.floor(liveTime * .018)) % 52)
           const length = 1 + Math.floor((particle % 7) * activity * 2.4)
           context.globalAlpha = .25 + ((particle * 13) % 70) / 100 * gain
           context.fillRect(x, y, Math.max(1, length), particle % 5 === 0 ? 2 : 1)
         }
         context.globalAlpha = 1
         for (let x = 0; x < 128; x += 3) {
-          const amplitude = Math.sin(x * .23 + time * .002) * (4 + strength * 8)
+          const amplitude = Math.sin(x * .23 + liveTime * .002) * (4 + strength * 8)
           context.fillRect(x, Math.round(34 + amplitude), 5 + Math.round(activity * 9), 1)
         }
       }
@@ -137,6 +138,8 @@ export function SpectralDrawCanvas({ values, width, height, scan, spectrum }: {
   const drawing = useRef(false)
   const erasing = useRef(false)
   const previous = useRef<[number, number] | null>(null)
+  const keyboardCursor = useRef<[number, number]>([Math.floor(width / 2), Math.floor(height / 2)])
+  const [keyboardFocused, setKeyboardFocused] = useState(false)
   const [revision, setRevision] = useState(0)
 
   useEffect(() => {
@@ -168,7 +171,12 @@ export function SpectralDrawCanvas({ values, width, height, scan, spectrum }: {
     }
     context.fillStyle = '#eeede5'
     context.fillRect(Math.max(0, Math.min(width - 1, Math.floor(scan * width))), 0, 1, height)
-  }, [revision, scan, spectrum, width, height])
+    if (keyboardFocused) {
+      const [x, y] = keyboardCursor.current
+      context.fillRect(Math.max(0, x - 2), y, 5, 1)
+      context.fillRect(x, Math.max(0, y - 2), 1, 5)
+    }
+  }, [revision, scan, spectrum, width, height, keyboardFocused])
 
   const point = useCallback((event: React.PointerEvent<HTMLCanvasElement>): [number, number] => {
     const bounds = event.currentTarget.getBoundingClientRect()
@@ -193,8 +201,27 @@ export function SpectralDrawCanvas({ values, width, height, scan, spectrum }: {
     setRevision((current) => current + 1)
     sendPluginCommand('resetSpectral')
   }
+  const handleKey = (event: React.KeyboardEvent<HTMLCanvasElement>) => {
+    const [x, y] = keyboardCursor.current
+    if (event.key.startsWith('Arrow')) {
+      event.preventDefault()
+      const step = event.shiftKey ? 8 : 1
+      keyboardCursor.current = [
+        Math.max(0, Math.min(width - 1, x + (event.key === 'ArrowRight' ? step : event.key === 'ArrowLeft' ? -step : 0))),
+        Math.max(0, Math.min(height - 1, y + (event.key === 'ArrowDown' ? step : event.key === 'ArrowUp' ? -step : 0)))
+      ]
+      setRevision((current) => current + 1)
+    } else if (event.key === ' ' || event.key === 'Enter' || event.key === 'Delete' || event.key === 'Backspace') {
+      event.preventDefault()
+      paintLine(mask.current, width, height, keyboardCursor.current, keyboardCursor.current,
+        event.key === 'Delete' || event.key === 'Backspace' || event.shiftKey ? 0 : 1)
+      setRevision((current) => current + 1)
+      sendPluginCommand('setSpectralCanvas', { values: Array.from(mask.current) })
+    }
+  }
   return <div className="spectral-editor">
-    <canvas ref={ref} className="pixel-canvas spectral-canvas" aria-label="Spectral mask drawing surface"
+    <canvas ref={ref} className="pixel-canvas spectral-canvas" aria-label="Spectral mask drawing surface. Arrow keys move the cursor; Space draws; Delete erases." tabIndex={0}
+      onFocus={() => setKeyboardFocused(true)} onBlur={() => setKeyboardFocused(false)} onKeyDown={handleKey}
       onContextMenu={(event) => event.preventDefault()}
       onPointerDown={(event) => { drawing.current = true; erasing.current = event.button === 2 || event.shiftKey || event.altKey; previous.current = null; event.currentTarget.setPointerCapture(event.pointerId); apply(event) }}
       onPointerMove={(event) => { if (drawing.current) apply(event) }} onPointerUp={finish} onPointerCancel={finish} />

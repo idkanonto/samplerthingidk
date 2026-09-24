@@ -37,9 +37,15 @@ std::optional<juce::WebBrowserComponent::Resource> makeResource(
     if (path == "/assets/app.css")
         return juce::WebBrowserComponent::Resource {
             bytesFrom(BinaryData::app_css, BinaryData::app_cssSize), "text/css" };
-    if (path == "/assets/anton.ttf")
+    if (path == "/assets/pixelify-sans.ttf")
         return juce::WebBrowserComponent::Resource {
-            bytesFrom(BinaryData::anton_ttf, BinaryData::anton_ttfSize), "font/ttf" };
+            bytesFrom(BinaryData::pixelify_sans_ttf, BinaryData::pixelify_sans_ttfSize), "font/ttf" };
+    if (path == "/assets/space-mono-regular.ttf")
+        return juce::WebBrowserComponent::Resource {
+            bytesFrom(BinaryData::space_mono_regular_ttf, BinaryData::space_mono_regular_ttfSize), "font/ttf" };
+    if (path == "/assets/space-mono-bold.ttf")
+        return juce::WebBrowserComponent::Resource {
+            bytesFrom(BinaryData::space_mono_bold_ttf, BinaryData::space_mono_bold_ttfSize), "font/ttf" };
     return std::nullopt;
 }
 }
@@ -68,9 +74,8 @@ RandomChopSamplerWebViewEditor::RandomChopSamplerWebViewEditor(
     ensureValidSelection(lastPool);
     lastSpectralGeneration = processor.getSpectralCanvasGeneration();
     addAndMakeVisible(browser);
-    setResizable(true, true);
-    setResizeLimits(640, 460, 1536, 1024);
-    setSize(900, 620);
+    setResizable(false, false);
+    applyEditorScale();
     browser.goToURL(juce::WebBrowserComponent::getResourceProviderRoot());
     startTimerHz(30);
 }
@@ -149,6 +154,7 @@ juce::var RandomChopSamplerWebViewEditor::createBackendState()
     object->setProperty("maximumSampleCount", SampleManager::maximumSamples);
     object->setProperty("voiceCount", processor.getActiveVoiceCount());
     object->setProperty("outputMuted", processor.isOutputMuted());
+    object->setProperty("uiScale", processor.getUiScaleIndex());
     juce::Array<juce::var> effectEnabled;
     for (int effect = 0; effect < 4; ++effect)
         effectEnabled.add(processor.isEffectEnabled(effect));
@@ -340,6 +346,12 @@ void RandomChopSamplerWebViewEditor::handleCommand(const juce::var& payload)
             static_cast<bool>(payload.getProperty("enabled", true)));
         backendStateDirty = true;
     }
+    else if (type == "setUiScale")
+    {
+        processor.setUiScaleIndex(static_cast<int>(payload.getProperty("index", 1)));
+        applyEditorScale();
+        backendStateDirty = true;
+    }
 }
 
 void RandomChopSamplerWebViewEditor::emitBackendState()
@@ -374,6 +386,17 @@ void RandomChopSamplerWebViewEditor::addFiles(const juce::StringArray& files)
     backendStateDirty = true;
 }
 
+void RandomChopSamplerWebViewEditor::applyEditorScale()
+{
+    static constexpr std::array<juce::Point<int>, 4> sizes {
+        juce::Point<int> { 720, 485 }, juce::Point<int> { 960, 647 },
+        juce::Point<int> { 1200, 809 }, juce::Point<int> { 1440, 971 }
+    };
+    appliedUiScale = processor.getUiScaleIndex();
+    const auto size = sizes[static_cast<size_t>(appliedUiScale)];
+    setSize(size.x, size.y);
+}
+
 void RandomChopSamplerWebViewEditor::ensureValidSelection(
     const std::shared_ptr<const SampleManager::Pool>& pool)
 {
@@ -405,6 +428,8 @@ void RandomChopSamplerWebViewEditor::parameterValueChanged(int parameterIndex, f
 void RandomChopSamplerWebViewEditor::timerCallback()
 {
     processor.samples.collectGarbage();
+    if (appliedUiScale != processor.getUiScaleIndex())
+        applyEditorScale();
     for (const auto& binding : parameterBindings)
     {
         if (binding.processorIndex < 0

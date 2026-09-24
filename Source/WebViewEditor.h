@@ -41,6 +41,7 @@ private:
     void emitBackendState();
     void openFileChooser();
     void addFiles(const juce::StringArray&);
+    void applyEditorScale();
     void ensureValidSelection(const std::shared_ptr<const SampleManager::Pool>&);
     ParameterBinding* findParameter(const juce::String&) noexcept;
 
@@ -55,6 +56,7 @@ private:
     juce::String selectedSampleId;
     std::unique_ptr<juce::FileChooser> fileChooser;
     uint64_t lastSpectralGeneration = 0;
+    int appliedUiScale = -1;
     bool backendStateDirty = true;
     juce::WebBrowserComponent browser;
 

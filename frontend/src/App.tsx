@@ -81,7 +81,9 @@ function PixelDisplay({ children, className = '' }: { children: ReactNode, class
 }
 
 function SampleRow({ sample, selected }: { sample: SampleSummary, selected: boolean }) {
-  return <div className={`sample-row ${selected ? 'selected' : ''}`} onClick={() => sendPluginCommand('selectSample', { id: sample.id })}>
+  const select = () => sendPluginCommand('selectSample', { id: sample.id })
+  return <div className={`sample-row ${selected ? 'selected' : ''}`} role="button" tabIndex={0} onClick={select}
+    onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); select() } }}>
     <button className={`pixel-check ${sample.enabled ? 'checked' : ''}`} aria-label={`${sample.enabled ? 'Disable' : 'Enable'} ${sample.name}`}
       onClick={(event) => { event.stopPropagation(); sendPluginCommand('setSampleEnabled', { id: sample.id, enabled: !sample.enabled }) }}>
       {sample.enabled ? '✓' : ''}
@@ -135,14 +137,28 @@ function Waveform({ sample }: { sample?: SampleSummary }) {
     setRegion({ start: sample?.start ?? 0, end: sample?.end ?? 1 })
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
   }
+  const nudgeHandle = (event: React.KeyboardEvent<HTMLDivElement>, handle: 'start' | 'end') => {
+    if (!sample || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+    event.preventDefault()
+    const delta = event.shiftKey ? .025 : .005
+    const position = event.key === 'Home' ? 0 : event.key === 'End' ? 1
+      : region[handle] + (event.key === 'ArrowLeft' ? -delta : delta)
+    const next = handle === 'start'
+      ? { ...region, start: Math.max(0, Math.min(position, region.end - minimumRegion)) }
+      : { ...region, end: Math.min(1, Math.max(position, region.start + minimumRegion)) }
+    setRegion(next)
+    sendPluginCommand('setSampleRegion', { id: sample.id, ...next })
+  }
   return <PixelDisplay className="waveform-display">
     <WaveformCanvas waveform={sample?.waveform} />
     {!sample && <span className="waveform-empty">NO WAVEFORM DATA</span>}
     {sample && <>
       <div className="region-shade left" style={{ width: `${region.start * 100}%` }} />
       <div className="region-shade right" style={{ width: `${(1 - region.end) * 100}%` }} />
-      <div className="marker start" style={{ left: `${region.start * 100}%` }}><b>START</b><i /></div>
-      <div className="marker end" style={{ left: `${region.end * 100}%` }}><b>END</b><i /></div>
+      <div className="marker start" role="slider" tabIndex={0} aria-label="Sample start" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(region.start * 100)}
+        style={{ left: `${region.start * 100}%` }} onKeyDown={(event) => nudgeHandle(event, 'start')}><b>START</b><i /></div>
+      <div className="marker end" role="slider" tabIndex={0} aria-label="Sample end" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(region.end * 100)}
+        style={{ left: `${region.end * 100}%` }} onKeyDown={(event) => nudgeHandle(event, 'end')}><b>END</b><i /></div>
       <div className="waveform-interaction" role="group" aria-label="Sample playback region"
         onPointerDown={beginDrag} onPointerMove={continueDrag} onPointerUp={finishDrag} onPointerCancel={cancelDrag} />
     </>}
@@ -150,27 +166,38 @@ function Waveform({ sample }: { sample?: SampleSummary }) {
 }
 
 function SampleNumber({ sample, property, value, min, max, step, suffix }: {
-  sample: SampleSummary, property: string, value: number, min: number, max: number, step: number, suffix: string
+  sample?: SampleSummary, property: string, value: number, min: number, max: number, step: number, suffix: string
 }) {
-  const set = (next: number) => sendPluginCommand('setSampleProperty', { id: sample.id, property, value: Math.max(min, Math.min(max, next)) })
+  const set = (next: number) => sample && sendPluginCommand('setSampleProperty', { id: sample.id, property, value: Math.max(min, Math.min(max, next)) })
   return <div className="stepper"><input type="number" min={min} max={max} step={step} value={value} aria-label={property}
-    onChange={(event) => set(Number(event.target.value))} /><div><button onClick={() => set(value + step)}>▲</button><button onClick={() => set(value - step)}>▼</button></div><span>{suffix}</span></div>
+    disabled={!sample} onChange={(event) => set(Number(event.target.value))} /><div><button disabled={!sample} onClick={() => set(value + step)}>▲</button><button disabled={!sample} onClick={() => set(value - step)}>▼</button></div><span>{suffix}</span></div>
+}
+
+function SourceGainKnob({ sample }: { sample?: SampleSummary }) {
+  const min = -60
+  const max = 12
+  const value = sample?.gainDb ?? 0
+  const percent = (value - min) / (max - min)
+  return <div className="source-gain-control">
+    <div className="pixel-knob source-gain-knob" style={{ '--knob-angle': `${-138 + percent * 276}deg` } as CSSProperties}>
+      <i /><input aria-label="Sample gain" type="range" min={min} max={max} step="0.1" value={value} disabled={!sample}
+        onChange={(event) => sample && sendPluginCommand('setSampleProperty', { id: sample.id, property: 'gainDb', value: Number(event.target.value) })} />
+    </div>
+    <NumericReadout value={value} digits={1} suffix=" dB" />
+  </div>
 }
 
 function SourceControls({ sample }: { sample?: SampleSummary }) {
-  if (!sample) return <div className="source-controls empty">IMPORT A SAMPLE TO EDIT ITS SOURCE SETTINGS</div>
   return <div className="source-controls">
-    <label><b>SOURCE KEY</b><select className="pixel-select" value={sample.sourceKey}
-      onChange={(event) => sendPluginCommand('setSampleProperty', { id: sample.id, property: 'sourceKey', value: Number(event.target.value) })}>
+    <label><b>SOURCE KEY</b><select className="pixel-select" value={sample?.sourceKey ?? 1} disabled={!sample}
+      onChange={(event) => sample && sendPluginCommand('setSampleProperty', { id: sample.id, property: 'sourceKey', value: Number(event.target.value) })}>
       {tonicNames.map((name, index) => <option key={name} value={index}>{name}</option>)}</select></label>
     <Divider />
-    <label><b>TRANSPOSE</b><SampleNumber sample={sample} property="transpose" value={sample.transpose} min={-24} max={24} step={1} suffix="st" /></label>
+    <label><b>TRANSPOSE</b><SampleNumber sample={sample} property="transpose" value={sample?.transpose ?? 0} min={-24} max={24} step={1} suffix="st" /></label>
     <Divider />
-    <label><b>FINE TUNE</b><SampleNumber sample={sample} property="fineTune" value={sample.fineTune} min={-100} max={100} step={1} suffix="ct" /></label>
+    <label><b>FINE TUNE</b><SampleNumber sample={sample} property="fineTune" value={sample?.fineTune ?? 0} min={-100} max={100} step={1} suffix="ct" /></label>
     <Divider />
-    <label className="gain-source"><b>GAIN</b><input type="range" min="-60" max="12" step="0.1" value={sample.gainDb}
-      onChange={(event) => sendPluginCommand('setSampleProperty', { id: sample.id, property: 'gainDb', value: Number(event.target.value) })} />
-      <NumericReadout value={sample.gainDb} digits={1} suffix=" dB" /></label>
+    <label className="gain-source"><b>GAIN</b><SourceGainKnob sample={sample} /></label>
   </div>
 }
 
@@ -212,13 +239,14 @@ function StereoMeter() {
 function OutputModule({ muted }: { muted: boolean }) {
   const output = usePluginParameter('output')
   const min = output.descriptor?.min ?? -60
-  const max = 4
+  const max = output.descriptor?.max ?? 6
   const shown = Math.max(min, Math.min(max, output.value))
+  const faderPosition = (shown - min) / Math.max(0.001, max - min)
   const finish = () => output.endGesture()
   return <RecompilerPanel title="OUTPUT" className="output-module"><div className="output-body">
     <StereoMeter />
-    <div className="meter-ticks"><span>+4</span><span>0</span><span>-6</span><span>-12</span><span>-24</span><span>-36</span><span>dB</span></div>
-    <div className="output-fader"><b>LEVEL</b><div className="fader-track"><input aria-label="Output level" type="range" min={min} max={max} step={output.descriptor?.interval || 0.1}
+    <div className="meter-ticks"><span>+{max}</span><span>0</span><span>-6</span><span>-12</span><span>-24</span><span>-36</span><span>dB</span></div>
+    <div className="output-fader"><b>LEVEL</b><div className="fader-track" style={{ '--fader-position': `${faderPosition * 100}%` } as CSSProperties}><i /><input aria-label="Output level" type="range" min={min} max={max} step={output.descriptor?.interval || 0.1}
       value={shown} onPointerDown={output.beginGesture} onPointerUp={finish} onPointerCancel={finish}
       onKeyDown={output.beginGesture} onKeyUp={finish} onChange={(event) => output.setValue(Number(event.target.value))} /></div>
       <PixelButton className="mute-button" active={muted} onClick={() => sendPluginCommand('setOutputMuted', { enabled: !muted })}>{muted ? 'UNMUTE' : 'MUTE'}</PixelButton>
@@ -233,19 +261,20 @@ function VoiceCounter({ maximum }: { maximum: number }) {
 
 function Header({ page, setPage, maxSamples }: { page: string, setPage: (page: string) => void, maxSamples: number }) {
   return <header className="app-header">
-    <div className="brand"><div className="logo-mark">⌁╳</div><h1>recompiler.dll</h1><Divider /><span>random sample instrument</span></div>
+    <div className="brand-reserve" aria-label="Reserved branding area"><i /><i /><i /></div>
     <div className="header-actions"><VoiceCounter maximum={maxSamples} />
       <nav><PixelButton active={page === 'main'} onClick={() => setPage('main')}>MAIN</PixelButton><PixelButton active={page === 'settings'} onClick={() => setPage('settings')}>SETTINGS</PixelButton></nav>
     </div>
   </header>
 }
 
-function SettingsPage({ sampleCount, maximumSampleCount, effectEnabled }: {
-  sampleCount: number, maximumSampleCount: number, effectEnabled: boolean[]
+function SettingsPage({ sampleCount, maximumSampleCount, effectEnabled, uiScale }: {
+  sampleCount: number, maximumSampleCount: number, effectEnabled: boolean[], uiScale: number
 }) {
   const effects = ['SCRAMBLE', 'MELT', 'SMEAR', 'SPECTRAL DRAW']
   return <div className="settings-page">
     <RecompilerPanel title="ENGINE" className="settings-block"><dl><dt>AUDIO</dt><dd>NATIVE C++</dd><dt>EDITOR</dt><dd>EMBEDDED / OFFLINE</dd><dt>PROJECT STATE</dt><dd>AUTOMATIC</dd></dl></RecompilerPanel>
+    <RecompilerPanel title="INTERFACE SCALE" className="settings-block scale-settings"><p>FIXED LOGICAL CANVAS / UNIFORM SCALE</p><div>{['75%', '100%', '125%', '150%'].map((label, index) => <PixelButton key={label} active={uiScale === index} onClick={() => sendPluginCommand('setUiScale', { index })}>{label}</PixelButton>)}</div></RecompilerPanel>
     <RecompilerPanel title="SAMPLE LIBRARY" className="settings-block"><dl><dt>LOADED</dt><dd>{sampleCount} / {maximumSampleCount}</dd><dt>FORMATS</dt><dd>WAV / AIFF / MP3 / FLAC</dd></dl><PixelButton onClick={() => sendPluginCommand('importSamples')}>ADD SAMPLES…</PixelButton></RecompilerPanel>
     <RecompilerPanel title="EFFECT ENGINES" className="settings-block effect-settings">
       {effects.map((name, effect) => <PixelButton key={name} active={effectEnabled[effect] !== false}
@@ -253,7 +282,6 @@ function SettingsPage({ sampleCount, maximumSampleCount, effectEnabled }: {
       <PixelButton onClick={() => sendPluginCommand('regenerateSeed')}>NEW RANDOM SEED</PixelButton>
       <PixelButton onClick={() => sendPluginCommand('resetSpectral')}>CLEAR SPECTRAL MASK</PixelButton>
     </RecompilerPanel>
-    <RecompilerPanel title="ABOUT" className="settings-block settings-about"><h2>RECOMPILER.DLL</h2><p>RANDOM SAMPLE INSTRUMENT</p><p>The C++ engine remains authoritative for audio, automation, and project state.</p></RecompilerPanel>
   </div>
 }
 
@@ -264,7 +292,7 @@ export default function App() {
   const selectedSample = useMemo(() => samples.find((sample) => sample.id === backendState?.selectedSampleId), [samples, backendState?.selectedSampleId])
   return <main className="recompiler-shell">
     <Header page={page} setPage={setPage} maxSamples={backendState?.maximumSampleCount ?? 20} />
-    {page === 'settings' ? <SettingsPage sampleCount={backendState?.sampleCount ?? 0} maximumSampleCount={backendState?.maximumSampleCount ?? 20} effectEnabled={backendState?.effectEnabled ?? [true, true, true, true]} /> : <>
+    {page === 'settings' ? <SettingsPage sampleCount={backendState?.sampleCount ?? 0} maximumSampleCount={backendState?.maximumSampleCount ?? 20} effectEnabled={backendState?.effectEnabled ?? [true, true, true, true]} uiScale={backendState?.uiScale ?? 1} /> : <>
       <div className="source-zone">
         <RecompilerPanel title="SAMPLES" className="samples-panel">
           <div className="sample-list">{samples.length ? samples.map((sample) => <SampleRow key={sample.id} sample={sample} selected={sample.id === selectedSample?.id} />) : <p className="empty-samples">NO SAMPLES LOADED</p>}</div>

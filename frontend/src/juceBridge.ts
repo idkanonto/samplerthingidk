@@ -38,6 +38,7 @@ export type BackendState = {
   maximumSampleCount: number
   voiceCount: number
   outputMuted: boolean
+  uiScale: number
   samples: SampleSummary[]
   spectralWidth: number
   spectralHeight: number
