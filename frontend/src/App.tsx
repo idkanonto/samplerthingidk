@@ -1,6 +1,7 @@
 import { type CSSProperties, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import {
   sendPluginCommand,
+  postDroppedFiles,
   type SampleSummary,
   useBackendState,
   usePluginParameter,
@@ -9,8 +10,6 @@ import {
 import {
   EffectCanvas, SpectralDrawCanvas, StereoMeterCanvas, WaveformCanvas
 } from './VisualCanvases'
-
-const tonicNames = ['NONE', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
 function HatchFill() { return <span className="hatch-fill" aria-hidden="true" /> }
 function Divider() { return <span className="divider" aria-hidden="true" /> }
@@ -31,16 +30,6 @@ function PixelToggle({ id, left, right }: { id: string, left: string, right: str
     <PixelButton active={parameter.value < 0.5} onClick={() => set(0)}>{left}</PixelButton>
     <PixelButton active={parameter.value >= 0.5} onClick={() => set(1)}>{right}</PixelButton>
   </div>
-}
-
-function PixelSelect({ id }: { id: string }) {
-  const parameter = usePluginParameter(id)
-  const options = id === 'targetKey' ? tonicNames : (parameter.descriptor?.choices ?? [])
-  return <select className="pixel-select" aria-label={parameter.descriptor?.name ?? id}
-    value={Math.round(parameter.value)} onFocus={parameter.beginGesture} onBlur={parameter.endGesture}
-    onChange={(event) => parameter.setValue(Number(event.target.value))}>
-    {options.map((option, index) => <option key={option} value={index}>{option}</option>)}
-  </select>
 }
 
 function NumericReadout({ value, digits = 0, suffix = '' }: { value: number, digits?: number, suffix?: string }) {
@@ -68,12 +57,12 @@ function PixelKnob({ id, label }: { id: string, label: string }) {
   </div>
 }
 
-function ModuleHeader({ children }: { children: ReactNode }) {
-  return <div className="module-header"><strong>{children}</strong><HatchFill /></div>
+function ModuleHeader({ children, action }: { children: ReactNode, action?: ReactNode }) {
+  return <div className="module-header"><strong>{children}</strong><HatchFill />{action}</div>
 }
 
-function RecompilerPanel({ title, children, className = '' }: { title?: string, children: ReactNode, className?: string }) {
-  return <section className={`recompiler-panel ${className}`}>{title && <ModuleHeader>{title}</ModuleHeader>}{children}</section>
+function RecompilerPanel({ title, children, className = '', headerAction }: { title?: string, children: ReactNode, className?: string, headerAction?: ReactNode }) {
+  return <section className={`recompiler-panel ${className}`}>{title && <ModuleHeader action={headerAction}>{title}</ModuleHeader>}{children}</section>
 }
 
 function PixelDisplay({ children, className = '' }: { children: ReactNode, className?: string }) {
@@ -189,10 +178,6 @@ function SourceGainKnob({ sample }: { sample?: SampleSummary }) {
 
 function SourceControls({ sample }: { sample?: SampleSummary }) {
   return <div className="source-controls">
-    <label><b>SOURCE KEY</b><select className="pixel-select" value={sample?.sourceKey ?? 1} disabled={!sample}
-      onChange={(event) => sample && sendPluginCommand('setSampleProperty', { id: sample.id, property: 'sourceKey', value: Number(event.target.value) })}>
-      {tonicNames.map((name, index) => <option key={name} value={index}>{name}</option>)}</select></label>
-    <Divider />
     <label><b>TRANSPOSE</b><SampleNumber sample={sample} property="transpose" value={sample?.transpose ?? 0} min={-24} max={24} step={1} suffix="st" /></label>
     <Divider />
     <label><b>FINE TUNE</b><SampleNumber sample={sample} property="fineTune" value={sample?.fineTune ?? 0} min={-100} max={100} step={1} suffix="ct" /></label>
@@ -215,18 +200,21 @@ function EffectModule({ title, id, type }: {
   </RecompilerPanel>
 }
 
-function SpectralActivityDisplay({ values, width, height }: { values: number[], width: number, height: number }) {
+function SpectralActivityDisplay({ values, width, height, resetSignal }: { values: number[], width: number, height: number, resetSignal: number }) {
   const visualisation = useVisualisationState()
   return <PixelDisplay className="effect-display"><SpectralDrawCanvas values={values} width={width} height={height}
-    scan={visualisation.spectralScan} spectrum={visualisation.spectrum} /></PixelDisplay>
+    scan={visualisation.spectralScan} spectrum={visualisation.spectrum} resetSignal={resetSignal} /></PixelDisplay>
 }
 
 function SpectralModule({ values, width, height }: {
   values: number[], width: number, height: number
 }) {
-  return <RecompilerPanel title="SPECTRAL DRAW" className="effect-module spectral-module">
+  const [resetSignal, setResetSignal] = useState(0)
+  const reset = () => { setResetSignal((current) => current + 1); sendPluginCommand('resetSpectral') }
+  return <RecompilerPanel title="SPECTRAL DRAW" className="effect-module spectral-module"
+    headerAction={<button className="spectral-reset" onClick={reset}>RESET</button>}>
     <PixelKnob id="spectralDepth" label="Spectral Depth" />
-    <SpectralActivityDisplay values={values} width={width} height={height} />
+    <SpectralActivityDisplay values={values} width={width} height={height} resetSignal={resetSignal} />
   </RecompilerPanel>
 }
 
@@ -236,21 +224,28 @@ function StereoMeter() {
     right={visualisation.outputPeakRight ?? visualisation.outputPeak} /></PixelDisplay>
 }
 
+function OutputFader({ id, label, format, top, bottom }: { id: string, label: string, format: (value: number) => string, top: string, bottom: string }) {
+  const parameter = usePluginParameter(id)
+  const min = parameter.descriptor?.min ?? 0
+  const max = parameter.descriptor?.max ?? 100
+  const shown = Math.max(min, Math.min(max, parameter.value))
+  const position = (shown - min) / Math.max(0.001, max - min)
+  const finish = () => parameter.endGesture()
+  return <div className={`output-fader ${id === 'globalPitch' ? 'pitch-fader' : ''}`}><b>{label}</b>
+    <div className="fader-track" style={{ '--fader-position': `${position * 100}%` } as CSSProperties}><span className="fader-endpoint top">{top}</span><span className="fader-endpoint bottom">{bottom}</span><i />
+      <input aria-label={parameter.descriptor?.name ?? label} type="range" min={min} max={max} step={parameter.descriptor?.interval || 1}
+        value={shown} onPointerDown={parameter.beginGesture} onPointerUp={finish} onPointerCancel={finish}
+        onKeyDown={parameter.beginGesture} onKeyUp={finish} onChange={(event) => parameter.setValue(Number(event.target.value))} />
+    </div><output className="fader-readout">{format(shown)}</output>
+  </div>
+}
+
 function OutputModule({ muted }: { muted: boolean }) {
-  const output = usePluginParameter('output')
-  const min = output.descriptor?.min ?? -60
-  const max = output.descriptor?.max ?? 6
-  const shown = Math.max(min, Math.min(max, output.value))
-  const faderPosition = (shown - min) / Math.max(0.001, max - min)
-  const finish = () => output.endGesture()
   return <RecompilerPanel title="OUTPUT" className="output-module"><div className="output-body">
-    <StereoMeter />
-    <div className="meter-ticks"><span>+{max}</span><span>0</span><span>-6</span><span>-12</span><span>-24</span><span>-36</span><span>dB</span></div>
-    <div className="output-fader"><b>LEVEL</b><div className="fader-track" style={{ '--fader-position': `${faderPosition * 100}%` } as CSSProperties}><i /><input aria-label="Output level" type="range" min={min} max={max} step={output.descriptor?.interval || 0.1}
-      value={shown} onPointerDown={output.beginGesture} onPointerUp={finish} onPointerCancel={finish}
-      onKeyDown={output.beginGesture} onKeyUp={finish} onChange={(event) => output.setValue(Number(event.target.value))} /></div>
-      <PixelButton className="mute-button" active={muted} onClick={() => sendPluginCommand('setOutputMuted', { enabled: !muted })}>{muted ? 'UNMUTE' : 'MUTE'}</PixelButton>
-    </div>
+    <div className="meter-column"><StereoMeter /><PixelButton className="mute-button" active={muted} onClick={() => sendPluginCommand('setOutputMuted', { enabled: !muted })}>{muted ? 'UNMUTE' : 'MUTE'}</PixelButton></div>
+    <div className="meter-ticks"><span>+6</span><span>0</span><span>-6</span><span>-12</span><span>-24</span><span>-36</span><span>dB</span></div>
+    <OutputFader id="output" label="VOL" top="125" bottom="0" format={(value) => `${Math.round(value)}%`} />
+    <OutputFader id="globalPitch" label="PITCH" top="+12" bottom="−12" format={(value) => `${value > 0 ? '+' : ''}${Math.round(value)}`} />
   </div></RecompilerPanel>
 }
 
@@ -288,22 +283,39 @@ function SettingsPage({ sampleCount, maximumSampleCount, effectEnabled, uiScale 
 export default function App() {
   const backendState = useBackendState()
   const [page, setPage] = useState('main')
+  const [draggingFiles, setDraggingFiles] = useState(false)
   const samples = backendState?.samples ?? []
   const selectedSample = useMemo(() => samples.find((sample) => sample.id === backendState?.selectedSampleId), [samples, backendState?.selectedSampleId])
+  useEffect(() => {
+    const preventFileNavigation = (event: DragEvent) => {
+      if (event.dataTransfer?.types.includes('Files')) event.preventDefault()
+    }
+    document.addEventListener('dragover', preventFileNavigation)
+    document.addEventListener('drop', preventFileNavigation)
+    return () => {
+      document.removeEventListener('dragover', preventFileNavigation)
+      document.removeEventListener('drop', preventFileNavigation)
+    }
+  }, [])
   return <main className="recompiler-shell">
     <Header page={page} setPage={setPage} maxSamples={backendState?.maximumSampleCount ?? 20} />
     {page === 'settings' ? <SettingsPage sampleCount={backendState?.sampleCount ?? 0} maximumSampleCount={backendState?.maximumSampleCount ?? 20} effectEnabled={backendState?.effectEnabled ?? [true, true, true, true]} uiScale={backendState?.uiScale ?? 1} /> : <>
       <div className="source-zone">
         <RecompilerPanel title="SAMPLES" className="samples-panel">
           <div className="sample-list">{samples.length ? samples.map((sample) => <SampleRow key={sample.id} sample={sample} selected={sample.id === selectedSample?.id} />) : <p className="empty-samples">NO SAMPLES LOADED</p>}</div>
-          <button className="drop-zone" onClick={() => sendPluginCommand('importSamples')} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); sendPluginCommand('importSamples') }}>DROP WAV, AIFF, MP3 OR FLAC</button>
+          <button className={`drop-zone ${draggingFiles ? 'drag-active' : ''}`} onClick={() => sendPluginCommand('importSamples')}
+            onDragEnter={(event) => { event.preventDefault(); event.stopPropagation(); setDraggingFiles(true) }}
+            onDragOver={(event) => { event.preventDefault(); event.stopPropagation(); setDraggingFiles(true) }}
+            onDragLeave={(event) => { event.preventDefault(); event.stopPropagation(); setDraggingFiles(false) }}
+            onDrop={(event) => { event.preventDefault(); event.stopPropagation(); setDraggingFiles(false); postDroppedFiles(event.dataTransfer.files) }}>
+            {draggingFiles ? 'RELEASE TO IMPORT' : (backendState?.importMessage || 'DROP WAV, AIFF, MP3 OR FLAC')}</button>
         </RecompilerPanel>
         <RecompilerPanel className="selected-source">
           <div className="source-title"><strong>{selectedSample?.name ?? 'NO SAMPLE SELECTED'}</strong><span>{selectedSample ? `${(selectedSample.sampleRate / 1000).toFixed(1)} kHz   ${selectedSample.bitDepth || '--'} bit   ${selectedSample.durationSeconds.toFixed(1)} s` : '--.- kHz   -- bit   --.- s'}</span></div>
           <Waveform sample={selectedSample} /><SourceControls sample={selectedSample} />
         </RecompilerPanel>
       </div>
-      <div className="global-strip"><strong>GLOBAL</strong><label>PLAY IN KEY <PixelSelect id="targetKey" /></label><Divider /><label>CHORDS <PixelToggle id="midiPitch" left="OFF" right="ON" /></label><Divider /><label>POLY / MONO <PixelToggle id="voiceMode" left="POLY" right="MONO" /></label></div>
+      <div className="global-strip"><label>CHORDS <PixelToggle id="midiPitch" left="OFF" right="ON" /></label><Divider /><label>POLY / MONO <PixelToggle id="voiceMode" left="POLY" right="MONO" /></label></div>
       <div className="effects-zone">
         <EffectModule title="SCRAMBLE" id="scrambleAmount" type="scramble" />
         <EffectModule title="MELT" id="meltAmount" type="melt" />

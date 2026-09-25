@@ -130,8 +130,8 @@ const paintLine = (mask: Float32Array, width: number, height: number,
   }
 }
 
-export function SpectralDrawCanvas({ values, width, height, scan, spectrum }: {
-  values: number[], width: number, height: number, scan: number, spectrum?: number[]
+export function SpectralDrawCanvas({ values, width, height, scan, spectrum, resetSignal }: {
+  values: number[], width: number, height: number, scan: number, spectrum?: number[], resetSignal: number
 }) {
   const ref = useRef<HTMLCanvasElement>(null)
   const mask = useRef(new Float32Array(Math.max(1, width * height)))
@@ -147,6 +147,12 @@ export function SpectralDrawCanvas({ values, width, height, scan, spectrum }: {
     values.slice(0, width * height).forEach((value, index) => { mask.current[index] = value })
     setRevision((current) => current + 1)
   }, [values, width, height])
+
+  useEffect(() => {
+    if (resetSignal === 0) return
+    mask.current.fill(0)
+    setRevision((current) => current + 1)
+  }, [resetSignal])
 
   useEffect(() => {
     const canvas = ref.current
@@ -196,11 +202,6 @@ export function SpectralDrawCanvas({ values, width, height, scan, spectrum }: {
     event.currentTarget.releasePointerCapture(event.pointerId)
     sendPluginCommand('setSpectralCanvas', { values: Array.from(mask.current) })
   }, [])
-  const reset = () => {
-    mask.current.fill(0)
-    setRevision((current) => current + 1)
-    sendPluginCommand('resetSpectral')
-  }
   const handleKey = (event: React.KeyboardEvent<HTMLCanvasElement>) => {
     const [x, y] = keyboardCursor.current
     if (event.key.startsWith('Arrow')) {
@@ -226,7 +227,6 @@ export function SpectralDrawCanvas({ values, width, height, scan, spectrum }: {
       onPointerDown={(event) => { drawing.current = true; erasing.current = event.button === 2 || event.shiftKey || event.altKey; previous.current = null; event.currentTarget.setPointerCapture(event.pointerId); apply(event) }}
       onPointerMove={(event) => { if (drawing.current) apply(event) }} onPointerUp={finish} onPointerCancel={finish} />
     <span className="spectral-label high">HIGH</span><span className="spectral-label low">LOW</span><span className="spectral-label time">TIME →</span>
-    <button className="spectral-reset" onClick={reset}>RESET</button>
   </div>
 }
 

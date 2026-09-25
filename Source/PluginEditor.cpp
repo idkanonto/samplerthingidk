@@ -1356,14 +1356,14 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     moreButton.onClick = [this]
     {
         juce::PopupMenu menu;
-        menu.addItem(1, "Reset output to 0 dB");
+        menu.addItem(1, "Reset VOL to 100%");
         menu.addItem(2, "About recompiler.dll");
         juce::Component::SafePointer<RandomChopSamplerAudioProcessorEditor> safe(this);
         menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&moreButton),
             [safe](int choice)
             {
                 if (safe == nullptr) return;
-                if (choice == 1) safe->output.setValue(0.0);
+                if (choice == 1) safe->output.setValue(100.0);
                 if (choice == 2) safe->infoButton.triggerClick();
             });
     };
@@ -1438,7 +1438,7 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     targetKeyLabel.setText("PLAY IN KEY", juce::dontSendNotification);
     voiceModeLabel.setText("POLY / MONO", juce::dontSendNotification);
     spectralDrawLabel.setText("SPECTRAL DRAW", juce::dontSendNotification);
-    midiPitch.setTooltip("Off keeps every trigger in Play In Key; on follows MIDI notes for chords");
+    midiPitch.setTooltip("Off ignores MIDI note pitch; on follows notes relative to MIDI 72");
     voiceMode.setTooltip("POLY overlaps held notes; MONO cuts the previous voice");
     spectralResetButton.setTooltip("Clear the entire spectral drawing.");
     spectralCanvas.setTooltip("Drag to draw attenuation into the time/frequency canvas.");
@@ -1497,7 +1497,7 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
         list.repaint();
     };
 
-    configureKnob(output, outputLabel, "OUTPUT");
+    configureKnob(output, outputLabel, "VOL");
     configureKnob(scrambleAmount, scrambleAmountLabel, "SCRAMBLE");
     configureKnob(meltAmount, meltAmountLabel, "MELT");
     configureKnob(spectralDepth, spectralDepthLabel, "SPECTRAL DEPTH");
@@ -1511,12 +1511,12 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     meltAmount.setTooltip("Increase automatic slice density and pitch-preserving time stretch.");
     smearAmount.setTooltip("Increase the density and brightness of progressively smaller pitched grains.");
     spectralDepth.setTooltip("Control how strongly the spectral drawing attenuates the signal.");
-    output.setTooltip("Set the final plug-in output level.");
+    output.setTooltip("Set final volume from silence at 0% to boost at 125%.");
     scrambleAmount.setName("Scramble amount");
     meltAmount.setName("Melt amount");
     smearAmount.setName("Smear amount");
     spectralDepth.setName("Spectral depth");
-    output.setName("Output level");
+    output.setName("Volume");
     midiPitch.setName("Chords mode");
     voiceMode.setName("Voice mode");
 
@@ -1657,12 +1657,6 @@ void RandomChopSamplerAudioProcessorEditor::paint(juce::Graphics& g)
         paintXpPanel(g, samplePanelBounds, "SAMPLES");
         paintXpPanel(g, sourcePanelBounds);
         paintXpPanel(g, globalPanelBounds);
-        auto globalTag = globalPanelBounds.reduced(5).removeFromLeft(85).toFloat();
-        g.setColour(juce::Colour(0xff242424));
-        g.fillRoundedRectangle(globalTag, 2.0f);
-        g.setColour(juce::Colours::white);
-        g.setFont(juce::Font(14.0f, juce::Font::bold));
-        g.drawText("GLOBAL", globalTag.toNearestInt(), juce::Justification::centred);
         g.setColour(juce::Colour(0xff222222));
         g.setFont(juce::Font(12.0f, juce::Font::bold));
         g.drawText("CHORDS", chordsOffButton.getX() - 57, chordsOffButton.getY(),
@@ -1670,7 +1664,7 @@ void RandomChopSamplerAudioProcessorEditor::paint(juce::Graphics& g)
         g.setColour(juce::Colour(0xff777777));
         for (const auto x : { sourceTransposeLabel.getX() - 4,
                               sourceFineTuneLabel.getX() - 4, sourceGainLabel.getX() - 4 })
-            g.drawVerticalLine(x, static_cast<float>(sourceKeyLabel.getY()),
+            g.drawVerticalLine(x, static_cast<float>(sourceTransposeLabel.getY()),
                                static_cast<float>(sourcePanelBounds.getBottom() - 9));
         if (list.hasKeyboardFocus(true))
         {
@@ -1814,7 +1808,7 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     zoomOutButton.setBounds(waveTools.removeFromTop(toolHeight).reduced(2));
     focusRegionButton.setBounds(waveTools.removeFromTop(toolHeight).reduced(2));
     fitButton.setBounds(waveTools.reduced(2));
-    const auto cellWidth = sourceControlRow.getWidth() / 4;
+    const auto cellWidth = sourceControlRow.getWidth() / 3;
     auto layoutSourceCell = [cellWidth](juce::Rectangle<int>& row, juce::Label& label,
                                         juce::Component& control)
     {
@@ -1822,7 +1816,6 @@ void RandomChopSamplerAudioProcessorEditor::resized()
         label.setBounds(cell.removeFromTop(18));
         control.setBounds(cell.reduced(0, 1));
     };
-    layoutSourceCell(sourceControlRow, sourceKeyLabel, sourceKey);
     layoutSourceCell(sourceControlRow, sourceTransposeLabel, sourceTranspose);
     layoutSourceCell(sourceControlRow, sourceFineTuneLabel, sourceFineTune);
     auto gainCell = sourceControlRow.reduced(4, 2);
@@ -1831,12 +1824,8 @@ void RandomChopSamplerAudioProcessorEditor::resized()
 
     globalPanelBounds = globalRow;
     auto globalContent = globalPanelBounds.reduced(7);
-    globalContent.removeFromLeft(93);
     regenerateButton.setBounds(globalContent.removeFromRight(36).reduced(2));
     randomSourceButton.setBounds(globalContent.removeFromRight(36).reduced(2));
-    auto keyCell = globalContent.removeFromLeft(juce::jmax(205, globalContent.getWidth() / 3));
-    targetKeyLabel.setBounds(keyCell.removeFromLeft(82));
-    targetKey.setBounds(keyCell.reduced(2, 1));
     auto chordsCell = globalContent.removeFromLeft(globalContent.getWidth() / 2);
     chordsCell.removeFromLeft(57);
     const auto halfChords = chordsCell.getWidth() / 2;
@@ -1849,6 +1838,10 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     monoButton.setBounds(voicesCell.reduced(1));
     midiPitch.setBounds(0, 0, 0, 0);
     voiceMode.setBounds(0, 0, 0, 0);
+    sourceKey.setBounds(0, 0, 0, 0);
+    sourceKeyLabel.setBounds(0, 0, 0, 0);
+    targetKey.setBounds(0, 0, 0, 0);
+    targetKeyLabel.setBounds(0, 0, 0, 0);
 
     const auto available = bottomRow.getWidth() - gap * 4;
     const auto effectWidth = juce::roundToInt(static_cast<float>(available) * 0.19f);
@@ -2371,4 +2364,3 @@ void RandomChopSamplerAudioProcessorEditor::timerCallback()
     repaint(spectralPanelBounds.withHeight(25));
     repaint(alert.getBounds().expanded(5, 2));
 }
-

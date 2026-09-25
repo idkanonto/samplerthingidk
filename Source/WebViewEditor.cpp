@@ -37,9 +37,9 @@ std::optional<juce::WebBrowserComponent::Resource> makeResource(
     if (path == "/assets/app.css")
         return juce::WebBrowserComponent::Resource {
             bytesFrom(BinaryData::app_css, BinaryData::app_cssSize), "text/css" };
-    if (path == "/assets/pixelify-sans.ttf")
+    if (path == "/assets/geist-pixel-square.woff2")
         return juce::WebBrowserComponent::Resource {
-            bytesFrom(BinaryData::pixelifysans_ttf, BinaryData::pixelifysans_ttfSize), "font/ttf" };
+            bytesFrom(BinaryData::geistpixelsquare_woff2, BinaryData::geistpixelsquare_woff2Size), "font/woff2" };
     if (path == "/assets/space-mono-regular.ttf")
         return juce::WebBrowserComponent::Resource {
             bytesFrom(BinaryData::spacemonoregular_ttf, BinaryData::spacemonoregular_ttfSize), "font/ttf" };
@@ -97,6 +97,7 @@ RandomChopSamplerWebViewEditor::createBrowserOptions()
             .withUserDataFolder(juce::File::getSpecialLocation(
                 juce::File::tempDirectory).getChildFile("recompiler-dll-webview")))
         .withNativeIntegrationEnabled()
+        .withFileDropListener([this](const juce::StringArray& files) { addFiles(files); })
         .withInitialisationData("parameters", createParameterState())
         .withEventListener(parameterValueEvent,
             [this](const juce::var& value) { handleParameterValue(value); })
@@ -155,6 +156,7 @@ juce::var RandomChopSamplerWebViewEditor::createBackendState()
     object->setProperty("voiceCount", processor.getActiveVoiceCount());
     object->setProperty("outputMuted", processor.isOutputMuted());
     object->setProperty("uiScale", processor.getUiScaleIndex());
+    object->setProperty("importMessage", importMessage);
     juce::Array<juce::var> effectEnabled;
     for (int effect = 0; effect < 4; ++effect)
         effectEnabled.add(processor.isEffectEnabled(effect));
@@ -382,8 +384,26 @@ void RandomChopSamplerWebViewEditor::openFileChooser()
 
 void RandomChopSamplerWebViewEditor::addFiles(const juce::StringArray& files)
 {
-    processor.samples.addFiles(files);
+    const auto before = processor.samples.getSnapshot();
+    const auto beforeCount = static_cast<int>(before->size());
+    const auto errors = processor.samples.addFiles(files);
+    const auto after = processor.samples.getSnapshot();
+    const auto added = static_cast<int>(after->size()) - beforeCount;
+    if (added > 0 && static_cast<size_t>(beforeCount) < after->size())
+    {
+        selectedSampleId = (*after)[static_cast<size_t>(beforeCount)]->settings.id;
+        processor.setSelectedSampleId(selectedSampleId);
+    }
+    importMessage = juce::String(added) + (added == 1 ? " FILE ADDED" : " FILES ADDED");
+    if (!errors.empty())
+        importMessage += " · " + juce::String(static_cast<int>(errors.size())) + " REJECTED";
     backendStateDirty = true;
+}
+
+bool RandomChopSamplerWebViewEditor::pageAboutToLoad(const juce::String& url)
+{
+    return url == "about:blank"
+        || url.startsWith(juce::WebBrowserComponent::getResourceProviderRoot());
 }
 
 void RandomChopSamplerWebViewEditor::applyEditorScale()

@@ -52,6 +52,23 @@ These decisions govern implementation together with [[PRODUCT_SPEC_V2]].
 - Separate Spectral Draw and Erase modes. Dragging draws; one Reset action clears the canvas.
 - Any Loop/One-shot mode. The user chooses only whether Chords follows MIDI pitch.
 
+## 2026-09-25 — Final workflow simplification
+
+Accepted:
+
+- Remove Source Key and Play In Key from the active UI and pitch path. Preserve their saved values only as inert compatibility data.
+- Anchor Chords to fixed neutral MIDI note 72 so keyboard tracking is independent of hidden project metadata.
+- Keep the stable `output` host ID while changing its public control to 0–125% VOL with explicit pre-version-12 saved-state migration; add stable `globalPitch` from -12 to +12 semitones.
+- Import Windows Explorer drops through WebView2 additional objects and the same validated native importer used by the chooser.
+- Use locally bundled Geist Pixel Square in lowercase for the display layer and Space Mono for values and metadata.
+- Put a full-size Reset action in the Spectral Draw header and clear the local canvas immediately before backend confirmation.
+
+Rejected:
+
+- Reintroducing automatic key detection, scale selection, or hidden key correction.
+- Treating a browser drop as a request to reopen the file chooser.
+- Decorative full-editor grid backgrounds.
+
 Legacy state entries for these systems are ignored rather than reinterpreted.
 
 ## Deferred

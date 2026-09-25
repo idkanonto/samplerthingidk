@@ -17,8 +17,9 @@ This specification supersedes the earlier Random Chop Sampler V2 feature plan. I
 - The host-visible product is `recompiler.dll`, packaged as a valid VST3 bundle.
 - Load at most 20 WAV, AIFF/AIF, MP3, or FLAC sources.
 - Each MIDI Note On selects an enabled, non-missing source with equal probability and chooses a legal random start inside its manual Start/End region.
-- Source controls are enabled state, Start, End, Source Key, Transpose, Fine Tune, and Gain.
-- Preserve global Play In Key, a Chords toggle, Output, and fixed 16-voice POLY/MONO playback. Chords off keeps triggers in Play In Key; Chords on follows incoming MIDI notes relative to an automatically derived central root.
+- Source controls are enabled state, Start, End, Transpose, Fine Tune, and Gain. Previously saved Source Key metadata may remain for compatibility but is inert.
+- Preserve Chords and fixed 16-voice POLY/MONO playback. Chords off ignores MIDI note pitch; Chords on follows incoming MIDI relative to fixed neutral note 72. There is no automatic key correction or Play In Key control.
+- Output contains the stereo meter, 0–125% VOL, global -12 to +12 semitone PITCH, and Mute. VOL uses a perceptual curve with 0% silent, 1% near -65 dB, 100% unity, and 125% near +5.6 dB.
 - Random source selection and a legal random start across the manual source region are core instrument behavior. Click-safe attack/release are bounded implementation details rather than public controls.
 - A persisted internal random seed keeps a restored session coherent without exposing a technical Seed control in the producer workflow.
 - The editor-selected source is independent of the most recently randomly triggered source.
@@ -37,10 +38,10 @@ This specification supersedes the earlier Random Chop Sampler V2 feature plan. I
 |---|---|---|
 | Drag-and-drop, Add, per-source checkbox/audition, row selection, and menu removal | Essential | The monochrome reference's sample-browser controls are real actions. |
 | Waveform Start/End | Essential | Defines the playable source region and legal random-start range. |
-| Source Key, Transpose, Fine Tune, Gain | Essential | Source preparation, harmonic placement, correction, and balance. |
-| Play In Key, Chords | Essential | Straightforward harmonic normalization and optional keyboard tracking. |
+| Transpose, Fine Tune, Gain | Essential | Explicit source pitch placement, correction, and balance. |
+| Chords | Essential | Optional keyboard tracking from fixed neutral MIDI note 72. |
 | POLY/MONO | Essential | Voice overlap policy presented as one two-position switch. |
-| Output | Essential | Final gain with a short sample-time ramp for automation safety. |
+| Meter, VOL, PITCH, Mute | Essential | Perceptual final gain, global transposition, metering, and a short sample-time ramp for automation safety. |
 | SCRAMBLE | Macro with gesture checklist | Amount sets intensity; the Mode menu can include/exclude pitch, hold/micro-loop, reverse, jump/reorder, and motif repeat gestures. All checked retains the original sound. |
 | MELT | Macro with gesture checklist | Amount sets intensity; the Mode menu can include/exclude stretching, reversal, and slice-count variation. All checked retains the original sound. |
 | Spectral canvas, Reset, Depth | Essential | Dragging draws; timing is automatic and one Reset action clears the canvas. |
@@ -98,4 +99,4 @@ A crystalline pitched-grain cloud, not a blur or reverb substitute. A fixed prea
 
 ## Delivery boundary
 
-The editor follows the supplied monochrome desktop reference rather than the previous blue XP skin. Every shown action must be real: file add, source audition/navigation, waveform tools, harmony/voice switches, effect checklists/power, Spectral Reset, output mute/meter, and tab navigation. `SEQ` explains automatic timing; it does not add a programmable sequencer. Gesture checklists default to all on, preserve the established sound, and persist with state. Future passing Windows builds ship the raw complete VST3 bundle rather than a new unsigned installer executable. Completion requires Windows compilation/CTest, deterministic listening renders, fixed-latency and boundary-partition checks, artifact inspection, DAW listening guidance, and a green post-merge `main`.
+The editor follows the supplied monochrome desktop reference rather than the previous blue XP skin. The primary display voice is a locally bundled refined pixel face rendered in lowercase; Space Mono remains the data face. Every shown action must be real: native multi-file picker/drop import, source navigation, waveform editing, voice switches, effect controls, prominent Spectral Reset, output meter/VOL/PITCH/Mute, and tab navigation. `SEQ` explains automatic timing; it does not add a programmable sequencer. Gesture checklists default to all on, preserve the established sound, and persist with state. Future passing Windows builds ship the raw complete VST3 bundle rather than a new unsigned installer executable. Completion requires Windows compilation/CTest, deterministic listening renders, fixed-latency and boundary-partition checks, artifact inspection, DAW listening guidance, and a green post-merge `main`.

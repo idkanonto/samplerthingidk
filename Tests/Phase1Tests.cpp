@@ -1,6 +1,7 @@
 #include <JuceHeader.h>
 #include "CreativeEffects.h"
 #include "HarmonicPitch.h"
+#include "OutputGain.h"
 #include "HostGrid.h"
 #include "RandomSamplerVoice.h"
 #include "SampleManager.h"
@@ -239,15 +240,19 @@ void testEqualSelectionAndPitch()
     check(randomchop::chooseSource(empty, random) == -1,
           "empty playable pool did not return the silent sentinel");
 
-    check(randomchop::shortestTonicCorrection(1, 12) == -1,
-          "tonic correction no longer uses shortest direction");
-    check(randomchop::chordRootMidiNote(1) == 72
-              && randomchop::chordRootMidiNote(12) == 71
-              && randomchop::chordRootMidiNote(0) == 72,
-          "automatic Chords root no longer follows Play In Key near the central octave");
-    check(std::abs(randomchop::totalPitchSemitones(
-        1, 12, 12, 50.0f, true, 84, 72) - 23.5) < 0.000001,
-        "combined source, key, tuning, and MIDI pitch calculation changed");
+    check(std::abs(randomchop::playbackPitchSemitones(
+        12, 50.0f, -12, false, 20) - 0.5) < 0.000001,
+        "manual and global pitch no longer stack without key correction");
+    check(std::abs(randomchop::playbackPitchSemitones(
+        0, 0.0f, 0, true, 72)) < 0.000001
+              && std::abs(randomchop::playbackPitchSemitones(
+                  0, 0.0f, 0, true, 84) - 12.0) < 0.000001,
+          "Chords no longer uses neutral MIDI note 72 as its fixed reference");
+    check(std::abs(randomchop::playbackPitchSemitones(
+        0, 0.0f, -12, false, 127) + 12.0) < 0.000001
+              && std::abs(randomchop::playbackPitchSemitones(
+                  0, 0.0f, 12, false, 0) - 12.0) < 0.000001,
+          "global pitch range or Chords-off note independence changed");
     check(std::abs(randomchop::pitchRatioForSemitones(12.0) - 2.0) < 0.000001,
           "pitch ratio conversion changed");
     check(randomchop::midiNoteName(0) == "C-1"
@@ -258,6 +263,31 @@ void testEqualSelectionAndPitch()
               && randomchop::midiNoteFromName("Db3") == 49
               && randomchop::midiNoteFromName("72") == 72,
           "root-note musical display or parsing changed");
+}
+
+void testOutputGainMapping()
+{
+    check(randomchop::outputPercentToGain(0.0f) == 0.0f,
+          "VOL 0 percent was not true silence");
+    check(std::abs(randomchop::outputPercentToDecibels(1.0f) + 65.0f) < 0.001f,
+          "VOL 1 percent no longer maps to approximately -65 dB");
+    check(std::abs(randomchop::outputPercentToGain(100.0f) - 1.0f) < 0.000001f,
+          "VOL 100 percent was not unity gain");
+    check(std::abs(randomchop::outputPercentToDecibels(125.0f) - 5.6f) < 0.001f,
+          "VOL 125 percent no longer maps to approximately +5.6 dB");
+
+    auto previous = randomchop::outputPercentToGain(0.0f);
+    for (int percent = 1; percent <= 1250; ++percent)
+    {
+        const auto gain = randomchop::outputPercentToGain(percent * 0.1f);
+        check(std::isfinite(gain) && gain >= previous,
+              "VOL perceptual mapping was non-finite or non-monotonic");
+        previous = gain;
+    }
+    for (const auto decibels : { -60.0f, -12.0f, 0.0f, 5.6f })
+        check(std::abs(randomchop::outputPercentToDecibels(
+            randomchop::outputDecibelsToPercent(decibels)) - decibels) < 0.002f,
+            "legacy Output dB migration did not round-trip");
 }
 
 void testRegionsAndVoices()
@@ -1279,8 +1309,11 @@ void testStateMigration()
     }
     state.appendChild(juce::ValueTree("STEP_MASK"), nullptr);
     state.appendChild(juce::ValueTree("TAKE_HISTORY"), nullptr);
+    randomchop::migrateOutputToPercent(state, 11);
     randomchop::removeLegacyState(state);
     check(state.hasProperty("output")
+              && std::abs(static_cast<float>(state.getProperty("output"))
+                  - randomchop::outputDecibelsToPercent(-3.0f)) < 0.001f
               && !state.hasProperty("randomStart")
               && !state.hasProperty("reverseChance")
               && !state.hasProperty("bitDepth")
@@ -1311,7 +1344,8 @@ void testStateMigration()
                && randomchop::isRemovedParameterId("rootNote")
                && randomchop::isRemovedParameterId("globalGrid")
                && randomchop::isRemovedParameterId("spectralScanRate")
-              && !randomchop::isRemovedParameterId("output"),
+              && !randomchop::isRemovedParameterId("output")
+              && !randomchop::isRemovedParameterId("targetKey"),
           "legacy parameter allow/deny boundary changed");
 }
 
@@ -1355,6 +1389,7 @@ int main()
 {
     testSupportedFormatsAndPoolState();
     testEqualSelectionAndPitch();
+    testOutputGainMapping();
     testRegionsAndVoices();
     testMeltSingleMacroProgression();
     testHostGrid();

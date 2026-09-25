@@ -1,11 +1,29 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include "OutputGain.h"
 #include <array>
 
 namespace randomchop
 {
-inline constexpr int currentStateVersion = 11;
+inline constexpr int currentStateVersion = 12;
+
+inline void migrateOutputToPercent(juce::ValueTree& state, int restoredVersion)
+{
+    if (restoredVersion >= 12)
+        return;
+
+    if (state.hasProperty("output"))
+        state.setProperty("output", outputDecibelsToPercent(
+            static_cast<float>(state.getProperty("output"))), nullptr);
+
+    for (auto child : state)
+    {
+        if (child.getProperty("id").toString() == "output" && child.hasProperty("value"))
+            child.setProperty("value", outputDecibelsToPercent(
+                static_cast<float>(child.getProperty("value"))), nullptr);
+    }
+}
 
 inline bool isRemovedParameterId(const juce::String& id) noexcept
 {

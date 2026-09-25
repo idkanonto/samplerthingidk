@@ -21,7 +21,10 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
     GIT_TAG 8.0.13
     GIT_SHALLOW TRUE
-    GIT_PROGRESS TRUE)
+    GIT_PROGRESS TRUE
+    PATCH_COMMAND ${CMAKE_COMMAND}
+        -DJUCE_SOURCE_DIR=<SOURCE_DIR>
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/PatchJuceWebView2.cmake")
 FetchContent_MakeAvailable(JUCE)
 
 FetchContent_Declare(
@@ -76,6 +79,7 @@ target_sources(RandomChopSampler PRIVATE
     Source/SpectralDraw.h
     Source/RandomizationEngine.h
     Source/HarmonicPitch.h
+    Source/OutputGain.h
     Source/PlaybackRegion.h
     Source/SourceSelection.h)
 
@@ -84,7 +88,7 @@ set(frontend_dist_files
     "${frontend_directory}/dist/index.html"
     "${frontend_directory}/dist/assets/app.js"
     "${frontend_directory}/dist/assets/app.css"
-    "${frontend_directory}/dist/assets/pixelify-sans.ttf"
+    "${frontend_directory}/dist/assets/geist-pixel-square.woff2"
     "${frontend_directory}/dist/assets/space-mono-regular.ttf"
     "${frontend_directory}/dist/assets/space-mono-bold.ttf")
 
@@ -108,7 +112,7 @@ if (RECOMPILER_REBUILD_FRONTEND)
                 "${frontend_directory}/src/juceBridge.ts"
                 "${frontend_directory}/src/main.tsx"
                 "${frontend_directory}/src/styles.css"
-                "${frontend_directory}/src/assets/pixelify-sans.ttf"
+                "${frontend_directory}/src/assets/geist-pixel-square.woff2"
                 "${frontend_directory}/src/assets/space-mono-regular.ttf"
                 "${frontend_directory}/src/assets/space-mono-bold.ttf"
             BYPRODUCTS ${frontend_dist_files}
@@ -166,8 +170,8 @@ add_custom_command(TARGET RandomChopSampler_VST3 POST_BUILD
         "${signalsmith_linear_source_dir}/LICENSE.txt"
         "$<TARGET_FILE_DIR:RandomChopSampler_VST3>/../Resources/SIGNALSMITH_LINEAR_LICENSE.txt"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_CURRENT_SOURCE_DIR}/Licenses/PIXELIFY_SANS_OFL.txt"
-        "$<TARGET_FILE_DIR:RandomChopSampler_VST3>/../Resources/PIXELIFY_SANS_OFL.txt"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Licenses/GEIST_OFL.txt"
+        "$<TARGET_FILE_DIR:RandomChopSampler_VST3>/../Resources/GEIST_OFL.txt"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/Licenses/SPACE_MONO_OFL.txt"
         "$<TARGET_FILE_DIR:RandomChopSampler_VST3>/../Resources/SPACE_MONO_OFL.txt"
@@ -195,6 +199,7 @@ if (BUILD_TESTING)
         Source/SpectralDraw.h
         Source/RandomizationEngine.h
         Source/HarmonicPitch.h
+        Source/OutputGain.h
         Source/PlaybackRegion.h
         Source/SourceSelection.h)
     target_include_directories(RandomChopSamplerTests PRIVATE Source)

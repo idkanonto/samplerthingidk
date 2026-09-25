@@ -21,7 +21,7 @@ status: approved
 9. MELT one-knob automatic pitch-preserving slice stretch with internally derived per-slice reversal.
 10. SPECTRAL DRAW.
 11. SMEAR crystalline grain cloud.
-12. Sample-smoothed Output Gain.
+12. Sample-smoothed perceptual VOL gain (0–125%, with 0% true silence).
 
 ## Current code path
 

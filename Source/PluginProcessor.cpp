@@ -1,6 +1,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "WebViewEditor.h"
+#include "OutputGain.h"
 #include <algorithm>
 #include <cmath>
 
@@ -9,6 +10,7 @@ namespace IDs
 constexpr auto output = "output";
 constexpr auto targetKey = "targetKey";
 constexpr auto midiPitch = "midiPitch";
+constexpr auto globalPitch = "globalPitch";
 constexpr auto voiceMode = "voiceMode";
 constexpr auto scrambleAmount = "scrambleAmount";
 constexpr auto meltAmount = "meltAmount";
@@ -36,14 +38,16 @@ juce::AudioProcessorValueTreeState::ParameterLayout
 RandomChopSamplerAudioProcessor::createParameterLayout()
 {
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
-    layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::output, "Output",
-        juce::NormalisableRange<float>(-60.0f, 6.0f, 0.1f), 0.0f, "dB"));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::output, "Vol",
+        juce::NormalisableRange<float>(0.0f, 125.0f, 0.1f), 100.0f, "%"));
     juce::StringArray tonicChoices;
     for (const auto* name : randomchop::tonicNames)
         tonicChoices.add(name);
     layout.add(std::make_unique<juce::AudioParameterChoice>(
         IDs::targetKey, "Play In Key", tonicChoices, randomchop::noTonic));
     layout.add(std::make_unique<juce::AudioParameterBool>(IDs::midiPitch, "Chords", false));
+    layout.add(std::make_unique<juce::AudioParameterInt>(
+        IDs::globalPitch, "Global Pitch", -12, 12, 0, "st"));
     layout.add(std::make_unique<juce::AudioParameterChoice>(
         IDs::voiceMode, "Voice Mode", juce::StringArray { "POLY", "MONO" }, 0));
     layout.add(std::make_unique<juce::AudioParameterFloat>(
@@ -75,7 +79,7 @@ void RandomChopSamplerAudioProcessor::prepareToPlay(double rate, int maximumBloc
     spectralDrawProcessor.prepare(currentRate);
     smearProcessor.prepare(currentRate);
     outputGain.reset(currentRate, 0.010);
-    outputGain.setCurrentAndTargetValue(juce::Decibels::decibelsToGain(
+    outputGain.setCurrentAndTargetValue(randomchop::outputPercentToGain(
         parameters.getRawParameterValue(IDs::output)->load()));
     muteGain.reset(currentRate, 0.010);
     muteGain.setCurrentAndTargetValue(outputMuted.load(std::memory_order_relaxed) ? 0.0f : 1.0f);
@@ -124,12 +128,12 @@ void RandomChopSamplerAudioProcessor::noteOn(int note, float velocity) noexcept
         source->settings.endNormalised);
     const auto start = randomchop::resolveRandomStart(
         region, prepared->sampleRate, 1.0, random.unit());
-    const auto targetKey = static_cast<int>(parameters.getRawParameterValue(IDs::targetKey)->load());
     const auto chords = parameters.getRawParameterValue(IDs::midiPitch)->load() >= 0.5f;
-    const auto rootNote = randomchop::chordRootMidiNote(targetKey);
-    const auto pitchSemitones = randomchop::totalPitchSemitones(
-        source->settings.sourceKey, targetKey, source->settings.transposeSemitones,
-        source->settings.fineTuneCents, chords, note, rootNote);
+    const auto globalPitch = static_cast<int>(
+        parameters.getRawParameterValue(IDs::globalPitch)->load());
+    const auto pitchSemitones = randomchop::playbackPitchSemitones(
+        source->settings.transposeSemitones, source->settings.fineTuneCents,
+        globalPitch, chords, note);
     const auto pitchRatio = randomchop::pitchRatioForSemitones(pitchSemitones);
     const auto mode = parameters.getRawParameterValue(IDs::voiceMode)->load() >= 0.5f
         ? randomchop::VoiceMode::mono : randomchop::VoiceMode::poly;
@@ -278,7 +282,7 @@ void RandomChopSamplerAudioProcessor::processBlock(
                               std::memory_order_relaxed);
     smearVisualGain.store(smearProcessor.getLastOverlapGain() / 1.10f,
                           std::memory_order_relaxed);
-    outputGain.setTargetValue(juce::Decibels::decibelsToGain(
+    outputGain.setTargetValue(randomchop::outputPercentToGain(
         parameters.getRawParameterValue(IDs::output)->load()));
     muteGain.setTargetValue(outputMuted.load(std::memory_order_relaxed) ? 0.0f : 1.0f);
     float leftPeak = 0.0f;
@@ -355,6 +359,7 @@ void RandomChopSamplerAudioProcessor::setStateInformation(const void* data, int 
             setEffectEnabled(effect, static_cast<bool>(state.getProperty(
                 juce::Identifier("effectEnabled" + juce::String(effect)), true)));
         const auto restoredVersion = static_cast<int>(state.getProperty("stateVersion", 0));
+        randomchop::migrateOutputToPercent(state, restoredVersion);
         const auto restoredSeedText = state.getProperty("creativeSeed").toString();
         const auto legacySeed = static_cast<int64_t>(state.getProperty("seed", 0));
         auto restoredSeed = static_cast<uint64_t>(restoredSeedText.getLargeIntValue());
@@ -401,6 +406,7 @@ void RandomChopSamplerAudioProcessor::setStateInformation(const void* data, int 
         ensureParameter(IDs::meltAmount, 0.0f);
         ensureParameter(IDs::spectralDepth, 0.0f);
         ensureParameter(IDs::smearAmount, 0.0f);
+        ensureParameter(IDs::globalPitch, 0.0f);
         parameters.replaceState(state);
         samples.restoreState(files);
         if (!spectralMaskStore.restoreEncodedCanvas(spectralCanvas))

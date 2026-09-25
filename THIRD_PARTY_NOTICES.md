@@ -9,10 +9,10 @@ The VST3 bundle also includes `JUCE_LICENSE.md` for JUCE 8.0.13 and
 transitive dependency used by Signalsmith Stretch. Those files are copied
 unchanged from their respective upstream source packages at build time.
 
-The embedded editor bundles Pixelify Sans and Space Mono from Google Fonts.
-Both are licensed under the SIL Open Font License 1.1; the unchanged licenses
-are included as `PIXELIFY_SANS_OFL.txt` and `SPACE_MONO_OFL.txt` in the VST3
-resources.
+The embedded editor bundles Geist Pixel Square from Vercel and Space Mono from
+Google Fonts. Both are licensed under the SIL Open Font License 1.1; the
+unchanged licenses are included as `GEIST_OFL.txt` and `SPACE_MONO_OFL.txt` in
+the VST3 resources.
 
 MIT License
 

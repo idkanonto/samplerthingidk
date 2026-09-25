@@ -27,44 +27,27 @@ inline int clampTranspose(int semitones) noexcept
     return std::clamp(semitones, -24, 24);
 }
 
+inline int clampGlobalPitch(int semitones) noexcept
+{
+    return std::clamp(semitones, -12, 12);
+}
+
 inline float clampFineTune(float cents) noexcept
 {
     return std::isfinite(cents) ? std::clamp(cents, -100.0f, 100.0f) : 0.0f;
 }
 
-inline int shortestTonicCorrection(int sourceTonic, int targetTonic) noexcept
+inline double playbackPitchSemitones(int transposeSemitones, float fineTuneCents,
+                                     int globalPitchSemitones,
+                                     bool midiPitchEnabled, int midiNote) noexcept
 {
-    sourceTonic = clampTonic(sourceTonic);
-    targetTonic = clampTonic(targetTonic);
-    if (sourceTonic == noTonic || targetTonic == noTonic)
-        return 0;
-
-    const auto sourcePitchClass = sourceTonic - 1;
-    const auto targetPitchClass = targetTonic - 1;
-    auto distance = (targetPitchClass - sourcePitchClass + chromaticTonicCount)
-        % chromaticTonicCount;
-    if (distance > 6)
-        distance -= chromaticTonicCount;
-    return distance;
-}
-
-inline int chordRootMidiNote(int targetTonic) noexcept
-{
-    constexpr int centralC = 72;
-    return centralC + shortestTonicCorrection(1, targetTonic);
-}
-
-inline double totalPitchSemitones(int sourceTonic, int targetTonic,
-                                  int transposeSemitones, float fineTuneCents,
-                                  bool midiPitchEnabled, int midiNote,
-                                  int rootMidiNote) noexcept
-{
+    constexpr int neutralMidiNote = 72;
     const auto fineTune = static_cast<double>(clampFineTune(fineTuneCents)) / 100.0;
     const auto midiOffset = midiPitchEnabled
-        ? std::clamp(midiNote, 0, 127) - std::clamp(rootMidiNote, 0, 127)
+        ? std::clamp(midiNote, 0, 127) - neutralMidiNote
         : 0;
-    return static_cast<double>(shortestTonicCorrection(sourceTonic, targetTonic)
-                               + clampTranspose(transposeSemitones) + midiOffset)
+    return static_cast<double>(clampTranspose(transposeSemitones)
+                               + clampGlobalPitch(globalPitchSemitones) + midiOffset)
         + fineTune;
 }
 

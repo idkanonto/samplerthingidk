@@ -23,8 +23,8 @@ The target name remains `RandomChopSampler` to preserve build continuity; the ho
 ## Current functional boundary
 
 - Immutable 20-source pool, missing-source persistence, stable identity, deferred non-realtime reclamation.
-- Equal-probability source selection with editable Start/End, Source Key, Transpose, Fine Tune, and Gain.
-- Play In Key, a Chords toggle, compact POLY/MONO switch, and smoothed Output. Random source/start behavior is always part of the instrument; reproducibility uses a persisted internal seed rather than a technical Seed control.
+- Equal-probability source selection with editable Start/End, Transpose, Fine Tune, and Gain. Legacy Source Key data remains loadable but is inert.
+- Fixed-reference Chords tracking at MIDI note 72, a compact POLY/MONO switch, global ±12-semitone PITCH, and smoothed 0–125% VOL. Random source/start behavior is always part of the instrument; reproducibility uses a persisted internal seed rather than a technical Seed control.
 - An automatic tempo-derived 1/8, 1/16, or 1/32 creative grid with stable block-edge ownership and a safe 120 BPM fallback.
 - Signature SCRAMBLE macro with next-boundary arming, a consistent per-grid manipulation budget, bounded rearrangement, seam-blended micro-holds/repeats, reverse, jumps, and integrated pitched fragments.
 - MELT is one automatic slice-stretch macro with pitch-preserving overlap-add grains, amount-scaled `1.08x`–`4x` expansion, and internally latched per-slice reversal.

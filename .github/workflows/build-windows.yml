@@ -96,7 +96,7 @@ jobs:
             'THIRD_PARTY_NOTICES.md',
             'JUCE_LICENSE.md',
             'SIGNALSMITH_LINEAR_LICENSE.txt',
-            'PIXELIFY_SANS_OFL.txt',
+            'GEIST_OFL.txt',
             'SPACE_MONO_OFL.txt'
           )
           foreach ($noticeName in $requiredNotices) {

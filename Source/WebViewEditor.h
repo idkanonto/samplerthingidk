@@ -17,6 +17,7 @@ public:
     ~RandomChopSamplerWebViewEditor() override;
 
     void resized() override;
+    bool pageAboutToLoad(const juce::String&) override;
     bool isInterestedInFileDrag(const juce::StringArray&) override;
     void filesDropped(const juce::StringArray&, int, int) override;
 
@@ -54,6 +55,7 @@ private:
     std::array<std::atomic<bool>, maximumTrackedParameters> dirtyParameters {};
     std::shared_ptr<const SampleManager::Pool> lastPool;
     juce::String selectedSampleId;
+    juce::String importMessage;
     std::unique_ptr<juce::FileChooser> fileChooser;
     uint64_t lastSpectralGeneration = 0;
     int appliedUiScale = -1;

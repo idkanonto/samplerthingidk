@@ -38,6 +38,7 @@ export type BackendState = {
   maximumSampleCount: number
   voiceCount: number
   outputMuted: boolean
+  importMessage: string
   uiScale: number
   samples: SampleSummary[]
   spectralWidth: number
@@ -73,6 +74,9 @@ declare global {
       backend: JuceBackend
       initialisationData?: { parameters?: ParameterDescriptor[][] }
     }
+    chrome?: { webview?: {
+      postMessageWithAdditionalObjects?: (message: string, objects: FileList) => void
+    } }
   }
 }
 
@@ -85,8 +89,10 @@ const fallbackParameters: ParameterDescriptor[] = [
     min: 0, max: 100, interval: 1, numSteps: 101, isDiscrete: false, isBoolean: false },
   { id: 'spectralDepth', name: 'Spectral Depth', label: '%', value: 71, defaultValue: 71,
     min: 0, max: 100, interval: 1, numSteps: 101, isDiscrete: false, isBoolean: false },
-  { id: 'output', name: 'Output', label: 'dB', value: 0, defaultValue: 0,
-    min: -60, max: 6, interval: 0.1, numSteps: 661, isDiscrete: false, isBoolean: false },
+  { id: 'output', name: 'Vol', label: '%', value: 100, defaultValue: 100,
+    min: 0, max: 125, interval: 0.1, numSteps: 1251, isDiscrete: false, isBoolean: false },
+  { id: 'globalPitch', name: 'Global Pitch', label: 'st', value: 0, defaultValue: 0,
+    min: -12, max: 12, interval: 1, numSteps: 25, isDiscrete: true, isBoolean: false },
   { id: 'midiPitch', name: 'Chords', label: '', value: 0, defaultValue: 0,
     min: 0, max: 1, interval: 1, numSteps: 2, isDiscrete: true, isBoolean: true },
   { id: 'voiceMode', name: 'Voice Mode', label: '', value: 0, defaultValue: 0,
@@ -190,4 +196,11 @@ export function useVisualisationState() {
 
 export function sendPluginCommand(type: string, payload: Record<string, unknown> = {}) {
   backend?.emitEvent('backendCommand', { type, ...payload })
+}
+
+export function postDroppedFiles(files: FileList) {
+  const webview = window.chrome?.webview
+  if (!webview?.postMessageWithAdditionalObjects || files.length === 0) return false
+  webview.postMessageWithAdditionalObjects('__recompilerFileDrop', files)
+  return true
 }
