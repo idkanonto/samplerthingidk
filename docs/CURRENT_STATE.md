@@ -6,10 +6,20 @@ tags:
   - implementation
   - current-state
 status: active
-verified: 2026-09-17
+verified: 2026-09-25
 ---
 
 # Current Implementation State
+
+The final workflow-cleanup implementation at code head `b98a7203c164198fe6789db4fde929489db36a14` passed [Windows Release CI run #103](https://github.com/idkanonto/samplerthingidk/actions/runs/36178190471). The workflow completed the Windows VST3/Standalone/test build, tests, render checks, artifact verification, and uploads. Artifact [`recompiler-dll-Windows-VST3`](https://github.com/idkanonto/samplerthingidk/actions/runs/36178190471/artifacts/10883850282) is 3,463,518 bytes with GitHub SHA-256 `7538ab6f47e9570151127d7266476d2359f9b1c1bb1d87beb26cefa6d4f36f4a`.
+
+## Verified final workflow cleanup
+
+- The embedded React/WebView interface uses the bundled Geist Pixel Square face and renders its visible interface copy in lowercase while preserving the established monochrome pixel direction.
+- Source Key and Play In Key are removed from the active workflow. Playback pitch is Transpose + Fine Tune + global Pitch plus the MIDI offset from neutral C5/MIDI 72; legacy key fields remain inert for state compatibility.
+- Output is a 0–125% level control with exact mute at 0%, unity at 100%, and bounded gain above unity. The compact Output card also owns the global -12 to +12 semitone Pitch control.
+- Browser file drops use WebView2 additional objects to pass real Windows paths into the existing importer. The JUCE 8.0.13 patch is deterministic, checks the embedded-resource origin, and the embedded browser rejects navigation away from the packaged UI.
+- The global strip now contains only Chords and POLY/MONO. Spectral Reset is promoted to the Spectral Draw header, and source controls are limited to Transpose, Fine Tune, and Gain.
 
 The monochrome-reference code head `833a0429a4f3de5c50eb8e90e3e7ab0cb3a371e2` on [PR #26](https://github.com/idkanonto/samplerthingidk/pull/26) passed [Windows Release CI run #91](https://github.com/idkanonto/samplerthingidk/actions/runs/35163505680). The workflow compiled the VST3, Standalone, and tests; CTest passed 1/1; all 16 deterministic listening renders were non-empty; and the runner verified the complete raw VST3 bundle. Artifact `10474097579` is 3,251,014 bytes with GitHub/upload SHA-256 `7cc62359c9373502a46ec0d8b95c8dee49c1238b99e528d412bd36b5b489e67b`. Its verified bundle contains a non-empty 7,477,248-byte Windows module at `recompiler.dll.vst3/Contents/x86_64-win/recompiler.dll.vst3`. The PR remains unmerged pending a hands-on DAW visual/interaction pass.
 
