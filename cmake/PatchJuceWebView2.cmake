@@ -39,9 +39,10 @@ if(NOT windows_text MATCHES "__recompilerFileDrop")
                                                  [this] (ICoreWebView2*, ICoreWebView2WebMessageReceivedEventArgs* args) -> HRESULT
                                                  {
                                                      const auto str = callMethodWithLpwstrResult (args, &ICoreWebView2WebMessageReceivedEventArgs::TryGetWebMessageAsString);
-                                                     const auto source = getUriStringFromArgs (args);
+                                                     const auto source = callMethodWithLpwstrResult (args, &ICoreWebView2WebMessageReceivedEventArgs::get_Source);
                                                      if (str == "__recompilerFileDrop"
-                                                         && source.startsWith (WebBrowserComponent::getResourceProviderRoot()))
+                                                         && source != std::nullopt
+                                                         && source->startsWith (WebBrowserComponent::getResourceProviderRoot()))
                                                      {
                                                          StringArray paths;
                                                          ComPtr<ICoreWebView2WebMessageReceivedEventArgs2> args2;
