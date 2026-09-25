@@ -17,11 +17,23 @@ public:
     ~RandomChopSamplerWebViewEditor() override;
 
     void resized() override;
-    bool pageAboutToLoad(const juce::String&) override;
     bool isInterestedInFileDrag(const juce::StringArray&) override;
     void filesDropped(const juce::StringArray&, int, int) override;
 
 private:
+    class RestrictedBrowser final : public juce::WebBrowserComponent
+    {
+    public:
+        explicit RestrictedBrowser(const juce::WebBrowserComponent::Options& options)
+            : WebBrowserComponent(options) {}
+
+        bool pageAboutToLoad(const juce::String& url) override
+        {
+            return url == "about:blank"
+                || url.startsWith(juce::WebBrowserComponent::getResourceProviderRoot());
+        }
+    };
+
     struct ParameterBinding
     {
         juce::String id;
@@ -60,7 +72,7 @@ private:
     uint64_t lastSpectralGeneration = 0;
     int appliedUiScale = -1;
     bool backendStateDirty = true;
-    juce::WebBrowserComponent browser;
+    RestrictedBrowser browser;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(RandomChopSamplerWebViewEditor)
 };

@@ -400,12 +400,6 @@ void RandomChopSamplerWebViewEditor::addFiles(const juce::StringArray& files)
     backendStateDirty = true;
 }
 
-bool RandomChopSamplerWebViewEditor::pageAboutToLoad(const juce::String& url)
-{
-    return url == "about:blank"
-        || url.startsWith(juce::WebBrowserComponent::getResourceProviderRoot());
-}
-
 void RandomChopSamplerWebViewEditor::applyEditorScale()
 {
     static constexpr std::array<juce::Point<int>, 4> sizes {
