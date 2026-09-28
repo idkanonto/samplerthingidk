@@ -39,10 +39,65 @@ export function WaveformCanvas({ waveform }: { waveform?: [number, number][] }) 
   return <canvas ref={ref} className="pixel-canvas waveform-canvas" aria-label="Selected sample waveform" />
 }
 
-type EffectKind = 'scramble' | 'melt' | 'smear'
+export function FaultCanvas({ pressure, visualisation }: {
+  pressure: number, visualisation: VisualisationState
+}) {
+  const ref = useRef<HTMLCanvasElement>(null)
+  const history = useRef<{ mutation: number, division: number }[]>([])
+  const previousProgress = useRef(0)
+  useEffect(() => {
+    const progress = Math.max(0, Math.min(1, visualisation.faultProgress || 0))
+    if (progress < previousProgress.current) {
+      history.current = [...history.current.slice(-11), {
+        mutation: visualisation.faultMutation || 0,
+        division: visualisation.faultDivision || 16
+      }]
+    }
+    previousProgress.current = progress
+    const canvas = ref.current
+    if (!canvas) return
+    const context = setup(canvas, 256, 140)
+    if (!context) return
+    grid(context, 256, 140, 16, 8)
+    const segments = [...history.current, {
+      mutation: visualisation.faultMutation || 0,
+      division: visualisation.faultDivision || 16
+    }].slice(-12)
+    const blockWidth = 256 / 12
+    segments.forEach((segment, index) => {
+      const x = Math.floor(index * blockWidth) + 2
+      const width = Math.max(3, Math.floor(blockWidth) - 4)
+      context.fillStyle = segment.mutation === 0 ? '#343630' : '#eeede5'
+      if (segment.mutation === 1) {
+        for (let y = 18; y < 122; y += 12) context.fillRect(x, y, width, 2)
+        for (let offset = 0; offset < width; offset += 5) context.fillRect(x + offset, 18 + offset * 2, 2, 80)
+      } else if (segment.mutation === 2) {
+        for (let y = 17; y < 124; y += 7) for (let px = 0; px < width; px += 4)
+          if ((px + y + index) % 3 !== 0) context.fillRect(x + px, y, 2, 3)
+      } else if (segment.mutation === 3) {
+        for (let px = 0; px < width; px += 2) {
+          const y = 70 - Math.round(Math.sin((px / Math.max(1, width)) * Math.PI * 3) * 34)
+          context.fillRect(x + px, y, 3, 3)
+        }
+      } else context.fillRect(x, 68, width, 3)
+      context.font = '600 9px "IBM Plex Mono Local", monospace'
+      context.fillStyle = '#96958d'
+      context.fillText(`1/${segment.division}`, x, 134)
+    })
+    const currentX = Math.floor((segments.length - 1) * blockWidth) + 1
+    context.fillStyle = '#eeede5'
+    context.fillRect(currentX, 6, Math.max(1, Math.floor(blockWidth * progress)), 4)
+    context.fillStyle = '#96958d'
+    context.font = '600 9px "IBM Plex Mono Local", monospace'
+    const names = ['DRY', 'PULL', 'DUST', 'BEND']
+    context.fillText(`${names[visualisation.faultMutation] ?? 'DRY'}  ${Math.round(pressure)}%`, 5, 12)
+  }, [pressure, visualisation.faultDivision, visualisation.faultMutation, visualisation.faultProgress])
+  return <canvas ref={ref} className="pixel-canvas fault-canvas"
+    aria-label="Live Fault segment activity, mutation type, division, and progress" />
+}
 
-export function EffectCanvas({ type, amount, visualisation }: {
-  type: EffectKind, amount: number, visualisation: VisualisationState
+export function EffectCanvas({ amount, visualisation }: {
+  type: 'smear', amount: number, visualisation: VisualisationState
 }) {
   const ref = useRef<HTMLCanvasElement>(null)
   const data = useRef({ amount, visualisation })
@@ -62,51 +117,27 @@ export function EffectCanvas({ type, amount, visualisation }: {
       const telemetry = current.visualisation
       const strength = Math.max(0, Math.min(1, current.amount / 100))
       context.fillStyle = '#eeede5'
-      if (type === 'scramble') {
-        const active = (telemetry.scrambleFlags & (1 << 8)) !== 0 ? 1 : .35
-        for (let segment = 0; segment < 16; segment += 1) {
-          if (strength > .08 && ((segment * 7 + Math.floor(telemetry.scramblePhase * 16)) % 11) < strength * 3) continue
-          const source = (segment * 5 + Math.floor(telemetry.scramblePhase * 13 * strength)) % 16
-          const x = segment * 8
-          const displacement = Math.round(Math.sin(source * 2.7 + telemetry.scramblePhase * 9) * strength * 17)
-          for (let column = 0; column < 7; column += 2) {
-            const amplitude = 4 + Math.abs(Math.sin((source * 7 + column) * .73)) * (10 + strength * 17)
-            context.fillRect(x + column, Math.round(34 - amplitude / 2 + displacement), 2, Math.max(2, Math.round(amplitude * active)))
-          }
-        }
-        context.fillRect(Math.floor(telemetry.scramblePhase * 124), 5, 4, 3)
-      } else if (type === 'melt') {
-        const stretch = Math.max(strength, telemetry.meltStretch)
-        for (let x = 0; x < 128; x += 2) {
-          const progress = (x / 128 + telemetry.meltProgress) * Math.PI * 2
-          const sag = Math.sin(progress) * (3 + stretch * 13) + Math.pow(x / 128, 2) * stretch * 12
-          const amplitude = 8 + Math.abs(Math.sin(x * .19)) * (8 + strength * 9)
-          context.fillRect(x, Math.round(29 + sag - amplitude / 2), 2, Math.max(2, Math.round(amplitude)))
-          if (stretch > .3 && x % 6 === 0) context.fillRect(x, Math.round(36 + sag), Math.max(2, Math.round(stretch * 10)), 2)
-        }
-      } else {
-        const activity = Math.max(strength * .45, telemetry.smearActivity)
-        const gain = Math.max(.2, telemetry.smearGain)
-        const liveTime = telemetry.smearActivity > .002 || telemetry.smearGain > .002 ? time : 0
-        for (let particle = 0; particle < 62; particle += 1) {
-          const drift = (liveTime * .012 * (1 + activity) + particle * 19) % 148
-          const x = Math.floor(drift - 10)
-          const y = 8 + ((particle * 29 + Math.floor(liveTime * .018)) % 52)
-          const length = 1 + Math.floor((particle % 7) * activity * 2.4)
-          context.globalAlpha = .25 + ((particle * 13) % 70) / 100 * gain
-          context.fillRect(x, y, Math.max(1, length), particle % 5 === 0 ? 2 : 1)
-        }
-        context.globalAlpha = 1
-        for (let x = 0; x < 128; x += 3) {
-          const amplitude = Math.sin(x * .23 + liveTime * .002) * (4 + strength * 8)
-          context.fillRect(x, Math.round(34 + amplitude), 5 + Math.round(activity * 9), 1)
-        }
+      const activity = Math.max(strength * .45, telemetry.smearActivity)
+      const gain = Math.max(.2, telemetry.smearGain)
+      const liveTime = telemetry.smearActivity > .002 || telemetry.smearGain > .002 ? time : 0
+      for (let particle = 0; particle < 62; particle += 1) {
+        const drift = (liveTime * .012 * (1 + activity) + particle * 19) % 148
+        const x = Math.floor(drift - 10)
+        const y = 8 + ((particle * 29 + Math.floor(liveTime * .018)) % 52)
+        const length = 1 + Math.floor((particle % 7) * activity * 2.4)
+        context.globalAlpha = .25 + ((particle * 13) % 70) / 100 * gain
+        context.fillRect(x, y, Math.max(1, length), particle % 5 === 0 ? 2 : 1)
+      }
+      context.globalAlpha = 1
+      for (let x = 0; x < 128; x += 3) {
+        const amplitude = Math.sin(x * .23 + liveTime * .002) * (4 + strength * 8)
+        context.fillRect(x, Math.round(34 + amplitude), 5 + Math.round(activity * 9), 1)
       }
     }
     frame = requestAnimationFrame(draw)
     return () => cancelAnimationFrame(frame)
-  }, [type])
-  return <canvas ref={ref} className="pixel-canvas effect-canvas" aria-label={`${type} activity display`} />
+  }, [])
+  return <canvas ref={ref} className="pixel-canvas effect-canvas" aria-label="Bleed activity display" />
 }
 
 const paintLine = (mask: Float32Array, width: number, height: number,

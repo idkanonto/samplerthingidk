@@ -2,6 +2,7 @@
 
 #include <JuceHeader.h>
 #include "CreativeEffects.h"
+#include "FaultProcessor.h"
 #include "HostGrid.h"
 #include "RandomizationEngine.h"
 #include "SourceSelection.h"
@@ -47,26 +48,26 @@ public:
     {
         return spectralDrawProcessor.getDisplaySpectrum();
     }
-    uint32_t getScrambleVisualFlags() const noexcept
+    int getFaultMutation() const noexcept
     {
-        return scrambleVisualFlags.load(std::memory_order_relaxed);
+        return faultMutation.load(std::memory_order_relaxed);
     }
-    float getScrambleVisualPhase() const noexcept
+    int getFaultDivision() const noexcept
     {
-        return scrambleVisualPhase.load(std::memory_order_relaxed);
+        return faultDivision.load(std::memory_order_relaxed);
     }
-    float getMeltVisualStretch() const noexcept
+    float getFaultProgress() const noexcept
     {
-        return meltVisualStretch.load(std::memory_order_relaxed);
+        return faultProgress.load(std::memory_order_relaxed);
     }
-    float getMeltVisualProgress() const noexcept
-    {
-        return meltVisualProgress.load(std::memory_order_relaxed);
-    }
-    uint32_t getMeltVisualFlags() const noexcept
-    {
-        return meltVisualFlags.load(std::memory_order_relaxed);
-    }
+    // Native-editor compatibility shims. The retired engines are never called
+    // from processBlock; these values only keep the optional fallback editor
+    // source-compatible while its old panels remain hidden.
+    uint32_t getScrambleVisualFlags() const noexcept { return 0; }
+    float getScrambleVisualPhase() const noexcept { return 0.0f; }
+    float getMeltVisualStretch() const noexcept { return 0.0f; }
+    float getMeltVisualProgress() const noexcept { return 0.0f; }
+    uint32_t getMeltVisualFlags() const noexcept { return 0; }
     float getSmearVisualActivity() const noexcept
     {
         return smearVisualActivity.load(std::memory_order_relaxed);
@@ -115,6 +116,10 @@ public:
     juce::String getSelectedSampleId() const;
     void setSelectedSampleId(const juce::String&);
     void regenerateCreativeSeed();
+    uint32_t getSmearFeatures() const noexcept
+    {
+        return smearFeatures.load(std::memory_order_relaxed);
+    }
     uint32_t getScrambleFeatures() const noexcept
     {
         return scrambleFeatures.load(std::memory_order_relaxed);
@@ -122,10 +127,6 @@ public:
     uint32_t getMeltFeatures() const noexcept
     {
         return meltFeatures.load(std::memory_order_relaxed);
-    }
-    uint32_t getSmearFeatures() const noexcept
-    {
-        return smearFeatures.load(std::memory_order_relaxed);
     }
     void setScrambleFeatures(uint32_t features) noexcept
     {
@@ -137,6 +138,15 @@ public:
         meltFeatures.store(features & randomchop::MeltFeatures::all,
                            std::memory_order_relaxed);
     }
+    uint32_t getFaultMutations() const noexcept
+    {
+        return faultMutations.load(std::memory_order_relaxed);
+    }
+    void setFaultMutations(uint32_t mutations) noexcept
+    {
+        faultMutations.store(mutations & randomchop::FaultMutations::all,
+                             std::memory_order_relaxed);
+    }
     void setSmearFeatures(uint32_t features) noexcept
     {
         smearFeatures.store(features & randomchop::SmearFeatures::all,
@@ -144,13 +154,13 @@ public:
     }
     bool isEffectEnabled(int effect) const noexcept
     {
-        return effect >= 0 && effect < 4
+        return effect >= 0 && effect < 3
             ? effectEnabled[static_cast<size_t>(effect)].load(std::memory_order_relaxed)
             : false;
     }
     void setEffectEnabled(int effect, bool enabled) noexcept
     {
-        if (effect >= 0 && effect < 4)
+        if (effect >= 0 && effect < 3)
             effectEnabled[static_cast<size_t>(effect)].store(enabled,
                 std::memory_order_relaxed);
     }
@@ -166,20 +176,18 @@ private:
 
     randomchop::VoicePool voices;
     RandomSamplerVoice previewVoice;
-    randomchop::MeltProcessor meltProcessor;
+    randomchop::FaultProcessor faultProcessor;
     randomchop::SpectralMaskStore spectralMaskStore;
     randomchop::SpectralDrawProcessor spectralDrawProcessor;
     randomchop::SmearProcessor smearProcessor;
     randomchop::HostGrid hostGrid;
+    randomchop::HostGrid faultGrid;
     randomchop::GridBoundaries lastGridBoundaries;
-    randomchop::ScrambleProcessor scrambleProcessor;
     RandomizationEngine random;
     std::atomic<uint64_t> internalSeed { 1 };
-    std::atomic<uint32_t> scrambleVisualFlags { 0 };
-    std::atomic<float> scrambleVisualPhase { 0.0f };
-    std::atomic<float> meltVisualStretch { 0.0f };
-    std::atomic<float> meltVisualProgress { 0.0f };
-    std::atomic<uint32_t> meltVisualFlags { 0 };
+    std::atomic<int> faultMutation { 0 };
+    std::atomic<int> faultDivision { 16 };
+    std::atomic<float> faultProgress { 0.0f };
     std::atomic<float> smearVisualActivity { 0.0f };
     std::atomic<float> smearVisualGain { 0.0f };
     std::atomic<uint64_t> previewRequestId { 0 };
@@ -191,10 +199,11 @@ private:
     std::atomic<int> activeVoiceCount { 0 };
     std::atomic<bool> outputMuted { false };
     std::atomic<int> uiScaleIndex { 1 };
+    std::atomic<uint32_t> faultMutations { randomchop::FaultMutations::all };
     std::atomic<uint32_t> scrambleFeatures { randomchop::ScrambleFeatures::all };
     std::atomic<uint32_t> meltFeatures { randomchop::MeltFeatures::all };
     std::atomic<uint32_t> smearFeatures { randomchop::SmearFeatures::all };
-    std::array<std::atomic<bool>, 4> effectEnabled {{ true, true, true, true }};
+    std::array<std::atomic<bool>, 3> effectEnabled {{ true, true, true }};
     mutable juce::CriticalSection editorStateLock;
     juce::String selectedSampleId;
     uint64_t handledPreviewSerial = 0;

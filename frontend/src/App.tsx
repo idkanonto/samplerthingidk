@@ -7,9 +7,7 @@ import {
   usePluginParameter,
   useVisualisationState
 } from './juceBridge'
-import {
-  EffectCanvas, SpectralDrawCanvas, StereoMeterCanvas, WaveformCanvas
-} from './VisualCanvases'
+import { EffectCanvas, FaultCanvas, SpectralDrawCanvas, StereoMeterCanvas, WaveformCanvas } from './VisualCanvases'
 
 function HatchFill() { return <span className="hatch-fill" aria-hidden="true" /> }
 function Divider() { return <span className="divider" aria-hidden="true" /> }
@@ -178,25 +176,41 @@ function SourceGainKnob({ sample }: { sample?: SampleSummary }) {
 
 function SourceControls({ sample }: { sample?: SampleSummary }) {
   return <div className="source-controls">
-    <label><b>TRANSPOSE</b><SampleNumber sample={sample} property="transpose" value={sample?.transpose ?? 0} min={-24} max={24} step={1} suffix="st" /></label>
+    <label><b>TUNE</b><SampleNumber sample={sample} property="transpose" value={sample?.transpose ?? 0} min={-24} max={24} step={1} suffix="st" /></label>
     <Divider />
-    <label><b>FINE TUNE</b><SampleNumber sample={sample} property="fineTune" value={sample?.fineTune ?? 0} min={-100} max={100} step={1} suffix="ct" /></label>
+    <label><b>DRIFT</b><SampleNumber sample={sample} property="fineTune" value={sample?.fineTune ?? 0} min={-100} max={100} step={1} suffix="ct" /></label>
     <Divider />
-    <label className="gain-source"><b>GAIN</b><SourceGainKnob sample={sample} /></label>
+    <label className="gain-source"><b>TRIM</b><SourceGainKnob sample={sample} /></label>
   </div>
 }
 
-function EffectActivityDisplay({ type, amount }: { type: 'scramble' | 'melt' | 'smear', amount: number }) {
+function EffectActivityDisplay({ amount }: { amount: number }) {
   const visualisation = useVisualisationState()
-  return <PixelDisplay className="effect-display"><EffectCanvas type={type} amount={amount} visualisation={visualisation} /></PixelDisplay>
+  return <PixelDisplay className="effect-display"><EffectCanvas type="smear" amount={amount} visualisation={visualisation} /></PixelDisplay>
 }
 
-function EffectModule({ title, id, type }: {
-  title: string, id: string, type: 'scramble' | 'melt' | 'smear'
-}) {
+function BleedModule() {
+  const id = 'smearAmount'
   const parameter = usePluginParameter(id)
-  return <RecompilerPanel title={title} className="effect-module"><PixelKnob id={id} label={title} />
-    <EffectActivityDisplay type={type} amount={parameter.value} />
+  return <RecompilerPanel title="BLEED" className="effect-module bleed-module"><PixelKnob id={id} label="Bleed" />
+    <EffectActivityDisplay amount={parameter.value} />
+  </RecompilerPanel>
+}
+
+function FaultModule({ mutations }: { mutations: number }) {
+  const pressure = usePluginParameter('faultPressure')
+  const visualisation = useVisualisationState()
+  const choices = [{ label: 'PULL', bit: 1 }, { label: 'DUST', bit: 2 }, { label: 'BEND', bit: 4 }]
+  const toggle = (bit: number) => sendPluginCommand('setFaultMutations', { mutations: mutations ^ bit })
+  return <RecompilerPanel title="FAULT" className="fault-module">
+    <div className="fault-controls">
+      <div><b className="control-label">PRESSURE</b><PixelKnob id="faultPressure" label="Fault pressure" /></div>
+      <div className="mutation-select" role="group" aria-label="Enabled fault mutations">
+        <b>MUTATIONS</b>{choices.map(({ label, bit }) => <PixelButton key={label} active={(mutations & bit) !== 0}
+          onClick={() => toggle(bit)}>{label}</PixelButton>)}
+      </div>
+    </div>
+    <PixelDisplay className="fault-display"><FaultCanvas pressure={pressure.value} visualisation={visualisation} /></PixelDisplay>
   </RecompilerPanel>
 }
 
@@ -211,9 +225,9 @@ function SpectralModule({ values, width, height }: {
 }) {
   const [resetSignal, setResetSignal] = useState(0)
   const reset = () => { setResetSignal((current) => current + 1); sendPluginCommand('resetSpectral') }
-  return <RecompilerPanel title="SPECTRAL DRAW" className="effect-module spectral-module"
-    headerAction={<button className="spectral-reset" onClick={reset}>RESET</button>}>
-    <PixelKnob id="spectralDepth" label="Spectral Depth" />
+  return <RecompilerPanel title="ETCH" className="effect-module spectral-module"
+    headerAction={<button className="spectral-reset" onClick={reset}>CLEAR</button>}>
+    <PixelKnob id="spectralDepth" label="Etch depth" />
     <SpectralActivityDisplay values={values} width={width} height={height} resetSignal={resetSignal} />
   </RecompilerPanel>
 }
@@ -241,7 +255,7 @@ function OutputFader({ id, label, format, top, bottom }: { id: string, label: st
 }
 
 function OutputModule({ muted }: { muted: boolean }) {
-  return <RecompilerPanel title="OUTPUT" className="output-module"><div className="output-body">
+  return <RecompilerPanel title="MASTER" className="output-module"><div className="output-body">
     <div className="meter-column"><StereoMeter /><PixelButton className="mute-button" active={muted} onClick={() => sendPluginCommand('setOutputMuted', { enabled: !muted })}>{muted ? 'UNMUTE' : 'MUTE'}</PixelButton></div>
     <div className="meter-ticks"><span>+6</span><span>0</span><span>-6</span><span>-12</span><span>-24</span><span>-36</span><span>dB</span></div>
     <OutputFader id="output" label="VOL" top="125" bottom="0" format={(value) => `${Math.round(value)}%`} />
@@ -254,10 +268,10 @@ function VoiceCounter({ maximum }: { maximum: number }) {
   return <div className="voice-counter">{String(visualisation.voiceCount).padStart(2, '0')} / {maximum} VOICES</div>
 }
 
-function Header({ page, setPage, maxSamples }: { page: string, setPage: (page: string) => void, maxSamples: number }) {
+function Header({ page, setPage }: { page: string, setPage: (page: string) => void }) {
   return <header className="app-header">
     <div className="brand-reserve" aria-label="Reserved branding area"><i /><i /><i /></div>
-    <div className="header-actions"><VoiceCounter maximum={maxSamples} />
+    <div className="header-actions"><VoiceCounter maximum={16} />
       <nav><PixelButton active={page === 'main'} onClick={() => setPage('main')}>MAIN</PixelButton><PixelButton active={page === 'settings'} onClick={() => setPage('settings')}>SETTINGS</PixelButton></nav>
     </div>
   </header>
@@ -266,16 +280,16 @@ function Header({ page, setPage, maxSamples }: { page: string, setPage: (page: s
 function SettingsPage({ sampleCount, maximumSampleCount, effectEnabled, uiScale }: {
   sampleCount: number, maximumSampleCount: number, effectEnabled: boolean[], uiScale: number
 }) {
-  const effects = ['SCRAMBLE', 'MELT', 'SMEAR', 'SPECTRAL DRAW']
+  const effects = ['FAULT', 'BLEED', 'ETCH']
   return <div className="settings-page">
     <RecompilerPanel title="ENGINE" className="settings-block"><dl><dt>AUDIO</dt><dd>NATIVE C++</dd><dt>EDITOR</dt><dd>EMBEDDED / OFFLINE</dd><dt>PROJECT STATE</dt><dd>AUTOMATIC</dd></dl></RecompilerPanel>
     <RecompilerPanel title="INTERFACE SCALE" className="settings-block scale-settings"><p>FIXED LOGICAL CANVAS / UNIFORM SCALE</p><div>{['75%', '100%', '125%', '150%'].map((label, index) => <PixelButton key={label} active={uiScale === index} onClick={() => sendPluginCommand('setUiScale', { index })}>{label}</PixelButton>)}</div></RecompilerPanel>
-    <RecompilerPanel title="SAMPLE LIBRARY" className="settings-block"><dl><dt>LOADED</dt><dd>{sampleCount} / {maximumSampleCount}</dd><dt>FORMATS</dt><dd>WAV / AIFF / MP3 / FLAC</dd></dl><PixelButton onClick={() => sendPluginCommand('importSamples')}>ADD SAMPLES…</PixelButton></RecompilerPanel>
+    <RecompilerPanel title="POOL" className="settings-block"><dl><dt>LOADED</dt><dd>{sampleCount} / {maximumSampleCount}</dd><dt>FORMATS</dt><dd>WAV / AIFF / MP3 / FLAC</dd></dl><PixelButton onClick={() => sendPluginCommand('importSamples')}>ADD SAMPLES…</PixelButton></RecompilerPanel>
     <RecompilerPanel title="EFFECT ENGINES" className="settings-block effect-settings">
       {effects.map((name, effect) => <PixelButton key={name} active={effectEnabled[effect] !== false}
         onClick={() => sendPluginCommand('setEffectEnabled', { effect, enabled: effectEnabled[effect] === false })}>{name}</PixelButton>)}
       <PixelButton onClick={() => sendPluginCommand('regenerateSeed')}>NEW RANDOM SEED</PixelButton>
-      <PixelButton onClick={() => sendPluginCommand('resetSpectral')}>CLEAR SPECTRAL MASK</PixelButton>
+      <PixelButton onClick={() => sendPluginCommand('resetSpectral')}>CLEAR ETCH MASK</PixelButton>
     </RecompilerPanel>
   </div>
 }
@@ -298,28 +312,29 @@ export default function App() {
     }
   }, [])
   return <main className="recompiler-shell">
-    <Header page={page} setPage={setPage} maxSamples={backendState?.maximumSampleCount ?? 20} />
-    {page === 'settings' ? <SettingsPage sampleCount={backendState?.sampleCount ?? 0} maximumSampleCount={backendState?.maximumSampleCount ?? 20} effectEnabled={backendState?.effectEnabled ?? [true, true, true, true]} uiScale={backendState?.uiScale ?? 1} /> : <>
+    <Header page={page} setPage={setPage} />
+    {page === 'settings' ? <SettingsPage sampleCount={backendState?.sampleCount ?? 0} maximumSampleCount={backendState?.maximumSampleCount ?? 20} effectEnabled={backendState?.effectEnabled ?? [true, true, true]} uiScale={backendState?.uiScale ?? 1} /> : <>
       <div className="source-zone">
-        <RecompilerPanel title="SAMPLES" className="samples-panel">
+        <div className={`pool-drop-target ${draggingFiles ? 'drag-active' : ''}`}
+          onDragEnter={(event) => { event.preventDefault(); event.stopPropagation(); setDraggingFiles(true) }}
+          onDragOver={(event) => { event.preventDefault(); event.stopPropagation(); setDraggingFiles(true) }}
+          onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDraggingFiles(false) }}
+          onDrop={(event) => { event.preventDefault(); event.stopPropagation(); setDraggingFiles(false); postDroppedFiles(event.dataTransfer.files) }}>
+        <RecompilerPanel title="POOL" className="samples-panel">
           <div className="sample-list">{samples.length ? samples.map((sample) => <SampleRow key={sample.id} sample={sample} selected={sample.id === selectedSample?.id} />) : <p className="empty-samples">NO SAMPLES LOADED</p>}</div>
           <button className={`drop-zone ${draggingFiles ? 'drag-active' : ''}`} onClick={() => sendPluginCommand('importSamples')}
-            onDragEnter={(event) => { event.preventDefault(); event.stopPropagation(); setDraggingFiles(true) }}
-            onDragOver={(event) => { event.preventDefault(); event.stopPropagation(); setDraggingFiles(true) }}
-            onDragLeave={(event) => { event.preventDefault(); event.stopPropagation(); setDraggingFiles(false) }}
-            onDrop={(event) => { event.preventDefault(); event.stopPropagation(); setDraggingFiles(false); postDroppedFiles(event.dataTransfer.files) }}>
+            >
             {draggingFiles ? 'RELEASE TO IMPORT' : (backendState?.importMessage || 'DROP WAV, AIFF, MP3 OR FLAC')}</button>
-        </RecompilerPanel>
-        <RecompilerPanel className="selected-source">
+        </RecompilerPanel></div>
+        <RecompilerPanel title="SOURCE" className="selected-source">
           <div className="source-title"><strong>{selectedSample?.name ?? 'NO SAMPLE SELECTED'}</strong><span>{selectedSample ? `${(selectedSample.sampleRate / 1000).toFixed(1)} kHz   ${selectedSample.bitDepth || '--'} bit   ${selectedSample.durationSeconds.toFixed(1)} s` : '--.- kHz   -- bit   --.- s'}</span></div>
           <Waveform sample={selectedSample} /><SourceControls sample={selectedSample} />
         </RecompilerPanel>
       </div>
-      <div className="global-strip"><label>CHORDS <PixelToggle id="midiPitch" left="OFF" right="ON" /></label><Divider /><label>POLY / MONO <PixelToggle id="voiceMode" left="POLY" right="MONO" /></label></div>
+      <div className="global-strip"><label>STACK <PixelToggle id="midiPitch" left="OFF" right="ON" /></label><Divider /><label>VOICES <PixelToggle id="voiceMode" left="POLY" right="MONO" /></label></div>
       <div className="effects-zone">
-        <EffectModule title="SCRAMBLE" id="scrambleAmount" type="scramble" />
-        <EffectModule title="MELT" id="meltAmount" type="melt" />
-        <EffectModule title="SMEAR" id="smearAmount" type="smear" />
+        <FaultModule mutations={backendState?.faultMutations ?? 7} />
+        <BleedModule />
         <SpectralModule values={backendState?.spectralCanvas ?? []} width={backendState?.spectralWidth ?? 128} height={backendState?.spectralHeight ?? 64} />
         <OutputModule muted={backendState?.outputMuted ?? false} />
       </div>

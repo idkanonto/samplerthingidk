@@ -1,5 +1,6 @@
 #include <JuceHeader.h>
 #include "CreativeEffects.h"
+#include "FaultProcessor.h"
 #include "HarmonicPitch.h"
 #include "OutputGain.h"
 #include "HostGrid.h"
@@ -1345,8 +1346,72 @@ void testStateMigration()
                && randomchop::isRemovedParameterId("globalGrid")
                && randomchop::isRemovedParameterId("spectralScanRate")
               && !randomchop::isRemovedParameterId("output")
-              && !randomchop::isRemovedParameterId("targetKey"),
+              && randomchop::isRemovedParameterId("targetKey")
+              && randomchop::isRemovedParameterId("scrambleAmount")
+              && randomchop::isRemovedParameterId("meltAmount"),
           "legacy parameter allow/deny boundary changed");
+}
+
+juce::AudioBuffer<float> renderFault(float pressure, uint32_t mask, uint64_t seed)
+{
+    auto result = makeListeningInput(480000, 48000.0);
+    randomchop::GridBoundaries boundaries;
+    boundaries.bpm = 120.0;
+    for (int offset = 0; offset < result.getNumSamples(); offset += 6000)
+        boundaries.sampleOffsets[static_cast<size_t>(boundaries.count++)] = offset;
+    randomchop::FaultProcessor processor;
+    processor.prepare(48000.0);
+    processor.setSeed(seed);
+    processor.process(result, boundaries, { pressure, mask });
+    return result;
+}
+
+void testFaultProcessor()
+{
+    const auto dry = makeListeningInput(480000, 48000.0);
+    check(buffersEqual(dry, renderFault(0.0f, randomchop::FaultMutations::all, 4101)),
+          "FAULT pressure zero was not sample-identical");
+    check(buffersEqual(dry, renderFault(100.0f, 0, 4101)),
+          "FAULT with no enabled mutations was not sample-identical");
+
+    const auto first = renderFault(100.0f, randomchop::FaultMutations::all, 4102);
+    const auto second = renderFault(100.0f, randomchop::FaultMutations::all, 4102);
+    check(buffersEqual(first, second), "FAULT fixed-seed rendering was not deterministic");
+    check(!buffersEqual(dry, first), "FAULT maximum pressure produced no mutations");
+
+    for (const auto only : { randomchop::FaultMutations::pull,
+                             randomchop::FaultMutations::dust,
+                             randomchop::FaultMutations::bend })
+    {
+        auto signal = dry;
+        randomchop::GridBoundaries boundaries;
+        boundaries.bpm = 120.0;
+        for (int offset = 0; offset < signal.getNumSamples(); offset += 6000)
+            boundaries.sampleOffsets[static_cast<size_t>(boundaries.count++)] = offset;
+        randomchop::FaultProcessor processor;
+        processor.prepare(48000.0);
+        processor.setSeed(4200 + only);
+        processor.process(signal, boundaries, { 100.0f, only });
+        const auto selected = only == randomchop::FaultMutations::pull
+            ? randomchop::FaultMutation::pull
+            : only == randomchop::FaultMutations::dust
+                ? randomchop::FaultMutation::dust : randomchop::FaultMutation::bend;
+        check(processor.getMutationCount(selected) > 0,
+              "FAULT single-mutation selection never activated");
+        for (const auto other : { randomchop::FaultMutation::pull,
+                                  randomchop::FaultMutation::dust,
+                                  randomchop::FaultMutation::bend })
+            if (other != selected)
+                check(processor.getMutationCount(other) == 0,
+                      "FAULT single-mutation selection leaked another mutation");
+        check((processor.getObservedDivisionMask() & ~0x0fu) == 0
+                  && processor.getObservedDivisionMask() != 0,
+              "FAULT emitted a division outside 1/2, 1/4, 1/8, and 1/16");
+        for (int channel = 0; channel < signal.getNumChannels(); ++channel)
+            for (int frame = 0; frame < signal.getNumSamples(); ++frame)
+                check(std::isfinite(signal.getSample(channel, frame)),
+                      "FAULT produced a non-finite sample");
+    }
 }
 
 void testCreativeFeatureMenus()
@@ -1390,6 +1455,7 @@ int main()
     testSupportedFormatsAndPoolState();
     testEqualSelectionAndPitch();
     testOutputGainMapping();
+    testFaultProcessor();
     testRegionsAndVoices();
     testMeltSingleMacroProgression();
     testHostGrid();

@@ -8,7 +8,6 @@
 #include <vector>
 
 class RandomChopSamplerWebViewEditor final : public juce::AudioProcessorEditor,
-    public juce::FileDragAndDropTarget,
     private juce::AudioProcessorParameter::Listener,
     private juce::Timer
 {
@@ -17,8 +16,6 @@ public:
     ~RandomChopSamplerWebViewEditor() override;
 
     void resized() override;
-    bool isInterestedInFileDrag(const juce::StringArray&) override;
-    void filesDropped(const juce::StringArray&, int, int) override;
 
 private:
     class RestrictedBrowser final : public juce::WebBrowserComponent

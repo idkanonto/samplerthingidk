@@ -73,6 +73,8 @@ target_sources(RandomChopSampler PRIVATE
     Source/StateMigration.h
     Source/TemporalEffects.cpp
     Source/TemporalEffects.h
+    Source/FaultProcessor.cpp
+    Source/FaultProcessor.h
     Source/CreativeEffects.cpp
     Source/CreativeEffects.h
     Source/SpectralDraw.cpp
@@ -88,9 +90,10 @@ set(frontend_dist_files
     "${frontend_directory}/dist/index.html"
     "${frontend_directory}/dist/assets/app.js"
     "${frontend_directory}/dist/assets/app.css"
-    "${frontend_directory}/dist/assets/geist-pixel-square.woff2"
-    "${frontend_directory}/dist/assets/space-mono-regular.ttf"
-    "${frontend_directory}/dist/assets/space-mono-bold.ttf")
+    "${frontend_directory}/dist/assets/spleen-8x16.woff2"
+    "${frontend_directory}/dist/assets/spleen-6x12.woff2"
+    "${frontend_directory}/dist/assets/ibm-plex-mono-regular.woff2"
+    "${frontend_directory}/dist/assets/ibm-plex-mono-semibold.woff2")
 
 if (RECOMPILER_REBUILD_FRONTEND)
     find_program(NPM_EXECUTABLE npm)
@@ -112,9 +115,10 @@ if (RECOMPILER_REBUILD_FRONTEND)
                 "${frontend_directory}/src/juceBridge.ts"
                 "${frontend_directory}/src/main.tsx"
                 "${frontend_directory}/src/styles.css"
-                "${frontend_directory}/src/assets/geist-pixel-square.woff2"
-                "${frontend_directory}/src/assets/space-mono-regular.ttf"
-                "${frontend_directory}/src/assets/space-mono-bold.ttf"
+                "${frontend_directory}/src/assets/spleen-8x16.woff2"
+                "${frontend_directory}/src/assets/spleen-6x12.woff2"
+                "${frontend_directory}/src/assets/ibm-plex-mono-regular.woff2"
+                "${frontend_directory}/src/assets/ibm-plex-mono-semibold.woff2"
             BYPRODUCTS ${frontend_dist_files}
             COMMENT "Building embedded React WebView frontend"
             VERBATIM)
@@ -170,11 +174,11 @@ add_custom_command(TARGET RandomChopSampler_VST3 POST_BUILD
         "${signalsmith_linear_source_dir}/LICENSE.txt"
         "$<TARGET_FILE_DIR:RandomChopSampler_VST3>/../Resources/SIGNALSMITH_LINEAR_LICENSE.txt"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_CURRENT_SOURCE_DIR}/Licenses/GEIST_OFL.txt"
-        "$<TARGET_FILE_DIR:RandomChopSampler_VST3>/../Resources/GEIST_OFL.txt"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Licenses/SPLEEN_BSD.txt"
+        "$<TARGET_FILE_DIR:RandomChopSampler_VST3>/../Resources/SPLEEN_BSD.txt"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_CURRENT_SOURCE_DIR}/Licenses/SPACE_MONO_OFL.txt"
-        "$<TARGET_FILE_DIR:RandomChopSampler_VST3>/../Resources/SPACE_MONO_OFL.txt"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Licenses/IBM_PLEX_OFL.txt"
+        "$<TARGET_FILE_DIR:RandomChopSampler_VST3>/../Resources/IBM_PLEX_OFL.txt"
     COMMENT "Copying third-party notices into the VST3 bundle")
 
 if (BUILD_TESTING)
@@ -193,6 +197,8 @@ if (BUILD_TESTING)
         Source/StateMigration.h
         Source/TemporalEffects.cpp
         Source/TemporalEffects.h
+        Source/FaultProcessor.cpp
+        Source/FaultProcessor.h
         Source/CreativeEffects.cpp
         Source/CreativeEffects.h
         Source/SpectralDraw.cpp

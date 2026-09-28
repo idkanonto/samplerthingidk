@@ -8,12 +8,10 @@
 namespace IDs
 {
 constexpr auto output = "output";
-constexpr auto targetKey = "targetKey";
 constexpr auto midiPitch = "midiPitch";
 constexpr auto globalPitch = "globalPitch";
 constexpr auto voiceMode = "voiceMode";
-constexpr auto scrambleAmount = "scrambleAmount";
-constexpr auto meltAmount = "meltAmount";
+constexpr auto faultPressure = "faultPressure";
 constexpr auto spectralDepth = "spectralDepth";
 constexpr auto smearAmount = "smearAmount";
 }
@@ -40,24 +38,16 @@ RandomChopSamplerAudioProcessor::createParameterLayout()
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
     layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::output, "Vol",
         juce::NormalisableRange<float>(0.0f, 125.0f, 0.1f), 100.0f, "%"));
-    juce::StringArray tonicChoices;
-    for (const auto* name : randomchop::tonicNames)
-        tonicChoices.add(name);
-    layout.add(std::make_unique<juce::AudioParameterChoice>(
-        IDs::targetKey, "Play In Key", tonicChoices, randomchop::noTonic));
-    layout.add(std::make_unique<juce::AudioParameterBool>(IDs::midiPitch, "Chords", false));
+    layout.add(std::make_unique<juce::AudioParameterBool>(IDs::midiPitch, "Stack", false));
     layout.add(std::make_unique<juce::AudioParameterInt>(
         IDs::globalPitch, "Global Pitch", -12, 12, 0, "st"));
     layout.add(std::make_unique<juce::AudioParameterChoice>(
         IDs::voiceMode, "Voice Mode", juce::StringArray { "POLY", "MONO" }, 0));
-    layout.add(std::make_unique<juce::AudioParameterFloat>(
-        IDs::scrambleAmount, "Scramble",
+    layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::faultPressure, "Fault Pressure",
         juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, "%"));
-    layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::meltAmount, "Melt",
+    layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::spectralDepth, "Etch Depth",
         juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, "%"));
-    layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::spectralDepth, "Spectral Depth",
-        juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, "%"));
-    layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::smearAmount, "Smear",
+    layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::smearAmount, "Bleed",
         juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, "%"));
     return layout;
 }
@@ -73,8 +63,8 @@ void RandomChopSamplerAudioProcessor::prepareToPlay(double rate, int maximumBloc
     previewingRuntimeId.store(0, std::memory_order_relaxed);
     handledPreviewSerial = previewRequestSerial.load(std::memory_order_relaxed);
     hostGrid.reset();
-    scrambleProcessor.prepare(currentRate);
-    meltProcessor.prepare(currentRate);
+    faultGrid.reset();
+    faultProcessor.prepare(currentRate);
     setLatencySamples(randomchop::SpectralDrawProcessor::latencySamples);
     spectralDrawProcessor.prepare(currentRate);
     smearProcessor.prepare(currentRate);
@@ -86,8 +76,7 @@ void RandomChopSamplerAudioProcessor::prepareToPlay(double rate, int maximumBloc
     lastGridBoundaries = {};
     const auto seed = internalSeed.load(std::memory_order_relaxed);
     random.setSeed(seed);
-    scrambleProcessor.setSeed(seed);
-    meltProcessor.setSeed(seed);
+    faultProcessor.setSeed(seed);
     smearProcessor.setSeed(seed);
     lastSeed = seed;
 }
@@ -182,8 +171,7 @@ void RandomChopSamplerAudioProcessor::processBlock(
     if (seed != lastSeed)
     {
         random.setSeed(seed);
-        scrambleProcessor.setSeed(seed);
-        meltProcessor.setSeed(seed);
+        faultProcessor.setSeed(seed);
         smearProcessor.setSeed(seed);
         lastSeed = seed;
     }
@@ -224,6 +212,8 @@ void RandomChopSamplerAudioProcessor::processBlock(
     const auto gridChoice = randomchop::HostGrid::automaticDivisionChoice(timingBpm);
     lastGridBoundaries = hostGrid.process(
         currentRate, buffer.getNumSamples(), gridChoice, hostTiming);
+    const auto faultBoundaries = faultGrid.process(
+        currentRate, buffer.getNumSamples(), 1, hostTiming);
 
     int rendered = 0;
     for (const auto metadata : midi)
@@ -245,36 +235,23 @@ void RandomChopSamplerAudioProcessor::processBlock(
     if (!previewVoice.isActive())
         previewingRuntimeId.store(0, std::memory_order_relaxed);
 
-    scrambleProcessor.process(buffer, lastGridBoundaries, gridChoice,
-        { isEffectEnabled(0) ? parameters.getRawParameterValue(IDs::scrambleAmount)->load() : 0.0f,
-          scrambleFeatures.load(std::memory_order_relaxed) });
-    const auto scrambleFlags = scrambleProcessor.getActiveSliceMask()
-        | (scrambleProcessor.isActive() ? uint32_t { 1 } << 8 : 0)
-        | (scrambleProcessor.isArmed() ? uint32_t { 1 } << 9 : 0);
-    scrambleVisualFlags.store(scrambleFlags, std::memory_order_relaxed);
-    scrambleVisualPhase.store(scrambleProcessor.getEventProgress(),
-                              std::memory_order_relaxed);
-    meltProcessor.process(buffer, lastGridBoundaries, gridChoice,
-        { isEffectEnabled(1) ? parameters.getRawParameterValue(IDs::meltAmount)->load() : 0.0f,
-          meltFeatures.load(std::memory_order_relaxed) });
-    const auto meltStretch = std::clamp(
-        (meltProcessor.getLastStretchRatio() - 1.0f) / 3.0f, 0.0f, 1.0f);
-    const auto meltFlags = meltProcessor.getActiveReverseMask()
-        | (meltProcessor.isActive() ? uint32_t { 1 } << 8 : 0)
-        | (meltProcessor.isArmed() ? uint32_t { 1 } << 9 : 0);
-    meltVisualStretch.store(meltStretch, std::memory_order_relaxed);
-    meltVisualProgress.store(meltProcessor.getEventProgress(),
-                             std::memory_order_relaxed);
-    meltVisualFlags.store(meltFlags, std::memory_order_relaxed);
+    faultProcessor.process(buffer, faultBoundaries,
+        { isEffectEnabled(0) ? parameters.getRawParameterValue(IDs::faultPressure)->load() : 0.0f,
+          faultMutations.load(std::memory_order_relaxed) });
+    faultMutation.store(static_cast<int>(faultProcessor.getCurrentMutation()),
+                        std::memory_order_relaxed);
+    faultDivision.store(faultProcessor.getCurrentDivisionDenominator(),
+                        std::memory_order_relaxed);
+    faultProgress.store(faultProcessor.getSegmentProgress(), std::memory_order_relaxed);
     spectralDrawProcessor.process(buffer, spectralMaskStore,
-        { isEffectEnabled(3) ? parameters.getRawParameterValue(IDs::spectralDepth)->load() : 0.0f,
+        { isEffectEnabled(2) ? parameters.getRawParameterValue(IDs::spectralDepth)->load() : 0.0f,
           randomchop::SpectralDrawProcessor::automaticCycleChoice(lastGridBoundaries.bpm),
           lastGridBoundaries.bpm,
           hostTiming.ppq,
           lastGridBoundaries.usedHostClock && hostTiming.hasPpq,
           lastGridBoundaries.transportDiscontinuity });
     smearProcessor.process(buffer,
-        { isEffectEnabled(2) ? parameters.getRawParameterValue(IDs::smearAmount)->load() : 0.0f,
+        { isEffectEnabled(1) ? parameters.getRawParameterValue(IDs::smearAmount)->load() : 0.0f,
           smearFeatures.load(std::memory_order_relaxed) });
     smearVisualActivity.store(static_cast<float>(smearProcessor.getActiveGrainCount())
                                   / static_cast<float>(
@@ -322,13 +299,11 @@ void RandomChopSamplerAudioProcessor::getStateInformation(juce::MemoryBlock& des
     state.setProperty("outputMuted", outputMuted.load(std::memory_order_relaxed), nullptr);
     state.setProperty("uiScale", uiScaleIndex.load(std::memory_order_relaxed), nullptr);
     state.setProperty("selectedSampleId", getSelectedSampleId(), nullptr);
-    state.setProperty("scrambleFeatures",
-        static_cast<int>(scrambleFeatures.load(std::memory_order_relaxed)), nullptr);
-    state.setProperty("meltFeatures",
-        static_cast<int>(meltFeatures.load(std::memory_order_relaxed)), nullptr);
+    state.setProperty("faultMutations",
+        static_cast<int>(faultMutations.load(std::memory_order_relaxed)), nullptr);
     state.setProperty("smearFeatures",
         static_cast<int>(smearFeatures.load(std::memory_order_relaxed)), nullptr);
-    for (int effect = 0; effect < 4; ++effect)
+    for (int effect = 0; effect < 3; ++effect)
         state.setProperty(juce::Identifier("effectEnabled" + juce::String(effect)),
                           isEffectEnabled(effect), nullptr);
     state.appendChild(samples.createState(), nullptr);
@@ -349,16 +324,23 @@ void RandomChopSamplerAudioProcessor::setStateInformation(const void* data, int 
                           std::memory_order_relaxed);
         setUiScaleIndex(static_cast<int>(state.getProperty("uiScale", 1)));
         setSelectedSampleId(state.getProperty("selectedSampleId").toString());
-        setScrambleFeatures(static_cast<uint32_t>(static_cast<int>(
-            state.getProperty("scrambleFeatures", static_cast<int>(randomchop::ScrambleFeatures::all)))));
-        setMeltFeatures(static_cast<uint32_t>(static_cast<int>(
-            state.getProperty("meltFeatures", static_cast<int>(randomchop::MeltFeatures::all)))));
+        setFaultMutations(static_cast<uint32_t>(static_cast<int>(
+            state.getProperty("faultMutations", static_cast<int>(randomchop::FaultMutations::all)))));
         setSmearFeatures(static_cast<uint32_t>(static_cast<int>(
             state.getProperty("smearFeatures", static_cast<int>(randomchop::SmearFeatures::all)))));
-        for (int effect = 0; effect < 4; ++effect)
-            setEffectEnabled(effect, static_cast<bool>(state.getProperty(
-                juce::Identifier("effectEnabled" + juce::String(effect)), true)));
         const auto restoredVersion = static_cast<int>(state.getProperty("stateVersion", 0));
+        if (restoredVersion < 13)
+        {
+            setEffectEnabled(0, true);
+            setEffectEnabled(1, static_cast<bool>(state.getProperty("effectEnabled2", true)));
+            setEffectEnabled(2, static_cast<bool>(state.getProperty("effectEnabled3", true)));
+        }
+        else
+        {
+            for (int effect = 0; effect < 3; ++effect)
+                setEffectEnabled(effect, static_cast<bool>(state.getProperty(
+                    juce::Identifier("effectEnabled" + juce::String(effect)), true)));
+        }
         randomchop::migrateOutputToPercent(state, restoredVersion);
         const auto restoredSeedText = state.getProperty("creativeSeed").toString();
         const auto legacySeed = static_cast<int64_t>(state.getProperty("seed", 0));
@@ -367,29 +349,13 @@ void RandomChopSamplerAudioProcessor::setStateInformation(const void* data, int 
             restoredSeed = static_cast<uint64_t>(legacySeed);
         if (restoredSeed != 0)
             internalSeed.store(restoredSeed, std::memory_order_relaxed);
-        if (restoredVersion < 7)
-        {
-            const auto oldScrambleChance = static_cast<float>(
-                state.getProperty("scrambleChance", 0.0f));
-            const auto oldScrambleAmount = static_cast<float>(
-                state.getProperty(IDs::scrambleAmount, 50.0f));
-            const auto oldFreezeChance = static_cast<float>(
-                state.getProperty("freezeChance", 0.0f));
-            const auto oldFreezeOctave = static_cast<float>(
-                state.getProperty("freezeOctaveChance", 0.0f));
-            const auto migratedScramble = std::clamp(std::max({
-                oldScrambleAmount * oldScrambleChance * 0.01f,
-                oldFreezeChance * 0.78f,
-                oldFreezeOctave * oldFreezeChance * 0.006f }), 0.0f, 100.0f);
-            state.setProperty(IDs::scrambleAmount, migratedScramble, nullptr);
-
-        }
         if (files.isValid())
             state.removeChild(files, nullptr);
         state.removeProperty("spectralCanvas", nullptr);
         state.removeProperty("outputMuted", nullptr);
         state.removeProperty("uiScale", nullptr);
         state.removeProperty("selectedSampleId", nullptr);
+        state.removeProperty("faultMutations", nullptr);
         state.removeProperty("scrambleFeatures", nullptr);
         state.removeProperty("meltFeatures", nullptr);
         state.removeProperty("smearFeatures", nullptr);
@@ -402,8 +368,7 @@ void RandomChopSamplerAudioProcessor::setStateInformation(const void* data, int 
             if (!state.hasProperty(id))
                 state.setProperty(id, value, nullptr);
         };
-        ensureParameter(IDs::scrambleAmount, 0.0f);
-        ensureParameter(IDs::meltAmount, 0.0f);
+        ensureParameter(IDs::faultPressure, 0.0f);
         ensureParameter(IDs::spectralDepth, 0.0f);
         ensureParameter(IDs::smearAmount, 0.0f);
         ensureParameter(IDs::globalPitch, 0.0f);

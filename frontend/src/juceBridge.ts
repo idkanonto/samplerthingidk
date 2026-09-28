@@ -22,7 +22,6 @@ export type SampleSummary = {
   missing: boolean
   start: number
   end: number
-  sourceKey: number
   transpose: number
   fineTune: number
   gainDb: number
@@ -45,6 +44,7 @@ export type BackendState = {
   spectralHeight: number
   spectralCanvas: number[]
   effectEnabled: boolean[]
+  faultMutations: number
 }
 
 export type VisualisationState = {
@@ -52,11 +52,9 @@ export type VisualisationState = {
   outputPeakLeft: number
   outputPeakRight: number
   voiceCount: number
-  scramblePhase: number
-  scrambleFlags: number
-  meltStretch: number
-  meltProgress: number
-  meltFlags: number
+  faultMutation: number
+  faultDivision: number
+  faultProgress: number
   smearActivity: number
   smearGain: number
   spectralScan: number
@@ -81,24 +79,20 @@ declare global {
 }
 
 const fallbackParameters: ParameterDescriptor[] = [
-  { id: 'scrambleAmount', name: 'Scramble', label: '%', value: 42, defaultValue: 42,
+  { id: 'faultPressure', name: 'Fault Pressure', label: '%', value: 0, defaultValue: 0,
     min: 0, max: 100, interval: 1, numSteps: 101, isDiscrete: false, isBoolean: false },
-  { id: 'meltAmount', name: 'Melt', label: '%', value: 63, defaultValue: 63,
+  { id: 'smearAmount', name: 'Bleed', label: '%', value: 28, defaultValue: 28,
     min: 0, max: 100, interval: 1, numSteps: 101, isDiscrete: false, isBoolean: false },
-  { id: 'smearAmount', name: 'Smear', label: '%', value: 28, defaultValue: 28,
-    min: 0, max: 100, interval: 1, numSteps: 101, isDiscrete: false, isBoolean: false },
-  { id: 'spectralDepth', name: 'Spectral Depth', label: '%', value: 71, defaultValue: 71,
+  { id: 'spectralDepth', name: 'Etch Depth', label: '%', value: 71, defaultValue: 71,
     min: 0, max: 100, interval: 1, numSteps: 101, isDiscrete: false, isBoolean: false },
   { id: 'output', name: 'Vol', label: '%', value: 100, defaultValue: 100,
     min: 0, max: 125, interval: 0.1, numSteps: 1251, isDiscrete: false, isBoolean: false },
   { id: 'globalPitch', name: 'Global Pitch', label: 'st', value: 0, defaultValue: 0,
     min: -12, max: 12, interval: 1, numSteps: 25, isDiscrete: true, isBoolean: false },
-  { id: 'midiPitch', name: 'Chords', label: '', value: 0, defaultValue: 0,
+  { id: 'midiPitch', name: 'Stack', label: '', value: 0, defaultValue: 0,
     min: 0, max: 1, interval: 1, numSteps: 2, isDiscrete: true, isBoolean: true },
   { id: 'voiceMode', name: 'Voice Mode', label: '', value: 0, defaultValue: 0,
-    min: 0, max: 1, interval: 1, numSteps: 2, isDiscrete: true, isBoolean: true },
-  { id: 'targetKey', name: 'Play In Key', label: '', value: 0, defaultValue: 0,
-    min: 0, max: 12, interval: 1, numSteps: 13, isDiscrete: true, isBoolean: false }
+    min: 0, max: 1, interval: 1, numSteps: 2, isDiscrete: true, isBoolean: true }
 ]
 
 const descriptors = new Map<string, ParameterDescriptor>(
@@ -110,8 +104,8 @@ const parameterSubscribers = new Map<string, Set<(value: number) => void>>()
 let backendState: BackendState | null = null
 let visualisationState: VisualisationState = {
   outputPeak: 0, outputPeakLeft: 0, outputPeakRight: 0, voiceCount: 0,
-  scramblePhase: 0, scrambleFlags: 0, meltStretch: 0,
-  meltProgress: 0, meltFlags: 0, smearActivity: 0, smearGain: 0, spectralScan: 0
+  faultMutation: 0, faultDivision: 16, faultProgress: 0,
+  smearActivity: 0, smearGain: 0, spectralScan: 0
 }
 const backendSubscribers = new Set<(state: BackendState) => void>()
 const visualisationSubscribers = new Set<(state: VisualisationState) => void>()

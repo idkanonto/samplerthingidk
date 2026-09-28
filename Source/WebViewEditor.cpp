@@ -37,15 +37,18 @@ std::optional<juce::WebBrowserComponent::Resource> makeResource(
     if (path == "/assets/app.css")
         return juce::WebBrowserComponent::Resource {
             bytesFrom(BinaryData::app_css, BinaryData::app_cssSize), "text/css" };
-    if (path == "/assets/geist-pixel-square.woff2")
+    if (path == "/assets/spleen-8x16.woff2")
         return juce::WebBrowserComponent::Resource {
-            bytesFrom(BinaryData::geistpixelsquare_woff2, BinaryData::geistpixelsquare_woff2Size), "font/woff2" };
-    if (path == "/assets/space-mono-regular.ttf")
+            bytesFrom(BinaryData::spleen8x16_woff2, BinaryData::spleen8x16_woff2Size), "font/woff2" };
+    if (path == "/assets/spleen-6x12.woff2")
         return juce::WebBrowserComponent::Resource {
-            bytesFrom(BinaryData::spacemonoregular_ttf, BinaryData::spacemonoregular_ttfSize), "font/ttf" };
-    if (path == "/assets/space-mono-bold.ttf")
+            bytesFrom(BinaryData::spleen6x12_woff2, BinaryData::spleen6x12_woff2Size), "font/woff2" };
+    if (path == "/assets/ibm-plex-mono-regular.woff2")
         return juce::WebBrowserComponent::Resource {
-            bytesFrom(BinaryData::spacemonobold_ttf, BinaryData::spacemonobold_ttfSize), "font/ttf" };
+            bytesFrom(BinaryData::ibmplexmonoregular_woff2, BinaryData::ibmplexmonoregular_woff2Size), "font/woff2" };
+    if (path == "/assets/ibm-plex-mono-semibold.woff2")
+        return juce::WebBrowserComponent::Resource {
+            bytesFrom(BinaryData::ibmplexmonosemibold_woff2, BinaryData::ibmplexmonosemibold_woff2Size), "font/woff2" };
     return std::nullopt;
 }
 }
@@ -158,9 +161,10 @@ juce::var RandomChopSamplerWebViewEditor::createBackendState()
     object->setProperty("uiScale", processor.getUiScaleIndex());
     object->setProperty("importMessage", importMessage);
     juce::Array<juce::var> effectEnabled;
-    for (int effect = 0; effect < 4; ++effect)
+    for (int effect = 0; effect < 3; ++effect)
         effectEnabled.add(processor.isEffectEnabled(effect));
     object->setProperty("effectEnabled", effectEnabled);
+    object->setProperty("faultMutations", static_cast<int>(processor.getFaultMutations()));
 
     juce::Array<juce::var> samples;
     for (const auto& sample : *pool)
@@ -173,7 +177,6 @@ juce::var RandomChopSamplerWebViewEditor::createBackendState()
         item->setProperty("missing", settings.missing);
         item->setProperty("start", settings.startNormalised);
         item->setProperty("end", settings.endNormalised);
-        item->setProperty("sourceKey", settings.sourceKey);
         item->setProperty("transpose", settings.transposeSemitones);
         item->setProperty("fineTune", settings.fineTuneCents);
         item->setProperty("gainDb", settings.gainDb);
@@ -220,11 +223,9 @@ juce::var RandomChopSamplerWebViewEditor::createVisualisationState() const
     object->setProperty("outputPeakLeft", processor.getOutputPeakLeft());
     object->setProperty("outputPeakRight", processor.getOutputPeakRight());
     object->setProperty("voiceCount", processor.getActiveVoiceCount());
-    object->setProperty("scramblePhase", processor.getScrambleVisualPhase());
-    object->setProperty("scrambleFlags", static_cast<int>(processor.getScrambleVisualFlags()));
-    object->setProperty("meltStretch", processor.getMeltVisualStretch());
-    object->setProperty("meltProgress", processor.getMeltVisualProgress());
-    object->setProperty("meltFlags", static_cast<int>(processor.getMeltVisualFlags()));
+    object->setProperty("faultMutation", processor.getFaultMutation());
+    object->setProperty("faultDivision", processor.getFaultDivision());
+    object->setProperty("faultProgress", processor.getFaultProgress());
     object->setProperty("smearActivity", processor.getSmearVisualActivity());
     object->setProperty("smearGain", processor.getSmearVisualGain());
     object->setProperty("spectralScan", processor.getSpectralScanPosition());
@@ -308,8 +309,7 @@ void RandomChopSamplerWebViewEditor::handleCommand(const juce::var& payload)
         const auto value = static_cast<double>(payload.getProperty("value", 0.0));
         processor.samples.updateSettings(id, [property, value](SampleSettings& settings)
         {
-            if (property == "sourceKey") settings.sourceKey = static_cast<int>(value);
-            else if (property == "transpose") settings.transposeSemitones = static_cast<int>(value);
+            if (property == "transpose") settings.transposeSemitones = static_cast<int>(value);
             else if (property == "fineTune") settings.fineTuneCents = static_cast<float>(value);
             else if (property == "gainDb") settings.gainDb = static_cast<float>(value);
         });
@@ -346,6 +346,12 @@ void RandomChopSamplerWebViewEditor::handleCommand(const juce::var& payload)
     {
         processor.setEffectEnabled(static_cast<int>(payload.getProperty("effect", -1)),
             static_cast<bool>(payload.getProperty("enabled", true)));
+        backendStateDirty = true;
+    }
+    else if (type == "setFaultMutations")
+    {
+        processor.setFaultMutations(static_cast<uint32_t>(static_cast<int>(
+            payload.getProperty("mutations", static_cast<int>(randomchop::FaultMutations::all)))));
         backendStateDirty = true;
     }
     else if (type == "setUiScale")
@@ -475,19 +481,4 @@ void RandomChopSamplerWebViewEditor::timerCallback()
 void RandomChopSamplerWebViewEditor::resized()
 {
     browser.setBounds(getLocalBounds());
-}
-
-bool RandomChopSamplerWebViewEditor::isInterestedInFileDrag(
-    const juce::StringArray& files)
-{
-    return std::any_of(files.begin(), files.end(), [](const auto& path)
-    {
-        return SampleManager::isSupported(juce::File(path));
-    });
-}
-
-void RandomChopSamplerWebViewEditor::filesDropped(
-    const juce::StringArray& files, int, int)
-{
-    addFiles(files);
 }
