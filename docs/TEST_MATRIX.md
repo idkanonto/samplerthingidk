@@ -8,6 +8,15 @@ status: active
 
 # Test Matrix
 
+## Local FAULT pass awaiting Windows CI
+
+| Area | Local evidence | Still required |
+|---|---|---|
+| Frontend | TypeScript and Vite production build pass; fixed-canvas browser render inspected; Impeccable detector returned `[]` | Embedded WebView2/Standalone and DAW interaction |
+| FAULT | Focused source tests added for zero-pressure and empty-mask transparency, fixed-seed equality, mutation-only masks, permitted-division mask, and finite output | Windows compile/CTest, block-partition renders, subjective listening |
+| Migration | State version 13 retires `targetKey`, `scrambleAmount`, and `meltAmount`; old creative state maps to pressure 0 and mask 7 | Host save/reopen and automation-lane behavior |
+| Drop import | One authoritative WebView2 additional-object route; full POOL drag highlight; shared importer unchanged | Actual Windows Explorer drop in Standalone/WebView2 |
+
 The final workflow-cleanup code head `b98a7203c164198fe6789db4fde929489db36a14` passed [Windows Release run #103](https://github.com/idkanonto/samplerthingidk/actions/runs/36178190471). Every workflow stage completed successfully, including the Release build, CTest, listening-render checks, VST3 verification, and artifact uploads. VST3 artifact [`10883850282`](https://github.com/idkanonto/samplerthingidk/actions/runs/36178190471/artifacts/10883850282) is 3,463,518 bytes with GitHub SHA-256 `7538ab6f47e9570151127d7266476d2359f9b1c1bb1d87beb26cefa6d4f36f4a`.
 
 The [PR #26](https://github.com/idkanonto/samplerthingidk/pull/26) code head `833a0429a4f3de5c50eb8e90e3e7ab0cb3a371e2` passed [Windows Release run #91](https://github.com/idkanonto/samplerthingidk/actions/runs/35163505680): Release VST3, Standalone, and tests built; CTest passed 1/1 in 1.66 seconds; all 16 listening renders were non-empty; and the workflow verified the raw bundle plus its 7,477,248-byte `Contents/x86_64-win/recompiler.dll.vst3` module. VST3 artifact `10474097579` is 3,251,014 bytes with GitHub/upload SHA-256 `7cc62359c9373502a46ec0d8b95c8dee49c1238b99e528d412bd36b5b489e67b`. The connector returned a downloaded file reference; independent local ZIP rehash is not claimed because the temporary URL rejected shell authentication. The PR is not merged, and DAW visual/interaction/listening checks remain open.

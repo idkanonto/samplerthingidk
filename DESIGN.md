@@ -14,25 +14,25 @@ colors:
   telemetry-white: "#eeede5"
 typography:
   module-title:
-    fontFamily: "Pixelify Local, sans-serif"
-    fontSize: "17px"
+    fontFamily: "Spleen 8x16 Local, monospace"
+    fontSize: "16px"
     fontWeight: 700
     lineHeight: 1
     letterSpacing: "0.01em"
   control:
-    fontFamily: "Pixelify Local, sans-serif"
-    fontSize: "13px"
+    fontFamily: "Spleen 6x12 Local, monospace"
+    fontSize: "12px"
     fontWeight: 700
     lineHeight: 1
   data:
-    fontFamily: "Space Mono Local, monospace"
+    fontFamily: "IBM Plex Mono Local, monospace"
     fontSize: "10px"
-    fontWeight: 700
+    fontWeight: 600
     lineHeight: 1
   micro-data:
-    fontFamily: "Space Mono Local, monospace"
+    fontFamily: "IBM Plex Mono Local, monospace"
     fontSize: "8px"
-    fontWeight: 700
+    fontWeight: 600
     lineHeight: 1
 rounded:
   square: "0px"
@@ -136,12 +136,12 @@ The palette is a warm, green-biased monochrome calibrated for long low-light ses
 
 ## Typography
 
-**Display Font:** Pixelify Local (with sans-serif fallback)
+**Module Font:** Spleen 8×16 Local at its native 16px strike.
 
-**Body Font:** Space Mono Local (with monospace fallback)
-**Label/Mono Font:** Space Mono Local
+**Control Font:** Spleen 6×12 Local at its native 12px strike.
+**Data Font:** IBM Plex Mono Local, regular and semibold.
 
-**Character:** Pixelify Sans gives module names and actions a compact equipment-label voice. Space Mono carries filenames, values, units, scales, and telemetry with stable widths and tabular alignment.
+**Character:** Spleen gives module names and actions a crisp industrial bitmap voice without arcade styling. IBM Plex Mono carries filenames, values, units, scales, and telemetry with stable widths and tabular alignment.
 
 ### Hierarchy
 
@@ -153,7 +153,7 @@ The palette is a warm, green-biased monochrome calibrated for long low-light ses
 
 ### Named Rules
 
-**The Face Split Rule.** Pixelify Sans names and commands; Space Mono measures and reports. Do not swap their jobs.
+**The Face Split Rule.** Spleen names and commands; IBM Plex Mono measures and reports. Do not swap their jobs.
 
 **The Uppercase Panel Rule.** Operational labels are terse uppercase equipment markings, not sentence-case application copy.
 
@@ -193,7 +193,7 @@ Panels, buttons, selects, rows, readouts, display chambers, and fader parts are 
 ### Buttons
 
 - **Shape:** Square, one-pixel calibration border, 28px minimum height, compact 2px × 10px inset.
-- **Default:** Panel-black fill with warm-ivory Pixelify label.
+- **Default:** Panel-black fill with a warm-ivory Spleen UI label.
 - **Hover / Active:** Hard inversion to warm ivory with bench-black text; pressed state moves down exactly 1px.
 - **Focus:** One-pixel dashed warm-ivory outline inset by 4px.
 - **Disabled:** Retain structure at 36% opacity with the default cursor.
@@ -215,7 +215,7 @@ Panels, buttons, selects, rows, readouts, display chambers, and fader parts are 
 
 ### Navigation
 
-Navigation is a joined row of 30px-high Pixelify buttons. Adjacent items share borders; the current page is the same hard ivory inversion used by every other selected state. The header’s 510×30 empty bay remains unlabelled and does not become a logo placeholder.
+Navigation is a joined row of 30px-high Spleen UI buttons. Adjacent items share borders; the current page is the same hard ivory inversion used by every other selected state. The header’s 510×30 empty bay remains unlabelled and does not become a logo placeholder.
 
 ### Rotary Controls
 
@@ -227,7 +227,7 @@ Waveform, effect, spectral, and meter displays are true black instrument fields 
 
 ### Sample Rows
 
-Rows are exactly 30px high with a 20px square enable switch, an ellipsized Space Mono filename, and a compact action. Hover and selection raise the row one tonal step; selection also adds the two-pixel ivory inset bar.
+Rows are exactly 30px high with a 20px square enable switch, an ellipsized IBM Plex Mono filename, and a compact action. Hover and selection raise the row one tonal step; selection also adds the two-pixel ivory inset bar.
 
 ## Do's and Don'ts
 

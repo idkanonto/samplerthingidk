@@ -13,16 +13,15 @@ status: approved
 1. MIDI Note On and POLY/MONO voice policy.
 2. Weighted selection from enabled, playable sources.
 3. Random start inside the source's manual Start/End region.
-4. Source/Target tonic correction, Transpose, Fine Tune, and optional MIDI pitch/root offset.
-5. Cached pitch-preserving Stretch and source Gain.
+4. TUNE, DRIFT, global PITCH, and optional STACK MIDI offset from neutral note 72. Source/target key metadata is inert.
+5. Source TRIM.
 6. Internal click-safe envelope, boundary fade, and voice-steal crossfade.
 7. Mix up to 16 voices.
-8. SCRAMBLE, including repeat/hold/octave gestures.
-9. MELT one-knob automatic pitch-preserving slice stretch with internally derived per-slice reversal.
-10. SPECTRAL DRAW.
-11. SMEAR crystalline grain cloud.
-12. Sample-smoothed perceptual VOL gain (0–125%, with 0% true silence).
+8. FAULT deterministic tempo-aligned PULL, DUST, or BEND mutation.
+9. ETCH spectral mask.
+10. BLEED crystalline grain cloud.
+11. MASTER: sample-smoothed perceptual VOL gain (0–125%, with 0% true silence) and mute ramp.
 
 ## Current code path
 
-The creative-quality branch implements all 12 steps in this order. SCRAMBLE first rearranges rhythm, MELT then lengthens automatically captured slices and may reverse them, SPECTRAL DRAW sculpts that result, and SMEAR adds a final pitched crystalline layer. Removed FREEZE, CODEC, and FRACTURE stages, Take/Step/per-event processing, and Bit Crush are not in the path. Every creative macro defaults transparent after its bounded transition. See [[CURRENT_STATE]] and [[TEST_MATRIX]] for the exact verified status.
+The local final-pass implementation follows this order. FAULT defaults transparent because PRESSURE is zero; ETCH and BLEED keep their existing DSP under the new names. SCRAMBLE and MELT are retired from the live processor path. See [[CURRENT_STATE]] and [[TEST_MATRIX]] for the exact verification boundary.

@@ -8,6 +8,9 @@ status: active
 
 # DSP Notes
 
+> [!important] Active final-pass chain
+> FAULT → ETCH → BLEED → MASTER supersedes the historical SCRAMBLE/MELT sections below. `FaultProcessor` owns a prepared 6.1-second stereo history and 4096-entry Hann table. A dedicated allocation-free 1/16 clock groups ticks into 1/2, 1/4, 1/8, or 1/16 segments; each segment latches occurrence, mutation, and profile once. PULL and BEND render at most five fixed overlap-add grains per sample, DUST uses scalar quantize/hold state, and all three share six-millisecond equal-power edges. The callback performs no file I/O, locks, or dynamic allocation.
+
 ## Realtime contract
 
 - No file I/O, decoding, blocking lock, logging, background wait, avoidable allocation/deallocation, analysis, or stretch preparation in `processBlock`.

@@ -71,6 +71,25 @@ Rejected:
 
 Legacy state entries for these systems are ignored rather than reinterpreted.
 
+## 2026-09-28 — Final FAULT product pass
+
+Accepted:
+
+- Replace the live SCRAMBLE and MELT chain with one new `FaultProcessor`; their parameter IDs and state are retired rather than mapped onto a different sound.
+- Add stable automatable `faultPressure` from 0–100, default 0. Persist the state-backed mutation mask separately with PULL=1, DUST=2, BEND=4, default 7.
+- Schedule FAULT from a dedicated 1/16 clock and group it into only 1/2, 1/4, 1/8, or 1/16 segments. Pressure controls occurrence probability and the division distribution, not wet/dry amount.
+- Keep the persisted creative seed and latch one division, occurrence, mutation, and mutation profile for each segment. Reset logical FAULT history on transport discontinuities, clock-source changes, and seed changes.
+- Use new fixed-storage overlap-add paths for PULL and duration-preserving BEND, curated DUST profiles, and six-millisecond equal-power event edges. Allocate all FAULT buffers and tables in `prepareToPlay()`.
+- Rename the producer workflow to POOL, SOURCE, TUNE, DRIFT, TRIM, STACK, VOICES, BLEED, ETCH/CLEAR, and MASTER while keeping the stable surviving parameter IDs.
+- Bundle Spleen 8×16 and 6×12 for native-strike module/control text and IBM Plex Mono regular/semibold for filenames, data, and telemetry. Preserve case for dynamic data.
+- Make the WebView2 additional-object bridge the single authoritative OS file-drop path; the JUCE editor-level duplicate drop target is retired. Keep the chooser as fallback.
+
+Retired:
+
+- Active/public `targetKey`, `scrambleAmount`, and `meltAmount` parameters; old values restore inertly and cannot affect sound.
+- SCRAMBLE/MELT feature masks, processors, bridge telemetry, UI modules, and synthetic visualizer activity.
+- Geist Pixel Square and Space Mono assets.
+
 ## Deferred
 
 - Any feature not named in [[PRODUCT_SPEC_V2]].

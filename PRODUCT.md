@@ -16,7 +16,7 @@ A JUCE VST3 and standalone random-sample instrument that turns a pool of up to 2
 
 ## Positioning
 
-Each note selects an enabled source with equal probability and routes it through a fixed creative chain of SCRAMBLE, MELT, SPECTRAL DRAW, SMEAR, and OUTPUT. The source-pool workflow and single-macro creative engines are the product's defining mechanism.
+Each note selects an enabled source with equal probability and routes it through the fixed creative chain FAULT → ETCH → BLEED → MASTER. The source pool and FAULT's deterministic tempo-aligned PULL/DUST/BEND mutations are the product's defining mechanism.
 
 ## Operating Context
 
@@ -25,8 +25,8 @@ The interface runs as an offline embedded WebView inside JUCE on Windows and is 
 ## Capabilities and Constraints
 
 - Preserve the native C++ audio engine, parameter automation, project-state persistence, and existing JUCE bridge contract.
-- Support WAV, AIFF/AIF, MP3, and FLAC sources, with source region, key, transpose, fine tune, gain, and enabled state.
-- Preserve Play In Key, Chords, POLY/MONO, the four creative modules, stereo metering, output level, and mute.
+- Support WAV, AIFF/AIF, MP3, and FLAC sources, with source region, TUNE, DRIFT, TRIM, and enabled state. Legacy source-key metadata remains inert.
+- Preserve STACK, POLY/MONO, ETCH, BLEED, stereo metering, 0–125% VOL, global PITCH, and mute.
 - The UI ships completely offline with bundled fonts and assets.
 - The composition is fixed at 960×647 logical pixels and scales uniformly only at 75%, 100%, 125%, and 150%.
 - Do not reintroduce retired DSP or controls and do not begin a later development pass during this visual reconstruction.

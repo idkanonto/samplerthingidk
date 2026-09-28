@@ -1,12 +1,22 @@
 # recompiler.dll User Manual
 
-This manual covers the current Windows VST3 version of recompiler.dll. It is written for producers who already know how to load an instrument plug-in and route MIDI in a DAW.
+This manual records the current local final-pass implementation of recompiler.dll. The Windows VST3 and Standalone build still require CI verification before release.
 
-recompiler.dll is a sample-pool instrument. You load several audio files, set how each source should be trimmed and tuned, and play the pool from MIDI. Every note chooses one enabled source at random and starts from a random point inside that source's active region. Four global effects can then reshape the mixed result before it reaches the output.
+recompiler.dll is a sample-pool instrument. You load several audio files, set how each source should be trimmed and tuned, and play the pool from MIDI. Every note chooses one enabled source at random and starts from a random point inside that source's active region. Three global effects then reshape the mixed result before it reaches the master output.
 
 The basic signal flow is:
 
-**Sample pool -> source tuning and region -> MIDI voices -> Scramble -> Melt -> Spectral Draw -> Smear -> Output**
+**POOL -> SOURCE tuning and region -> MIDI voices -> FAULT -> ETCH -> BLEED -> MASTER**
+
+The final-pass control names are authoritative throughout the current UI:
+
+- **TUNE**, **DRIFT**, and global **PITCH** are the complete pitch path. Old Source Key and Play In Key values are ignored.
+- **STACK** off ignores incoming MIDI-note pitch. STACK on follows MIDI relative to neutral note 72 without sample-key correction.
+- **FAULT PRESSURE** controls how often mutations occur and how small its 1/2, 1/4, 1/8, and 1/16 segments can become. Select any combination of **PULL**, **DUST**, and **BEND**. With none selected, FAULT is dry.
+- **ETCH CLEAR** immediately clears the visible mask and the saved backend mask.
+- **MASTER VOL** reads 0–125% and **PITCH** reads -12 to +12 semitones.
+
+Sections that still describe SCRAMBLE, MELT, SPECTRAL DRAW, SMEAR, or OUTPUT are retained only as historical behavior notes and are superseded by this control map.
 
 ## 1 What recompiler.dll is
 
@@ -21,19 +31,19 @@ The normal workflow is:
 1. Load up to 20 samples.
 2. Trim and tune each source.
 3. Play MIDI notes to trigger random sources and random starting positions.
-4. Use Scramble, Melt, Spectral Draw, and Smear to reshape the combined sound.
-5. Set the final output level.
+4. Use FAULT, ETCH, and BLEED to reshape the combined sound.
+5. Set MASTER VOL and PITCH.
 
 ## 2 Quick start
 
 1. Insert recompiler.dll on an instrument track and route MIDI to it.
 2. Click the drop area in the Samples panel, or click **Add Samples** on the Settings page, and choose one or more supported audio files.
 3. Play a MIDI note. Each note-on chooses one enabled sample at random.
-4. Use **Transpose** and **Fine Tune** when a source needs manual pitch correction.
-5. Turn up **Scramble**, **Melt**, **Smear**, or **Spectral Depth**. Scramble and Melt may wait for the next tempo-grid boundary before their sound becomes obvious.
+4. Use **TUNE** and **DRIFT** when a source needs manual pitch correction.
+5. Turn up **FAULT PRESSURE**, draw in **ETCH**, or raise **BLEED**. FAULT waits for tempo-grid boundaries before a mutation begins.
 6. Leave **VOL** at 100% for unity gain, adjust **PITCH** if the whole instrument needs transposing, and make sure **Mute** is off.
 
-For the most predictable first test, load one short WAV file, keep **Chords** off, leave **PITCH** and all four effect amounts at 0, and leave **VOL** at 100%.
+For the most predictable first test, load one short WAV file, keep **STACK** off, leave **PITCH**, **FAULT**, **ETCH**, and **BLEED** at 0, and leave **VOL** at 100%.
 
 ## 3 Sample pool
 

@@ -10,6 +10,11 @@ status: approved
 
 # recompiler.dll Product Specification
 
+> [!important] 2026-09-28 final-pass amendment
+> The active creative chain is FAULT → ETCH → BLEED → MASTER. FAULT replaces SCRAMBLE and MELT with PRESSURE plus the state-backed PULL/DUST/BEND multiselect. User-facing source controls are POOL/SOURCE/TUNE/DRIFT/TRIM; CHORDS is STACK and the POLY/MONO group is VOICES. Any older SCRAMBLE/MELT or naming material below is historical and does not override this amendment.
+
+FAULT uses only tempo-aligned 1/2, 1/4, 1/8, and 1/16 segments. Each segment latches a deterministic occurrence decision, one enabled mutation, and one curated profile. PRESSURE raises event density and shifts the size distribution smaller; it is not a wet/dry mix. At 0 or with an empty mutation mask, FAULT is transparent. PULL uses a new short-window pitch-preserving overlap-add path, DUST uses curated bit-depth/hold profiles, and duration-preserving BEND uses ±5, ±7, and ±12 semitone intervals. Mutation edges use a short equal-power crossfade.
+
 This specification supersedes the earlier Random Chop Sampler V2 feature plan. Implementation status belongs in [[CURRENT_STATE]].
 
 ## Identity and sampler core
@@ -19,7 +24,7 @@ This specification supersedes the earlier Random Chop Sampler V2 feature plan. I
 - Each MIDI Note On selects an enabled, non-missing source with equal probability and chooses a legal random start inside its manual Start/End region.
 - Source controls are enabled state, Start, End, Transpose, Fine Tune, and Gain. Previously saved Source Key metadata may remain for compatibility but is inert.
 - Preserve Chords and fixed 16-voice POLY/MONO playback. Chords off ignores MIDI note pitch; Chords on follows incoming MIDI relative to fixed neutral note 72. There is no automatic key correction or Play In Key control.
-- Output contains the stereo meter, 0–125% VOL, global -12 to +12 semitone PITCH, and Mute. VOL uses a perceptual curve with 0% silent, 1% near -65 dB, 100% unity, and 125% near +5.6 dB.
+- MASTER contains the stereo meter, 0–125% VOL, global -12 to +12 semitone PITCH, and Mute. VOL uses a perceptual curve with 0% silent, 1% near -65 dB, 100% unity, and 125% near +5.6 dB.
 - Random source selection and a legal random start across the manual source region are core instrument behavior. Click-safe attack/release are bounded implementation details rather than public controls.
 - A persisted internal random seed keeps a restored session coherent without exposing a technical Seed control in the producer workflow.
 - The editor-selected source is independent of the most recently randomly triggered source.

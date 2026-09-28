@@ -1,5 +1,7 @@
 # recompiler.dll
 
+The current final-pass branch uses the creative chain `FAULT → ETCH → BLEED → MASTER`. FAULT is a deterministic tempo-aware mutation engine with PRESSURE and a PULL/DUST/BEND multiselect; it replaces the prior SCRAMBLE and MELT processors rather than relabeling them. Source workflow naming is POOL/SOURCE/TUNE/DRIFT/TRIM/STACK/VOICES, and automatic source-key matching is absent from the audio path.
+
 `recompiler.dll` is a JUCE VST3/standalone sampler instrument. Drag in up to 20 WAV, AIFF/AIF, MP3, or FLAC sources; each note chooses an enabled source with equal probability and plays through a fixed 16-voice POLY/MONO engine.
 
 The host-visible product name intentionally contains `.dll`; the editor itself reserves a quiet, unbranded header bay. The Windows plug-in is still distributed as the standards-compliant `recompiler.dll.vst3` bundle, not as a loose DLL.
