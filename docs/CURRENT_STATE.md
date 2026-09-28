@@ -6,14 +6,14 @@ tags:
   - implementation
   - current-state
 status: active
-verified: 2026-09-25
+verified: 2026-09-28
 ---
 
 # Current Implementation State
 
-## Local FAULT final pass — Windows verification pending
+## Verified FAULT final pass
 
-Local commit `aac3f4c` replaces the active SCRAMBLE/MELT path with the new FAULT architecture and builds the production React frontend. A Windows GitHub Actions run is not yet available because pushing to the discovered remote requires explicit user approval in the current workspace.
+Commit `a5832bce33bf234cada5e88778af46e0f0365893` replaces the active SCRAMBLE/MELT path with the new FAULT architecture and builds the production React frontend. [Windows Release run #105](https://github.com/idkanonto/samplerthingidk/actions/runs/36434374667) passed the VST3/Standalone/test build, CTest, listening-render checks, artifact verification, and uploads.
 
 - The active chain is `FAULT → ETCH → BLEED → MASTER`; the old Scramble and Melt processors are not called by `processBlock()`.
 - `faultPressure` is the single automatable FAULT parameter. The saved mutation bitmask defaults to PULL + DUST + BEND and can enable any combination.
@@ -22,7 +22,8 @@ Local commit `aac3f4c` replaces the active SCRAMBLE/MELT path with the new FAULT
 - The bridge publishes only real FAULT mutation/division/progress telemetry. The UI visualizer renders those values rather than unrelated animation.
 - POOL drop highlighting covers the intended panel. WebView2 additional objects are the only native file-drop route, preventing duplicate imports from the retired editor-level target.
 - The frontend production build passes locally and packages Spleen 8×16/6×12 plus IBM Plex Mono regular/semibold. The final Impeccable detector returned no findings, and a browser render was inspected at the fixed instrument canvas.
-- CTest, VST3, Standalone, actual WebView2 drag/drop, DAW automation, and subjective FAULT listening remain unverified until the Windows workflow can run.
+- The Windows VST3, Standalone, CTest suite, listening-render checks, and artifact structure passed. Artifact [`recompiler-dll-Windows-VST3`](https://github.com/idkanonto/samplerthingidk/actions/runs/36434374667/artifacts/10975167663) is 3,456,661 bytes with GitHub SHA-256 `6da17e212a86a0193ecc1b5ab1e40b5be66b9adc9545cce510e71eda6d57d7f2`.
+- Actual WebView2 drag/drop, DAW automation, and subjective FAULT listening remain hands-on checks.
 
 The final workflow-cleanup implementation at code head `b98a7203c164198fe6789db4fde929489db36a14` passed [Windows Release CI run #103](https://github.com/idkanonto/samplerthingidk/actions/runs/36178190471). The workflow completed the Windows VST3/Standalone/test build, tests, render checks, artifact verification, and uploads. Artifact [`recompiler-dll-Windows-VST3`](https://github.com/idkanonto/samplerthingidk/actions/runs/36178190471/artifacts/10883850282) is 3,463,518 bytes with GitHub SHA-256 `7538ab6f47e9570151127d7266476d2359f9b1c1bb1d87beb26cefa6d4f36f4a`.
 

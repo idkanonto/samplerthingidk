@@ -8,14 +8,16 @@ status: active
 
 # Test Matrix
 
-## Local FAULT pass awaiting Windows CI
+## Verified FAULT pass
 
-| Area | Local evidence | Still required |
+| Area | Verified evidence | Still required |
 |---|---|---|
 | Frontend | TypeScript and Vite production build pass; fixed-canvas browser render inspected; Impeccable detector returned `[]` | Embedded WebView2/Standalone and DAW interaction |
-| FAULT | Focused source tests added for zero-pressure and empty-mask transparency, fixed-seed equality, mutation-only masks, permitted-division mask, and finite output | Windows compile/CTest, block-partition renders, subjective listening |
+| FAULT | Run #105 compiled the Windows targets and passed CTest, including zero-pressure and empty-mask transparency, fixed-seed equality, mutation-only masks, permitted-division mask, and finite output | Subjective DAW listening |
 | Migration | State version 13 retires `targetKey`, `scrambleAmount`, and `meltAmount`; old creative state maps to pressure 0 and mask 7 | Host save/reopen and automation-lane behavior |
 | Drop import | One authoritative WebView2 additional-object route; full POOL drag highlight; shared importer unchanged | Actual Windows Explorer drop in Standalone/WebView2 |
+
+[Windows Release run #105](https://github.com/idkanonto/samplerthingidk/actions/runs/36434374667) passed the Release VST3/Standalone/test build, CTest, listening-render checks, artifact verification, and uploads at `a5832bce33bf234cada5e88778af46e0f0365893`. VST3 artifact [`10975167663`](https://github.com/idkanonto/samplerthingidk/actions/runs/36434374667/artifacts/10975167663) is 3,456,661 bytes with GitHub SHA-256 `6da17e212a86a0193ecc1b5ab1e40b5be66b9adc9545cce510e71eda6d57d7f2`.
 
 The final workflow-cleanup code head `b98a7203c164198fe6789db4fde929489db36a14` passed [Windows Release run #103](https://github.com/idkanonto/samplerthingidk/actions/runs/36178190471). Every workflow stage completed successfully, including the Release build, CTest, listening-render checks, VST3 verification, and artifact uploads. VST3 artifact [`10883850282`](https://github.com/idkanonto/samplerthingidk/actions/runs/36178190471/artifacts/10883850282) is 3,463,518 bytes with GitHub SHA-256 `7538ab6f47e9570151127d7266476d2359f9b1c1bb1d87beb26cefa6d4f36f4a`.
 
