@@ -11,7 +11,7 @@ verified: 2026-09-30
 
 # Current Implementation State
 
-## Focused slice/source processing update — verification pending
+## Verified focused slice/source processing update
 
 - FAULT's only random choices are PITCH, BITCRUSH, and REVERSE. The mutation-mask bit positions remain 1/2/4 for saved-state continuity.
 - PITCH directly reads its captured slice at `2^(semitones/12)` for a non-zero integer interval from -12 through +12. It has no overlap-add, formant preservation, stretch compensation, or fixed-duration path; +12 produces half duration and -12 produces double duration.
@@ -19,7 +19,9 @@ verified: 2026-09-30
 - Every source persists an independent 0.25×–2× Stretch speed. Signalsmith prepares a pitch-preserving immutable source version on the background worker; the audio callback only reads the published version.
 - MASTER VOL remains automatable from 0–125%; 0% maps to exact zero gain and is displayed as `−∞`. Dedicated mute UI, bridge/state, and DSP gain are removed.
 - State version 14 starts pre-version-14 Stretch values neutral to avoid reinterpreting retired duration-multiplier data as the new speed control.
-- Local frontend TypeScript/Vite production build passes. Native Windows compilation, CTest, listening renders, and artifact verification are pending CI.
+- Local frontend TypeScript/Vite production build passes. Commit `74b3f3ab82b59552c6b0bbcba15baa18c7cae852` passed [Windows Release run #107](https://github.com/idkanonto/samplerthingidk/actions/runs/36735530426): Release VST3/Standalone/test compilation, CTest, listening-render checks, artifact verification, and both uploads all completed successfully.
+- VST3 artifact [`11107147976`](https://github.com/idkanonto/samplerthingidk/actions/runs/36735530426/artifacts/11107147976) is 3,500,396 bytes with GitHub SHA-256 `59fbafbe8d2975b6002d1f74a75ea5be247629df3d3bc040979622d861dd8a07`. The 18,127,383-byte listening-render artifact [`11106399567`](https://github.com/idkanonto/samplerthingidk/actions/runs/36735530426/artifacts/11106399567) has GitHub SHA-256 `e962e1b036267309b752d703539f3ece676d08f7fd556b55f2c7586c97fccf97`.
+- Hands-on DAW automation/save-reopen, embedded WebView2 interaction, Explorer drag/drop, and subjective listening remain external release checks.
 
 ## Historical verified FAULT final pass (superseded by the update above)
 

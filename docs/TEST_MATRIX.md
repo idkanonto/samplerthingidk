@@ -8,14 +8,16 @@ status: active
 
 # Test Matrix
 
-## Focused slice/source update — pending Windows verification
+## Verified focused slice/source update
 
-| Area | Local evidence | Still required |
+| Area | Verified evidence | Still required |
 |---|---|---|
-| FAULT choices | Focused tests cover the PITCH/BITCRUSH/REVERSE-only mask, direct ±12 rate/duration relationships, slice-local reverse duration, deterministic selection, finite output, and unchanged bitcrusher profiles | Windows CTest and subjective listening |
-| Source Stretch | Tests cover 0.25×/0.5×/2× output lengths, pitch preservation, bounds, per-source persistence, and independent values | Windows CTest and host save/reopen |
+| FAULT choices | Run #107 passed focused CTest coverage for the PITCH/BITCRUSH/REVERSE-only mask, direct ±12 rate/duration relationships, slice-local reverse duration, deterministic selection, finite output, and unchanged bitcrusher profiles | Subjective DAW listening |
+| Source Stretch | Run #107 passed 0.25×/0.5×/2× output-length, pitch-preservation, bounds, per-source persistence, and independent-value tests | Host save/reopen |
 | Output | Existing curve tests verify exact zero gain at 0%; source/bridge audit finds no live mute control/state | DAW automation to and from `−∞` |
-| Frontend | TypeScript/Vite production build passes with STRETCH, PITCH/BITCRUSH/REVERSE, and no Mute control | Embedded WebView2 interaction and final detector |
+| Frontend | TypeScript/Vite production build passes with STRETCH, PITCH/BITCRUSH/REVERSE, and no Mute control; browser inspection passed and the final Impeccable detector returned `[]` | Embedded WebView2 interaction |
+
+[Windows Release run #107](https://github.com/idkanonto/samplerthingidk/actions/runs/36735530426) passed every workflow stage at `74b3f3ab82b59552c6b0bbcba15baa18c7cae852`. VST3 artifact [`11107147976`](https://github.com/idkanonto/samplerthingidk/actions/runs/36735530426/artifacts/11107147976) is 3,500,396 bytes with GitHub SHA-256 `59fbafbe8d2975b6002d1f74a75ea5be247629df3d3bc040979622d861dd8a07`; listening artifact [`11106399567`](https://github.com/idkanonto/samplerthingidk/actions/runs/36735530426/artifacts/11106399567) is 18,127,383 bytes with GitHub SHA-256 `e962e1b036267309b752d703539f3ece676d08f7fd556b55f2c7586c97fccf97`.
 
 ## Historical verified FAULT pass
 
