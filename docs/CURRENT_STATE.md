@@ -6,12 +6,22 @@ tags:
   - implementation
   - current-state
 status: active
-verified: 2026-09-28
+verified: 2026-09-30
 ---
 
 # Current Implementation State
 
-## Verified FAULT final pass
+## Focused slice/source processing update — verification pending
+
+- FAULT's only random choices are PITCH, BITCRUSH, and REVERSE. The mutation-mask bit positions remain 1/2/4 for saved-state continuity.
+- PITCH directly reads its captured slice at `2^(semitones/12)` for a non-zero integer interval from -12 through +12. It has no overlap-add, formant preservation, stretch compensation, or fixed-duration path; +12 produces half duration and -12 produces double duration.
+- BITCRUSH retains the existing 12/10/8/6-bit and 2×/3×/4×/6× quantize/hold profiles. REVERSE reads only the captured slice backward and keeps that slice's duration.
+- Every source persists an independent 0.25×–2× Stretch speed. Signalsmith prepares a pitch-preserving immutable source version on the background worker; the audio callback only reads the published version.
+- MASTER VOL remains automatable from 0–125%; 0% maps to exact zero gain and is displayed as `−∞`. Dedicated mute UI, bridge/state, and DSP gain are removed.
+- State version 14 starts pre-version-14 Stretch values neutral to avoid reinterpreting retired duration-multiplier data as the new speed control.
+- Local frontend TypeScript/Vite production build passes. Native Windows compilation, CTest, listening renders, and artifact verification are pending CI.
+
+## Historical verified FAULT final pass (superseded by the update above)
 
 Commit `a5832bce33bf234cada5e88778af46e0f0365893` replaces the active SCRAMBLE/MELT path with the new FAULT architecture and builds the production React frontend. [Windows Release run #105](https://github.com/idkanonto/samplerthingidk/actions/runs/36434374667) passed the VST3/Standalone/test build, CTest, listening-render checks, artifact verification, and uploads.
 
@@ -27,7 +37,7 @@ Commit `a5832bce33bf234cada5e88778af46e0f0365893` replaces the active SCRAMBLE/M
 
 The final workflow-cleanup implementation at code head `b98a7203c164198fe6789db4fde929489db36a14` passed [Windows Release CI run #103](https://github.com/idkanonto/samplerthingidk/actions/runs/36178190471). The workflow completed the Windows VST3/Standalone/test build, tests, render checks, artifact verification, and uploads. Artifact [`recompiler-dll-Windows-VST3`](https://github.com/idkanonto/samplerthingidk/actions/runs/36178190471/artifacts/10883850282) is 3,463,518 bytes with GitHub SHA-256 `7538ab6f47e9570151127d7266476d2359f9b1c1bb1d87beb26cefa6d4f36f4a`.
 
-## Verified final workflow cleanup
+## Historical verified final workflow cleanup
 
 - The embedded React/WebView interface uses the bundled Geist Pixel Square face and renders its visible interface copy in lowercase while preserving the established monochrome pixel direction.
 - Source Key and Play In Key are removed from the active workflow. Playback pitch is Transpose + Fine Tune + global Pitch plus the MIDI offset from neutral C5/MIDI 72; legacy key fields remain inert for state compatibility.
@@ -37,7 +47,7 @@ The final workflow-cleanup implementation at code head `b98a7203c164198fe6789db4
 
 The monochrome-reference code head `833a0429a4f3de5c50eb8e90e3e7ab0cb3a371e2` on [PR #26](https://github.com/idkanonto/samplerthingidk/pull/26) passed [Windows Release CI run #91](https://github.com/idkanonto/samplerthingidk/actions/runs/35163505680). The workflow compiled the VST3, Standalone, and tests; CTest passed 1/1; all 16 deterministic listening renders were non-empty; and the runner verified the complete raw VST3 bundle. Artifact `10474097579` is 3,251,014 bytes with GitHub/upload SHA-256 `7cc62359c9373502a46ec0d8b95c8dee49c1238b99e528d412bd36b5b489e67b`. Its verified bundle contains a non-empty 7,477,248-byte Windows module at `recompiler.dll.vst3/Contents/x86_64-win/recompiler.dll.vst3`. The PR remains unmerged pending a hands-on DAW visual/interaction pass.
 
-## Verified monochrome-reference implementation
+## Historical verified monochrome-reference implementation
 
 - The complete editor now uses the supplied monochrome desktop hierarchy: header with source navigation, sample browser, source waveform/tools, global harmony and voice switches, SCRAMBLE/MELT/SMEAR/SPECTRAL DRAW/OUTPUT cards, tabs, and footer. It defaults to 1024×683 and supports 900×600 through 1536×1024. Code and Windows compilation are verified; exact visual matching still needs a DAW screenshot comparison.
 - Add opens a multi-file chooser, while drag-and-drop remains. Sample rows offer enable and audition actions, with individual removal in the sample menu. Source waveform zoom, region focus, fit, and Start/End edits are functional.

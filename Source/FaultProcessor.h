@@ -3,25 +3,39 @@
 #include <JuceHeader.h>
 #include "HostGrid.h"
 #include "RandomizationEngine.h"
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 
 namespace randomchop
 {
+inline double faultPitchPlaybackRate(int semitones) noexcept
+{
+    return std::exp2(static_cast<double>(std::clamp(semitones, -12, 12)) / 12.0);
+}
+
+inline int faultPitchPlaybackFrames(int sourceFrames, int semitones) noexcept
+{
+    return std::max(1, static_cast<int>(std::ceil(
+        static_cast<double>(std::max(1, sourceFrames))
+            / faultPitchPlaybackRate(semitones))));
+}
+
 namespace FaultMutations
 {
-constexpr uint32_t pull = 1u << 0;
-constexpr uint32_t dust = 1u << 1;
-constexpr uint32_t bend = 1u << 2;
-constexpr uint32_t all = pull | dust | bend;
+constexpr uint32_t pitch = 1u << 0;
+constexpr uint32_t bitcrush = 1u << 1;
+constexpr uint32_t reverse = 1u << 2;
+constexpr uint32_t all = pitch | bitcrush | reverse;
 }
 
 enum class FaultMutation : uint8_t
 {
     none = 0,
-    pull = 1,
-    dust = 2,
-    bend = 3
+    pitch = 1,
+    bitcrush = 2,
+    reverse = 3
 };
 
 struct FaultSettings final
@@ -47,22 +61,21 @@ public:
     bool isMutating() const noexcept { return mutation != FaultMutation::none; }
     uint64_t getMutationCount(FaultMutation type) const noexcept;
     uint32_t getObservedDivisionMask() const noexcept { return observedDivisionMask; }
+    int getLastPitchSemitones() const noexcept { return pitchSemitones; }
+    int getLastSourceFrames() const noexcept { return lastMutationSourceFrames; }
+    int getLastPlaybackFrames() const noexcept { return lastMutationPlaybackFrames; }
 
 private:
-    static constexpr int windowTableSize = 4096;
-    static constexpr double maximumHistorySeconds = 6.1;
+    static constexpr double maximumHistorySeconds = 18.1;
 
     void beginSegment(double bpm, float pressure, uint32_t enabledMask) noexcept;
     int chooseDivision(float pressure) noexcept;
     FaultMutation chooseMutation(uint32_t enabledMask) noexcept;
-    float renderOverlapAdd(int channel, int localFrame, bool pitchShift) const noexcept;
-    float readHistory(int channel, double logicalFrame) const noexcept;
-    float windowAt(double phase) const noexcept;
+    float readCapturedSlice(int channel, double sourceFrame) const noexcept;
     void invalidateHistory() noexcept;
     static float sanitise(float value) noexcept;
 
     juce::AudioBuffer<float> history;
-    std::array<float, windowTableSize> hannWindow {};
     RandomizationEngine random;
     double sampleRate = 44100.0;
     int writeFrame = 0;
@@ -71,18 +84,19 @@ private:
     int captureFrames = 0;
     int segmentFrame = 0;
     int segmentFrames = 1;
+    int playbackFrames = 1;
     int segmentTicksRemaining = 0;
     int segmentTicks = 1;
     int divisionDenominator = 16;
     int fadeFrames = 1;
-    int grainFrames = 1024;
-    int synthesisHop = 256;
     int dustBits = 12;
     int dustHoldFrames = 2;
     int dustCountdown = 0;
     std::array<float, 2> dustHeld {};
-    double stretchRatio = 1.0;
     double pitchRatio = 1.0;
+    int pitchSemitones = 0;
+    int lastMutationSourceFrames = 0;
+    int lastMutationPlaybackFrames = 0;
     FaultMutation mutation = FaultMutation::none;
     std::array<uint64_t, 4> mutationCounts {};
     uint32_t observedDivisionMask = 0;

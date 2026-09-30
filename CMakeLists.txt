@@ -66,6 +66,8 @@ target_sources(RandomChopSampler PRIVATE
     Source/SampleManager.cpp
     Source/SampleManager.h
     Source/PreparedSampleData.h
+    Source/StretchPreparation.cpp
+    Source/StretchPreparation.h
     Source/RandomSamplerVoice.cpp
     Source/RandomSamplerVoice.h
     Source/VoicePool.h
@@ -190,6 +192,8 @@ if (BUILD_TESTING)
         Source/SampleManager.cpp
         Source/SampleManager.h
         Source/PreparedSampleData.h
+        Source/StretchPreparation.cpp
+        Source/StretchPreparation.h
         Source/RandomSamplerVoice.cpp
         Source/RandomSamplerVoice.h
         Source/VoicePool.h

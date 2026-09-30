@@ -8,7 +8,16 @@ status: active
 
 # Test Matrix
 
-## Verified FAULT pass
+## Focused slice/source update — pending Windows verification
+
+| Area | Local evidence | Still required |
+|---|---|---|
+| FAULT choices | Focused tests cover the PITCH/BITCRUSH/REVERSE-only mask, direct ±12 rate/duration relationships, slice-local reverse duration, deterministic selection, finite output, and unchanged bitcrusher profiles | Windows CTest and subjective listening |
+| Source Stretch | Tests cover 0.25×/0.5×/2× output lengths, pitch preservation, bounds, per-source persistence, and independent values | Windows CTest and host save/reopen |
+| Output | Existing curve tests verify exact zero gain at 0%; source/bridge audit finds no live mute control/state | DAW automation to and from `−∞` |
+| Frontend | TypeScript/Vite production build passes with STRETCH, PITCH/BITCRUSH/REVERSE, and no Mute control | Embedded WebView2 interaction and final detector |
+
+## Historical verified FAULT pass
 
 | Area | Verified evidence | Still required |
 |---|---|---|

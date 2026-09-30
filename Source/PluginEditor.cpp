@@ -1268,15 +1268,14 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
         &addButton, &sampleMenuButton, &previousSourceButton, &nextSourceButton, &closeEditorButton,
         &mainTab, &fxTab, &seqTab, &settingsTab, &zoomInButton, &zoomOutButton,
         &focusRegionButton, &fitButton, &randomSourceButton, &regenerateButton,
-        &muteButton, &moreButton, &chordsOffButton, &chordsOnButton, &polyButton, &monoButton,
+        &moreButton, &chordsOffButton, &chordsOnButton, &polyButton, &monoButton,
         &scrambleModeButton, &meltModeButton, &smearModeButton,
         &scrambleFoldButton, &meltFoldButton, &smearFoldButton, &spectralFoldButton, &outputFoldButton,
         &scramblePowerButton, &meltPowerButton, &smearPowerButton, &spectralPowerButton,
-        &outputPowerButton,
         &sourceKey,
-        &sourceTranspose, &sourceFineTune, &sourceGain,
+        &sourceTranspose, &sourceFineTune, &sourceStretch, &sourceGain,
         &sourceKeyLabel,
-        &sourceTransposeLabel, &sourceFineTuneLabel, &sourceGainLabel,
+        &sourceTransposeLabel, &sourceFineTuneLabel, &sourceStretchLabel, &sourceGainLabel,
         &targetKey, &targetKeyLabel, &midiPitch,
         &voiceMode, &voiceModeLabel,
         &spectralDrawLabel, &spectralResetButton, &spectralCanvas,
@@ -1331,7 +1330,6 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     fitButton.setTooltip("Fit the whole source waveform.");
     randomSourceButton.setTooltip("Select a random loaded source for editing.");
     regenerateButton.setTooltip("Generate a new internal creative seed.");
-    muteButton.setTooltip("Temporarily mute or unmute the plugin output.");
     moreButton.setTooltip("Output actions.");
     addButton.onClick = [this] { openFileChooser(); };
     sampleMenuButton.onClick = [this] { showSampleMenu(); };
@@ -1352,7 +1350,6 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
                 static_cast<int>(displayPool->size())));
     };
     regenerateButton.onClick = [this] { processor.regenerateCreativeSeed(); };
-    muteButton.onClick = [this] { processor.setOutputMuted(!processor.isOutputMuted()); };
     moreButton.onClick = [this]
     {
         juce::PopupMenu menu;
@@ -1390,12 +1387,11 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     for (auto* button : foldButtons)
         button->setName("Fold card");
     juce::TextButton* powerButtons[] { &scramblePowerButton, &meltPowerButton,
-        &smearPowerButton, &spectralPowerButton, &outputPowerButton };
-    for (int index = 0; index < 5; ++index)
+        &smearPowerButton, &spectralPowerButton };
+    for (int index = 0; index < 4; ++index)
         powerButtons[index]->onClick = [this, index]
         {
-            if (index == 4) processor.setOutputMuted(!processor.isOutputMuted());
-            else processor.setEffectEnabled(index, !processor.isEffectEnabled(index));
+            processor.setEffectEnabled(index, !processor.isEffectEnabled(index));
             repaint();
         };
     for (auto* button : powerButtons)
@@ -1410,9 +1406,11 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     sourceTranspose.setTextValueSuffix(" st");
     sourceFineTune.setRange(-100.0, 100.0, 1.0);
     sourceFineTune.setTextValueSuffix(" cents");
+    sourceStretch.setRange(0.25, 2.0, 0.05);
+    sourceStretch.setTextValueSuffix(" x");
     sourceGain.setRange(-60.0, 12.0, 0.1);
     sourceGain.setTextValueSuffix(" dB");
-    for (auto* slider : { &sourceTranspose, &sourceFineTune })
+    for (auto* slider : { &sourceTranspose, &sourceFineTune, &sourceStretch })
     {
         slider->setSliderStyle(juce::Slider::IncDecButtons);
         slider->setIncDecButtonsMode(juce::Slider::incDecButtonsDraggable_Vertical);
@@ -1424,16 +1422,19 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     sourceKey.setTooltip("Set the detected or known musical key of the selected source.");
     sourceTranspose.setTooltip("Shift the selected source by whole semitones.");
     sourceFineTune.setTooltip("Correct the selected source in cents.");
+    sourceStretch.setTooltip("Change source timing from quarter speed to twice speed while preserving pitch.");
     sourceGain.setTooltip("Balance the selected source before global effects.");
     targetKey.setTooltip("Choose the shared musical key used to align all sources.");
     sourceKey.setName("Source key");
     sourceTranspose.setName("Source transpose");
     sourceFineTune.setName("Source fine tune");
+    sourceStretch.setName("Source stretch");
     sourceGain.setName("Source gain");
     targetKey.setName("Play in key");
     sourceKeyLabel.setText("SOURCE KEY", juce::dontSendNotification);
     sourceTransposeLabel.setText("TRANSPOSE", juce::dontSendNotification);
     sourceFineTuneLabel.setText("FINE TUNE", juce::dontSendNotification);
+    sourceStretchLabel.setText("STRETCH", juce::dontSendNotification);
     sourceGainLabel.setText("GAIN", juce::dontSendNotification);
     targetKeyLabel.setText("PLAY IN KEY", juce::dontSendNotification);
     voiceModeLabel.setText("POLY / MONO", juce::dontSendNotification);
@@ -1447,6 +1448,7 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     smearVisual.setTooltip("Live view of Smear's active pitched-grain cloud.");
     voiceModeLabel.setJustificationType(juce::Justification::centredLeft);
     for (auto* label : { &sourceKeyLabel, &sourceTransposeLabel, &sourceFineTuneLabel,
+                         &sourceStretchLabel,
                          &sourceGainLabel, &targetKeyLabel, &voiceModeLabel,
                          &spectralDrawLabel })
         label->setColour(juce::Label::textColourId, juce::Colour(xpInk));
@@ -1477,6 +1479,14 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
             [this](SampleSettings& s)
             {
                 s.fineTuneCents = static_cast<float>(sourceFineTune.getValue());
+            });
+    };
+    sourceStretch.onValueChange = [this]
+    {
+        if (selectedSourceId.isNotEmpty()) processor.samples.updateSettings(selectedSourceId,
+            [this](SampleSettings& s)
+            {
+                s.stretchSpeed = static_cast<float>(sourceStretch.getValue());
             });
     };
     sourceGain.onValueChange = [this]
@@ -1525,6 +1535,7 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
                              static_cast<juce::Component*>(&sourceKey),
                              static_cast<juce::Component*>(&sourceTranspose),
                              static_cast<juce::Component*>(&sourceFineTune),
+                             static_cast<juce::Component*>(&sourceStretch),
                              static_cast<juce::Component*>(&sourceGain),
                              static_cast<juce::Component*>(&targetKey),
                              static_cast<juce::Component*>(&midiPitch),
@@ -1808,7 +1819,7 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     zoomOutButton.setBounds(waveTools.removeFromTop(toolHeight).reduced(2));
     focusRegionButton.setBounds(waveTools.removeFromTop(toolHeight).reduced(2));
     fitButton.setBounds(waveTools.reduced(2));
-    const auto cellWidth = sourceControlRow.getWidth() / 3;
+    const auto cellWidth = sourceControlRow.getWidth() / 4;
     auto layoutSourceCell = [cellWidth](juce::Rectangle<int>& row, juce::Label& label,
                                         juce::Component& control)
     {
@@ -1818,6 +1829,7 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     };
     layoutSourceCell(sourceControlRow, sourceTransposeLabel, sourceTranspose);
     layoutSourceCell(sourceControlRow, sourceFineTuneLabel, sourceFineTune);
+    layoutSourceCell(sourceControlRow, sourceStretchLabel, sourceStretch);
     auto gainCell = sourceControlRow.reduced(4, 2);
     sourceGainLabel.setBounds(gainCell.removeFromTop(18));
     sourceGain.setBounds(gainCell.reduced(0, 1));
@@ -1892,10 +1904,8 @@ void RandomChopSamplerAudioProcessorEditor::resized()
 
     outputLabel.setBounds(0, 0, 0, 0);
     outputFoldButton.setBounds(outputPanelBounds.getX() + 5, outputPanelBounds.getY() + 4, 19, 19);
-    outputPowerButton.setBounds(outputPanelBounds.getRight() - 27, outputPanelBounds.getY() + 5, 18, 18);
     auto outputContent = outputPanelBounds.reduced(7).withTrimmedTop(25);
     auto outputActions = outputContent.removeFromBottom(scaled(30));
-    muteButton.setBounds(outputActions.removeFromLeft(outputActions.getWidth() / 2).reduced(2));
     moreButton.setBounds(outputActions.reduced(2));
     outputMeter.setBounds(outputContent.removeFromRight(35).reduced(1, 4));
     output.setBounds(outputContent.withSizeKeepingCentre(
@@ -1919,10 +1929,12 @@ void RandomChopSamplerAudioProcessorEditor::resized()
                              static_cast<juce::Component*>(&sourceKey),
                              static_cast<juce::Component*>(&sourceTranspose),
                              static_cast<juce::Component*>(&sourceFineTune),
+                             static_cast<juce::Component*>(&sourceStretch),
                              static_cast<juce::Component*>(&sourceGain),
                              static_cast<juce::Component*>(&sourceKeyLabel),
                              static_cast<juce::Component*>(&sourceTransposeLabel),
                              static_cast<juce::Component*>(&sourceFineTuneLabel),
+                             static_cast<juce::Component*>(&sourceStretchLabel),
                              static_cast<juce::Component*>(&sourceGainLabel),
                              static_cast<juce::Component*>(&targetKey),
                              static_cast<juce::Component*>(&targetKeyLabel),
@@ -1948,8 +1960,7 @@ void RandomChopSamplerAudioProcessorEditor::resized()
                              static_cast<juce::Component*>(&scramblePowerButton),
                              static_cast<juce::Component*>(&meltPowerButton),
                              static_cast<juce::Component*>(&smearPowerButton),
-                             static_cast<juce::Component*>(&spectralPowerButton),
-                             static_cast<juce::Component*>(&outputPowerButton) })
+                             static_cast<juce::Component*>(&spectralPowerButton) })
         component->setVisible(onEffects);
     scrambleVisual.setVisible(onEffects && expandedCards[0]);
     meltVisual.setVisible(onEffects && expandedCards[1]);
@@ -1962,7 +1973,6 @@ void RandomChopSamplerAudioProcessorEditor::resized()
     spectralDepthLabel.setVisible(onEffects && expandedCards[3]);
     spectralResetButton.setVisible(onEffects && expandedCards[3]);
     outputMeter.setVisible(onEffects && expandedCards[4]);
-    muteButton.setVisible(onEffects && expandedCards[4]);
     moreButton.setVisible(onEffects && expandedCards[4]);
     midiPitch.setVisible(false);
     voiceMode.setVisible(false);
@@ -2285,6 +2295,7 @@ void RandomChopSamplerAudioProcessorEditor::selectedRowsChanged(int row)
         sourceKey.setSelectedItemIndex(settings.sourceKey, juce::dontSendNotification);
         sourceTranspose.setValue(settings.transposeSemitones, juce::dontSendNotification);
         sourceFineTune.setValue(settings.fineTuneCents, juce::dontSendNotification);
+        sourceStretch.setValue(settings.stretchSpeed, juce::dontSendNotification);
         sourceGain.setValue(settings.gainDb, juce::dontSendNotification);
         waveform.setSource((*displayPool)[static_cast<size_t>(row)]);
     }
@@ -2320,9 +2331,6 @@ void RandomChopSamplerAudioProcessorEditor::timerCallback()
         buttons[effect]->setToggleState(processor.isEffectEnabled(effect),
                                         juce::dontSendNotification);
     }
-    outputPowerButton.setToggleState(!processor.isOutputMuted(), juce::dontSendNotification);
-    muteButton.setToggleState(processor.isOutputMuted(), juce::dontSendNotification);
-    muteButton.setButtonText(processor.isOutputMuted() ? "UNMUTE" : "MUTE");
     scrambleModeButton.setButtonText(processor.getScrambleFeatures() == randomchop::ScrambleFeatures::all
         ? "Random" : "Custom");
     meltModeButton.setButtonText(processor.getMeltFeatures() == randomchop::MeltFeatures::all

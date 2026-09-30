@@ -3,11 +3,14 @@
 #include <JuceHeader.h>
 #include "HarmonicPitch.h"
 #include "PlaybackRegion.h"
-#include "PreparedSampleData.h"
+#include "StretchPreparation.h"
 #include <atomic>
+#include <condition_variable>
+#include <deque>
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <thread>
 #include <vector>
 
 struct SampleSettings final
@@ -23,6 +26,7 @@ struct SampleSettings final
     float gainDb = 0.0f;
     int transposeSemitones = 0;
     float fineTuneCents = 0.0f;
+    float stretchSpeed = 1.0f;
 };
 
 struct SampleData final
@@ -44,6 +48,9 @@ struct SampleData final
     double sampleRate = 44100.0;
     int bitDepth = 0;
     uint64_t runtimeId = 0;
+    uint64_t requestedStretchRevision = 0;
+    bool stretchPending = false;
+    bool stretchFailed = false;
 
     bool isPlayable() const noexcept
     {
@@ -62,8 +69,12 @@ public:
     using SamplePtr = std::shared_ptr<const SampleData>;
     using Pool = std::vector<SamplePtr>;
 
-    SampleManager();
-    ~SampleManager() = default;
+    using StretchPrepareFunction = std::function<PreparedSamplePtr(
+        const std::shared_ptr<const juce::AudioBuffer<float>>&,
+        double, float, uint64_t)>;
+
+    explicit SampleManager(StretchPrepareFunction = {});
+    ~SampleManager();
     std::vector<juce::String> addFiles(const juce::StringArray& paths);
     void remove(const juce::String& id);
     void setEnabled(const juce::String& id, bool enabled);
@@ -76,9 +87,24 @@ public:
     static bool isSupported(const juce::File& file);
 
 private:
+    struct StretchJob final
+    {
+        juce::String sourceId;
+        uint64_t sourceRuntimeId = 0;
+        std::shared_ptr<const juce::AudioBuffer<float>> decodedAudio;
+        double sampleRate = 44100.0;
+        float speed = 1.0f;
+        uint64_t revision = 0;
+    };
+
     SamplePtr loadFile(const juce::File& file, const SampleSettings* restored,
                        std::vector<juce::String>& errors);
     void publish(std::shared_ptr<const Pool> next);
+    void enqueueStretch(StretchJob);
+    void discardQueuedStretch(const juce::String& sourceId);
+    void discardAllQueuedStretch();
+    void stretchWorkerLoop();
+    void publishStretchResult(const StretchJob&, PreparedSamplePtr);
     void collectGarbageLocked();
     static size_t findSource(const Pool&, const juce::String& id) noexcept;
     juce::AudioFormatManager formats;
@@ -90,5 +116,11 @@ private:
     std::vector<SamplePtr> retiredSamples;
     std::vector<PreparedSamplePtr> retiredPrepared;
     std::mutex mutationMutex;
+    StretchPrepareFunction stretchPrepare;
+    std::mutex stretchMutex;
+    std::condition_variable stretchCondition;
+    std::deque<StretchJob> stretchJobs;
+    bool stoppingStretchWorker = false;
+    std::thread stretchWorker;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SampleManager)
 };

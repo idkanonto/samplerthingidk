@@ -25,6 +25,8 @@ export type SampleSummary = {
   transpose: number
   fineTune: number
   gainDb: number
+  stretch: number
+  stretchPending: boolean
   sampleRate: number
   bitDepth: number
   durationSeconds: number
@@ -36,7 +38,6 @@ export type BackendState = {
   sampleCount: number
   maximumSampleCount: number
   voiceCount: number
-  outputMuted: boolean
   importMessage: string
   uiScale: number
   samples: SampleSummary[]

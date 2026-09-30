@@ -11,7 +11,7 @@ status: active
 
 # Realtime Safety Audit
 
-This audit covers straightforward-sampler code head `3dfbc5d55c717275d44ffb6798388d28bb3abbed` on [PR #22](https://github.com/idkanonto/samplerthingidk/pull/22), which passed [Windows Release CI run #79](https://github.com/idkanonto/samplerthingidk/actions/runs/34983220916), against [[DSP_NOTES]], and retains the earlier creative-effect ownership/lifecycle findings. Source and CI review do not replace an allocator hook, realtime profiler, or DAW stress pass.
+This audit retains the verified baseline from straightforward-sampler code head `3dfbc5d55c717275d44ffb6798388d28bb3abbed` and records the focused 2026-09-30 source-stretch/FAULT changes pending their Windows CI run. Source and CI review do not replace an allocator hook, realtime profiler, or DAW stress pass.
 
 ## Audio-thread paths
 
@@ -21,6 +21,7 @@ This audit covers straightforward-sampler code head `3dfbc5d55c717275d44ffb67983
 | Note On | Scans at most 20 immutable sources twice, resolves one region/start/pitch value, scans/acquires at most 16 voices | The atomically published pool and prepared version are shared immutable references; manager retirement roots prevent final callback reclamation. |
 | Voice render | Linear interpolation and scalar envelope/length/fade/steal state bounded by the supplied span | No RNG, collection, lock, or mutable source access. The removed per-event FX state is absent. |
 | Host grid | Constant scalar math plus a fixed 4096-entry output array with an explicit truncation flag | No playhead access outside the single block-start read; no heap or UI access. |
+| FAULT | One bounded sample loop with direct interpolated reads for PITCH/REVERSE or the established scalar BITCRUSH state | The 18.1-second stereo ring is allocated in `prepareToPlay`; segment decisions are scalar, captured slices are ring ranges, and no stretch/formant engine or callback copy is used. |
 | SCRAMBLE | One bounded sample loop and at most eight fixed slice decisions per activation. Fractional reads wrap inside the selected loop; seam blending adds only bounded duplicate reads. | Two-second stereo history plus fixed origin/offset/increment/loop/wet arrays are allocated in `prepare`; activation copies no audio and takes no lock. |
 | MELT | Per sample, two channels each render at most five overlapping grains with fixed lookup-window, interpolation, and scalar normalization work. Activation makes at most four slice decisions, 96 energy-probe positions, and 384 interpolated channel reads, independent of tempo or grid length. | Four-second stereo history, four slice records, and the 4096-entry Hann table are allocated/prepared before playback. Captures are ring indices, not audio copies; no callback resize, clearing of the large ring, lock, or variable-length activation scan occurs. |
 | SPECTRAL DRAW | One 1024-point transform per channel every 256 samples, fixed ring scans, bounded bin/mask lookup, frame-gain smoothing, and fixed-array reset on transport discontinuity | Signalsmith FFT work storage and bin-gain arrays are prepared/fixed; four inline immutable mask slots use atomic state transitions. The callback takes no canvas mutex, copy, allocation, or final reclamation. |
@@ -29,7 +30,7 @@ This audit covers straightforward-sampler code head `3dfbc5d55c717275d44ffb67983
 ## Non-realtime paths
 
 - File validation, decoding, waveform preparation, source-state restore, pool publication, and retirement collection remain control/state work.
-- There is no background manual-stretch worker or queue. Decoded PCM is wrapped once in an immutable prepared handle on the control/state path.
+- Per-source Stretch preparation runs on one background worker with replacement-by-source queueing and revision checks. Decoded PCM and published prepared versions remain immutable; stale results and removed sources cannot be republished.
 - Source edits use `mutationMutex`, which is never reached by the callback.
 - Persisted/updated source Gain is finite-clamped before publication. Voice envelope/sample sanitization is fixed-cost and protects internal voice state before the global chain.
 - Editor selection is a stable source ID. Trigger highlighting is a separate atomic runtime ID and cannot retarget edits.

@@ -10,6 +10,9 @@ status: approved
 
 # recompiler.dll Product Specification
 
+> [!important] 2026-09-30 focused-processing amendment
+> FAULT now chooses only PITCH, BITCRUSH, or REVERSE. PITCH is direct sampler-rate repitching from -12 through +12 semitones with naturally coupled duration; BITCRUSH preserves the established implementation; REVERSE affects only its selected slice. Independent pitch-preserving source Stretch returns at 0.25×–2× speed and is never a FAULT choice. MASTER VOL at 0% is exact silence, and no dedicated Mute control or state remains. This amendment supersedes conflicting statements below.
+
 > [!important] 2026-09-28 final-pass amendment
 > The active creative chain is FAULT → ETCH → BLEED → MASTER. FAULT replaces SCRAMBLE and MELT with PRESSURE plus the state-backed PULL/DUST/BEND multiselect. User-facing source controls are POOL/SOURCE/TUNE/DRIFT/TRIM; CHORDS is STACK and the POLY/MONO group is VOICES. Any older SCRAMBLE/MELT or naming material below is historical and does not override this amendment.
 

@@ -201,20 +201,20 @@ private:
     juce::TextButton mainTab { "MAIN" }, fxTab { "FX" }, seqTab { "SEQ" }, settingsTab { "SETTINGS" };
     juce::TextButton zoomInButton { "+" }, zoomOutButton { "-" }, focusRegionButton { "[]" }, fitButton { "FIT" };
     juce::TextButton randomSourceButton { "DICE" }, regenerateButton { "R" };
-    juce::TextButton muteButton { "MUTE" }, moreButton { "..." };
+    juce::TextButton moreButton { "..." };
     juce::TextButton scrambleModeButton { "Random" }, meltModeButton { "Stretch" },
         smearModeButton { "Diffuse" };
     juce::TextButton scrambleFoldButton { ">" }, meltFoldButton { ">" },
         smearFoldButton { ">" }, spectralFoldButton { ">" }, outputFoldButton { ">" };
     juce::TextButton scramblePowerButton { "o" }, meltPowerButton { "o" },
-        smearPowerButton { "o" }, spectralPowerButton { "o" }, outputPowerButton { "o" };
+        smearPowerButton { "o" }, spectralPowerButton { "o" };
     juce::TextButton chordsOffButton { "OFF" }, chordsOnButton { "ON" };
     juce::TextButton polyButton { "POLY" }, monoButton { "MONO" };
     SourceWaveformComponent waveform;
     juce::ComboBox sourceKey;
-    juce::Slider sourceTranspose, sourceFineTune, sourceGain;
+    juce::Slider sourceTranspose, sourceFineTune, sourceStretch, sourceGain;
     juce::Label sourceKeyLabel, sourceTransposeLabel, sourceFineTuneLabel,
-        sourceGainLabel;
+        sourceStretchLabel, sourceGainLabel;
     juce::ComboBox targetKey;
     juce::ToggleButton voiceMode { "MONO" };
     juce::TextButton spectralResetButton { "Reset" };
@@ -255,4 +255,3 @@ private:
         meltPanelBounds, smearPanelBounds, spectralPanelBounds, outputPanelBounds;
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(RandomChopSamplerAudioProcessorEditor)
 };
-

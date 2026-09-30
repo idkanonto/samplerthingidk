@@ -12,7 +12,8 @@ The final-pass control names are authoritative throughout the current UI:
 
 - **TUNE**, **DRIFT**, and global **PITCH** are the complete pitch path. Old Source Key and Play In Key values are ignored.
 - **STACK** off ignores incoming MIDI-note pitch. STACK on follows MIDI relative to neutral note 72 without sample-key correction.
-- **FAULT PRESSURE** controls how often mutations occur and how small its 1/2, 1/4, 1/8, and 1/16 segments can become. Select any combination of **PULL**, **DUST**, and **BEND**. With none selected, FAULT is dry.
+- **STRETCH** is independent for every source. It changes timing from 0.25× speed (about four times as long) through 1× original timing to 2× speed (about half as long) while preserving pitch.
+- **FAULT PRESSURE** controls how often mutations occur and how small its 1/2, 1/4, 1/8, and 1/16 segments can become. Select any combination of **PITCH**, **BITCRUSH**, and **REVERSE**. PITCH changes rate and duration together; REVERSE affects only the selected slice. With none selected, FAULT is dry.
 - **ETCH CLEAR** immediately clears the visible mask and the saved backend mask.
 - **MASTER VOL** reads 0–125% and **PITCH** reads -12 to +12 semitones.
 
@@ -41,7 +42,7 @@ The normal workflow is:
 3. Play a MIDI note. Each note-on chooses one enabled sample at random.
 4. Use **TUNE** and **DRIFT** when a source needs manual pitch correction.
 5. Turn up **FAULT PRESSURE**, draw in **ETCH**, or raise **BLEED**. FAULT waits for tempo-grid boundaries before a mutation begins.
-6. Leave **VOL** at 100% for unity gain, adjust **PITCH** if the whole instrument needs transposing, and make sure **Mute** is off.
+6. Leave **VOL** at 100% for unity gain, adjust **PITCH** if the whole instrument needs transposing, or move VOL to `−∞` for silence.
 
 For the most predictable first test, load one short WAV file, keep **STACK** off, leave **PITCH**, **FAULT**, **ETCH**, and **BLEED** at 0, and leave **VOL** at 100%.
 
@@ -246,9 +247,9 @@ There is no final limiter. If the plug-in or DAW channel clips, lower VOL, reduc
 
 The global PITCH fader transposes every newly triggered voice from -12 to +12 semitones. Its default is 0. It stacks with each source's Transpose and Fine Tune settings and with the MIDI offset when Chords is on.
 
-### Mute
+### Silence
 
-**MUTE** silences the final output with a short smooth transition. When muted, the button changes to **UNMUTE**. Muting does not unload samples or reset effects.
+Move **VOL** fully down to `−∞` for exact silence. There is no separate Mute control or state.
 
 ## 13 Settings
 
@@ -293,10 +294,9 @@ When the DAW saves the plug-in state, recompiler.dll stores:
 
 - All host parameters: Chords, Poly or Mono, the four effect amounts, VOL, and global PITCH.
 - The sample list and each file's external path.
-- Each source's enabled state, Start, End, Transpose, Fine Tune, and Gain. Legacy Source Key metadata may remain in older projects but is inert.
+- Each source's enabled state, Start, End, Transpose, Fine Tune, Stretch, and Gain. Legacy Source Key metadata may remain in older projects but is inert.
 - The selected sample.
 - The Spectral Draw canvas.
-- Output mute.
 - Interface scale.
 - Effect-engine enable states.
 - The internal creative seed.
@@ -345,7 +345,7 @@ The Main or Settings tab choice, active notes, meters, and live effect history a
 
 - Confirm that at least one sample is loaded, enabled, and not marked missing.
 - Send MIDI notes to the plug-in's instrument track.
-- Make sure Output is not muted and VOL is above 0%.
+- Make sure VOL is above `−∞` / 0%.
 - Check that Start and End leave a usable region.
 - Check the DAW track mute, monitor, and routing settings.
 
@@ -418,6 +418,7 @@ Spectral Draw requires 1024 samples of processing latency, including when its de
 | End | Sets the playback-region end | Just after Start to file end |
 | Transpose | Adds a fixed pitch offset | -24 to +24 semitones |
 | Fine Tune | Corrects or detunes pitch | -100 to +100 cents |
+| Stretch | Changes source timing while preserving pitch | 0.25× to 2× speed |
 | Source Gain | Balances one source before global effects | -60 to +12 dB |
 | Chords | Chooses fixed-pitch triggers or MIDI-following pitch | OFF or ON |
 | Poly or Mono | Allows overlapping voices or one replacing voice | POLY or MONO |
@@ -428,9 +429,8 @@ Spectral Draw requires 1024 samples of processing latency, including when its de
 | Spectral Reset | Clears the spectral mask | Reset |
 | Spectral Depth | Controls how strongly the mask attenuates sound | 0 to 100 |
 | Output meter | Displays left and right output peaks | L and R visual display |
-| VOL | Sets final plug-in gain on a perceptual curve | 0% to 125%; 100% is unity |
+| VOL | Sets final plug-in gain on a perceptual curve | `−∞` / 0% to 125%; 100% is unity |
 | PITCH | Transposes every newly triggered voice | -12 to +12 semitones |
-| Mute | Smoothly silences or restores final output | Mute or Unmute |
 | Interface Scale | Changes the fixed editor size | 75, 100, 125, or 150 percent |
 | Add Samples | Opens the multi-file sample chooser | Settings page |
 | Effect Engine buttons | Enable or bypass each complete creative engine | Scramble, Melt, Smear, Spectral Draw |

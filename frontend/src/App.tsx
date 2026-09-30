@@ -180,6 +180,8 @@ function SourceControls({ sample }: { sample?: SampleSummary }) {
     <Divider />
     <label><b>DRIFT</b><SampleNumber sample={sample} property="fineTune" value={sample?.fineTune ?? 0} min={-100} max={100} step={1} suffix="ct" /></label>
     <Divider />
+    <label><b>STRETCH{sample?.stretchPending ? '…' : ''}</b><SampleNumber sample={sample} property="stretch" value={sample?.stretch ?? 1} min={0.25} max={2} step={0.05} suffix="×" /></label>
+    <Divider />
     <label className="gain-source"><b>TRIM</b><SourceGainKnob sample={sample} /></label>
   </div>
 }
@@ -200,7 +202,7 @@ function BleedModule() {
 function FaultModule({ mutations }: { mutations: number }) {
   const pressure = usePluginParameter('faultPressure')
   const visualisation = useVisualisationState()
-  const choices = [{ label: 'PULL', bit: 1 }, { label: 'DUST', bit: 2 }, { label: 'BEND', bit: 4 }]
+  const choices = [{ label: 'PITCH', bit: 1 }, { label: 'BITCRUSH', bit: 2 }, { label: 'REVERSE', bit: 4 }]
   const toggle = (bit: number) => sendPluginCommand('setFaultMutations', { mutations: mutations ^ bit })
   return <RecompilerPanel title="FAULT" className="fault-module">
     <div className="fault-controls">
@@ -254,11 +256,11 @@ function OutputFader({ id, label, format, top, bottom }: { id: string, label: st
   </div>
 }
 
-function OutputModule({ muted }: { muted: boolean }) {
+function OutputModule() {
   return <RecompilerPanel title="MASTER" className="output-module"><div className="output-body">
-    <div className="meter-column"><StereoMeter /><PixelButton className="mute-button" active={muted} onClick={() => sendPluginCommand('setOutputMuted', { enabled: !muted })}>{muted ? 'UNMUTE' : 'MUTE'}</PixelButton></div>
+    <div className="meter-column"><StereoMeter /></div>
     <div className="meter-ticks"><span>+6</span><span>0</span><span>-6</span><span>-12</span><span>-24</span><span>-36</span><span>dB</span></div>
-    <OutputFader id="output" label="VOL" top="125" bottom="0" format={(value) => `${Math.round(value)}%`} />
+    <OutputFader id="output" label="VOL" top="125" bottom="−∞" format={(value) => value <= 0 ? '−∞' : `${Math.round(value)}%`} />
     <OutputFader id="globalPitch" label="PITCH" top="+12" bottom="−12" format={(value) => `${value > 0 ? '+' : ''}${Math.round(value)}`} />
   </div></RecompilerPanel>
 }
@@ -336,7 +338,7 @@ export default function App() {
         <FaultModule mutations={backendState?.faultMutations ?? 7} />
         <BleedModule />
         <SpectralModule values={backendState?.spectralCanvas ?? []} width={backendState?.spectralWidth ?? 128} height={backendState?.spectralHeight ?? 64} />
-        <OutputModule muted={backendState?.outputMuted ?? false} />
+        <OutputModule />
       </div>
     </>}
   </main>

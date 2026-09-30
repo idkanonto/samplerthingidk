@@ -93,14 +93,6 @@ public:
     {
         return outputPeakRight.load(std::memory_order_relaxed);
     }
-    void setOutputMuted(bool muted) noexcept
-    {
-        outputMuted.store(muted, std::memory_order_relaxed);
-    }
-    bool isOutputMuted() const noexcept
-    {
-        return outputMuted.load(std::memory_order_relaxed);
-    }
     int getActiveVoiceCount() const noexcept
     {
         return activeVoiceCount.load(std::memory_order_relaxed);
@@ -197,7 +189,6 @@ private:
     std::atomic<float> outputPeakLeft { 0.0f };
     std::atomic<float> outputPeakRight { 0.0f };
     std::atomic<int> activeVoiceCount { 0 };
-    std::atomic<bool> outputMuted { false };
     std::atomic<int> uiScaleIndex { 1 };
     std::atomic<uint32_t> faultMutations { randomchop::FaultMutations::all };
     std::atomic<uint32_t> scrambleFeatures { randomchop::ScrambleFeatures::all };
@@ -211,6 +202,5 @@ private:
     uint64_t voiceCounter = 0;
     uint64_t lastSeed = 0;
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> outputGain { 1.0f };
-    juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> muteGain { 1.0f };
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(RandomChopSamplerAudioProcessor)
 };

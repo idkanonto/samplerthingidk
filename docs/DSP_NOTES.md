@@ -9,7 +9,7 @@ status: active
 # DSP Notes
 
 > [!important] Active final-pass chain
-> FAULT → ETCH → BLEED → MASTER supersedes the historical SCRAMBLE/MELT sections below. `FaultProcessor` owns a prepared 6.1-second stereo history and 4096-entry Hann table. A dedicated allocation-free 1/16 clock groups ticks into 1/2, 1/4, 1/8, or 1/16 segments; each segment latches occurrence, mutation, and profile once. PULL and BEND render at most five fixed overlap-add grains per sample, DUST uses scalar quantize/hold state, and all three share six-millisecond equal-power edges. The callback performs no file I/O, locks, or dynamic allocation.
+> FAULT → ETCH → BLEED → MASTER supersedes the historical SCRAMBLE/MELT sections below. `FaultProcessor` owns a prepared 18.1-second stereo history so a maximum captured slice can survive a complete -12-semitone half-speed replay without callback copying. A dedicated allocation-free 1/16 clock groups ticks into 1/2, 1/4, 1/8, or 1/16 segments. PITCH uses direct interpolated variable-rate reads, BITCRUSH keeps the established scalar quantize/hold path, and REVERSE reads only the captured slice backward. All share six-millisecond equal-power edges. The callback performs no file I/O, locks, dynamic allocation, formant processing, or time compensation.
 
 ## Realtime contract
 
@@ -22,7 +22,7 @@ status: active
 ## Sampler playback
 
 - Sources decode fully into RAM on control/state paths. Waveform peaks are immutable.
-- Decoded PCM is published directly through immutable prepared handles. There is no manual source-stretch job or worker; MELT is the only time-expansion system.
+- Decoded PCM remains immutable. Per-source Stretch jobs run on a bounded background worker and publish versioned pitch-preserving buffers atomically; stale results cannot replace newer settings or removed sources.
 - Every enabled playable source receives equal selection probability. Voices retain their exact immutable prepared handle and use linear interpolation, per-source Gain, bounded internal attack/release, a 3 ms region fade, and a 3 ms steal tail.
 
 ## Host grid

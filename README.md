@@ -1,6 +1,6 @@
 # recompiler.dll
 
-The current final-pass branch uses the creative chain `FAULT → ETCH → BLEED → MASTER`. FAULT is a deterministic tempo-aware mutation engine with PRESSURE and a PULL/DUST/BEND multiselect; it replaces the prior SCRAMBLE and MELT processors rather than relabeling them. Source workflow naming is POOL/SOURCE/TUNE/DRIFT/TRIM/STACK/VOICES, and automatic source-key matching is absent from the audio path.
+The current final-pass branch uses the creative chain `FAULT → ETCH → BLEED → MASTER`. FAULT is a deterministic tempo-aware slice engine with PRESSURE and a PITCH/BITCRUSH/REVERSE multiselect. PITCH uses sampler-style variable-rate repitching; BITCRUSH retains the established quantize/hold sound; REVERSE reverses only its selected slice. Each source also has an independent pitch-preserving 0.25×–2× Stretch control. Source workflow naming is POOL/SOURCE/TUNE/DRIFT/STRETCH/TRIM/STACK/VOICES, and automatic source-key matching is absent from the audio path. MASTER VOL reaches exact silence at its minimum; there is no separate mute control.
 
 `recompiler.dll` is a JUCE VST3/standalone sampler instrument. Drag in up to 20 WAV, AIFF/AIF, MP3, or FLAC sources; each note chooses an enabled source with equal probability and plays through a fixed 16-voice POLY/MONO engine.
 

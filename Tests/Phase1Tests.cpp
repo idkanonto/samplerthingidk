@@ -160,6 +160,7 @@ void testSupportedFormatsAndPoolState()
             settings.gainDb = -7.5f;
             settings.transposeSemitones = -12;
             settings.fineTuneCents = 37.0f;
+            settings.stretchSpeed = 0.25f;
         });
         const auto changed = manager.getSnapshot()->front();
         check(changed->settings.id == id && changed->runtimeId == runtimeId,
@@ -168,8 +169,10 @@ void testSupportedFormatsAndPoolState()
                   && changed->settings.endNormalised == 0.8
                   && changed->settings.sourceKey == 8
                   && changed->settings.gainDb == -7.5f
-                  && changed->settings.transposeSemitones == -12
-                   && changed->settings.fineTuneCents == 37.0f,
+                   && changed->settings.transposeSemitones == -12
+                   && changed->settings.fineTuneCents == 37.0f
+                   && changed->settings.stretchSpeed == 0.25f
+                   && (*manager.getSnapshot())[1]->settings.stretchSpeed == 1.0f,
               "source controls were not preserved in the snapshot");
 
         manager.updateSettings(id, [](SampleSettings& settings)
@@ -187,6 +190,9 @@ void testSupportedFormatsAndPoolState()
               "sample pool state did not restore");
         check(restored.getSnapshot()->front()->settings.id == id,
               "stable source ID was not persisted");
+        check(restored.getSnapshot()->front()->settings.stretchSpeed == 0.25f
+                  && (*restored.getSnapshot())[1]->settings.stretchSpeed == 1.0f,
+              "independent per-source Stretch values were not persisted");
         juce::ValueTree hostileState("SAMPLES");
         juce::ValueTree hostileSource("SAMPLE");
         hostileSource.setProperty("id", "hostile-source", nullptr);
@@ -202,8 +208,9 @@ void testSupportedFormatsAndPoolState()
                    && hostileSnapshot->front()->settings.gainDb == 0.0f,
               "hostile persisted Gain escaped finite restore bounds");
         const auto rewritten = hostileRestore.createState().getChild(0);
-        check(!rewritten.hasProperty("weight") && !rewritten.hasProperty("stretch"),
-              "retired Weight or Stretch state was written back into a session");
+        check(!rewritten.hasProperty("weight")
+                  && static_cast<float>(rewritten.getProperty("stretch")) == 2.0f,
+              "active Stretch bounds or retired Weight state were written incorrectly");
         const auto restoredId = restored.getSnapshot()->front()->settings.id;
         const auto heldPrepared = restored.getSnapshot()->front()->prepared;
         const auto heldFrames = heldPrepared != nullptr && heldPrepared->audio != nullptr
@@ -289,6 +296,59 @@ void testOutputGainMapping()
         check(std::abs(randomchop::outputPercentToDecibels(
             randomchop::outputDecibelsToPercent(decibels)) - decibels) < 0.002f,
             "legacy Output dB migration did not round-trip");
+}
+
+void testPitchPreservingSourceStretch()
+{
+    constexpr double sampleRate = 48000.0;
+    constexpr double frequency = 440.0;
+    constexpr int inputFrames = 32768;
+    auto input = std::make_shared<juce::AudioBuffer<float>>(1, inputFrames);
+    for (int frame = 0; frame < inputFrames; ++frame)
+        input->setSample(0, frame, 0.5f * std::sin(
+            juce::MathConstants<double>::twoPi * frequency * frame / sampleRate));
+
+    const auto unchanged = randomchop::prepareStretch(input, sampleRate, 1.0f, 7);
+    check(unchanged != nullptr && unchanged->audio == input
+              && unchanged->revision == 7 && unchanged->stretchSpeed == 1.0f,
+          "1x source Stretch did not reuse the immutable decoded buffer");
+
+    for (const auto speed : { 0.25f, 0.5f, 2.0f })
+    {
+        const auto prepared = randomchop::prepareStretch(input, sampleRate, speed, 11);
+        const auto expectedFrames = static_cast<int>(std::llround(inputFrames / speed));
+        check(prepared != nullptr && prepared->audio != nullptr,
+              "Signalsmith source Stretch preparation failed");
+        if (prepared == nullptr || prepared->audio == nullptr)
+            continue;
+
+        check(prepared->audio->getNumSamples() == expectedFrames
+                  && prepared->revision == 11
+                  && std::abs(prepared->stretchSpeed - speed) < 0.000001f,
+              "source Stretch speed, duration, or version metadata was incorrect");
+
+        const auto* samples = prepared->audio->getReadPointer(0);
+        const int first = expectedFrames / 8;
+        const int last = expectedFrames - first;
+        int risingCrossings = 0;
+        bool allFinite = true;
+        for (int frame = first + 1; frame < last; ++frame)
+        {
+            allFinite = allFinite && std::isfinite(samples[frame]);
+            if (samples[frame - 1] <= 0.0f && samples[frame] > 0.0f)
+                ++risingCrossings;
+        }
+        const auto measuredFrequency = risingCrossings * sampleRate
+            / static_cast<double>(last - first);
+        check(allFinite && std::abs(measuredFrequency - frequency) < 70.0,
+              "source Stretch changed pitch or produced non-finite audio");
+    }
+
+    check(randomchop::clampStretchSpeed(0.1f) == 0.25f
+              && randomchop::clampStretchSpeed(3.0f) == 2.0f
+              && randomchop::clampStretchSpeed(
+                  std::numeric_limits<float>::quiet_NaN()) == 1.0f,
+          "source Stretch bounds did not sanitize invalid values");
 }
 
 void testRegionsAndVoices()
@@ -1379,9 +1439,9 @@ void testFaultProcessor()
     check(buffersEqual(first, second), "FAULT fixed-seed rendering was not deterministic");
     check(!buffersEqual(dry, first), "FAULT maximum pressure produced no mutations");
 
-    for (const auto only : { randomchop::FaultMutations::pull,
-                             randomchop::FaultMutations::dust,
-                             randomchop::FaultMutations::bend })
+    for (const auto only : { randomchop::FaultMutations::pitch,
+                             randomchop::FaultMutations::bitcrush,
+                             randomchop::FaultMutations::reverse })
     {
         auto signal = dry;
         randomchop::GridBoundaries boundaries;
@@ -1392,15 +1452,15 @@ void testFaultProcessor()
         processor.prepare(48000.0);
         processor.setSeed(4200 + only);
         processor.process(signal, boundaries, { 100.0f, only });
-        const auto selected = only == randomchop::FaultMutations::pull
-            ? randomchop::FaultMutation::pull
-            : only == randomchop::FaultMutations::dust
-                ? randomchop::FaultMutation::dust : randomchop::FaultMutation::bend;
+        const auto selected = only == randomchop::FaultMutations::pitch
+            ? randomchop::FaultMutation::pitch
+            : only == randomchop::FaultMutations::bitcrush
+                ? randomchop::FaultMutation::bitcrush : randomchop::FaultMutation::reverse;
         check(processor.getMutationCount(selected) > 0,
               "FAULT single-mutation selection never activated");
-        for (const auto other : { randomchop::FaultMutation::pull,
-                                  randomchop::FaultMutation::dust,
-                                  randomchop::FaultMutation::bend })
+        for (const auto other : { randomchop::FaultMutation::pitch,
+                                  randomchop::FaultMutation::bitcrush,
+                                  randomchop::FaultMutation::reverse })
             if (other != selected)
                 check(processor.getMutationCount(other) == 0,
                       "FAULT single-mutation selection leaked another mutation");
@@ -1411,7 +1471,29 @@ void testFaultProcessor()
             for (int frame = 0; frame < signal.getNumSamples(); ++frame)
                 check(std::isfinite(signal.getSample(channel, frame)),
                       "FAULT produced a non-finite sample");
+
+        if (selected == randomchop::FaultMutation::pitch)
+        {
+            check(processor.getLastPitchSemitones() >= -12
+                      && processor.getLastPitchSemitones() <= 12
+                      && processor.getLastPitchSemitones() != 0
+                      && processor.getLastPlaybackFrames()
+                          == randomchop::faultPitchPlaybackFrames(
+                              processor.getLastSourceFrames(),
+                              processor.getLastPitchSemitones()),
+                  "FAULT Pitch did not use direct rate-coupled resampling");
+        }
+        if (selected == randomchop::FaultMutation::reverse)
+            check(processor.getLastPlaybackFrames() == processor.getLastSourceFrames(),
+                  "FAULT Reverse changed the selected slice duration");
     }
+
+    check(std::abs(randomchop::faultPitchPlaybackRate(12) - 2.0) < 0.000001
+              && randomchop::faultPitchPlaybackFrames(48000, 12) == 24000,
+          "+12 semitone FAULT Pitch was not one octave up at twice speed/half duration");
+    check(std::abs(randomchop::faultPitchPlaybackRate(-12) - 0.5) < 0.000001
+              && randomchop::faultPitchPlaybackFrames(48000, -12) == 96000,
+          "-12 semitone FAULT Pitch was not one octave down at half speed/double duration");
 }
 
 void testCreativeFeatureMenus()
@@ -1455,6 +1537,7 @@ int main()
     testSupportedFormatsAndPoolState();
     testEqualSelectionAndPitch();
     testOutputGainMapping();
+    testPitchPreservingSourceStretch();
     testFaultProcessor();
     testRegionsAndVoices();
     testMeltSingleMacroProgression();

@@ -157,7 +157,6 @@ juce::var RandomChopSamplerWebViewEditor::createBackendState()
     object->setProperty("sampleCount", static_cast<int>(pool->size()));
     object->setProperty("maximumSampleCount", SampleManager::maximumSamples);
     object->setProperty("voiceCount", processor.getActiveVoiceCount());
-    object->setProperty("outputMuted", processor.isOutputMuted());
     object->setProperty("uiScale", processor.getUiScaleIndex());
     object->setProperty("importMessage", importMessage);
     juce::Array<juce::var> effectEnabled;
@@ -180,6 +179,8 @@ juce::var RandomChopSamplerWebViewEditor::createBackendState()
         item->setProperty("transpose", settings.transposeSemitones);
         item->setProperty("fineTune", settings.fineTuneCents);
         item->setProperty("gainDb", settings.gainDb);
+        item->setProperty("stretch", settings.stretchSpeed);
+        item->setProperty("stretchPending", sample->stretchPending);
         item->setProperty("sampleRate", sample->sampleRate);
         item->setProperty("bitDepth", sample->bitDepth);
         item->setProperty("durationSeconds", sample->audio != nullptr
@@ -312,6 +313,7 @@ void RandomChopSamplerWebViewEditor::handleCommand(const juce::var& payload)
             if (property == "transpose") settings.transposeSemitones = static_cast<int>(value);
             else if (property == "fineTune") settings.fineTuneCents = static_cast<float>(value);
             else if (property == "gainDb") settings.gainDb = static_cast<float>(value);
+            else if (property == "stretch") settings.stretchSpeed = static_cast<float>(value);
         });
         backendStateDirty = true;
     }
@@ -336,11 +338,6 @@ void RandomChopSamplerWebViewEditor::handleCommand(const juce::var& payload)
     else if (type == "regenerateSeed")
     {
         processor.regenerateCreativeSeed();
-    }
-    else if (type == "setOutputMuted")
-    {
-        processor.setOutputMuted(static_cast<bool>(payload.getProperty("enabled", false)));
-        backendStateDirty = true;
     }
     else if (type == "setEffectEnabled")
     {

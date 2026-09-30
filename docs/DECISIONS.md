@@ -90,6 +90,23 @@ Retired:
 - SCRAMBLE/MELT feature masks, processors, bridge telemetry, UI modules, and synthetic visualizer activity.
 - Geist Pixel Square and Space Mono assets.
 
+## 2026-09-30 — Focused slice and source-processing correction
+
+Accepted:
+
+- Keep FAULT scheduling and PRESSURE, but limit its random slice choices to PITCH=1, BITCRUSH=2, and REVERSE=4. STRETCH is not a FAULT choice.
+- Implement FAULT PITCH as direct sampler-style resampling across non-zero integer intervals from -12 through +12 semitones. Playback rate is `2^(semitones/12)` and playback duration changes inversely; no overlap-add, formant preservation, time compensation, or post-stretch is permitted.
+- Preserve the existing quantize/hold bitcrusher algorithm unchanged under the BITCRUSH label. REVERSE reads only the captured slice from end to beginning.
+- Restore independent per-source Stretch at 0.25×–2× speed. Prepare pitch-preserving source versions on the existing bounded background-worker model; source tuning remains separate.
+- Remove the dedicated output mute control, state, bridge command, and DSP ramp. MASTER VOL at 0% maps to exact zero gain and is the sole mute path.
+- Advance saved state to version 14. Pre-version-14 source Stretch data remains neutral rather than being reinterpreted with the new speed semantics.
+
+Superseded by this decision:
+
+- The 2026-09-28 PULL/DUST/BEND FAULT choice set.
+- The earlier decision that manual per-source Stretch stays removed.
+- The earlier dedicated output Mute control/state.
+
 ## Deferred
 
 - Any feature not named in [[PRODUCT_SPEC_V2]].

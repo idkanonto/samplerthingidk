@@ -89,7 +89,7 @@ export function FaultCanvas({ pressure, visualisation }: {
     context.fillRect(currentX, 6, Math.max(1, Math.floor(blockWidth * progress)), 4)
     context.fillStyle = '#96958d'
     context.font = '600 9px "IBM Plex Mono Local", monospace'
-    const names = ['DRY', 'PULL', 'DUST', 'BEND']
+    const names = ['DRY', 'PITCH', 'BITCRUSH', 'REVERSE']
     context.fillText(`${names[visualisation.faultMutation] ?? 'DRY'}  ${Math.round(pressure)}%`, 5, 12)
   }, [pressure, visualisation.faultDivision, visualisation.faultMutation, visualisation.faultProgress])
   return <canvas ref={ref} className="pixel-canvas fault-canvas"

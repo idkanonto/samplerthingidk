@@ -71,8 +71,6 @@ void RandomChopSamplerAudioProcessor::prepareToPlay(double rate, int maximumBloc
     outputGain.reset(currentRate, 0.010);
     outputGain.setCurrentAndTargetValue(randomchop::outputPercentToGain(
         parameters.getRawParameterValue(IDs::output)->load()));
-    muteGain.reset(currentRate, 0.010);
-    muteGain.setCurrentAndTargetValue(outputMuted.load(std::memory_order_relaxed) ? 0.0f : 1.0f);
     lastGridBoundaries = {};
     const auto seed = internalSeed.load(std::memory_order_relaxed);
     random.setSeed(seed);
@@ -261,12 +259,11 @@ void RandomChopSamplerAudioProcessor::processBlock(
                           std::memory_order_relaxed);
     outputGain.setTargetValue(randomchop::outputPercentToGain(
         parameters.getRawParameterValue(IDs::output)->load()));
-    muteGain.setTargetValue(outputMuted.load(std::memory_order_relaxed) ? 0.0f : 1.0f);
     float leftPeak = 0.0f;
     float rightPeak = 0.0f;
     for (int frame = 0; frame < buffer.getNumSamples(); ++frame)
     {
-        const auto gain = outputGain.getNextValue() * muteGain.getNextValue();
+        const auto gain = outputGain.getNextValue();
         for (int channel = 0; channel < buffer.getNumChannels(); ++channel)
         {
             const auto sample = buffer.getSample(channel, frame) * gain;
@@ -296,7 +293,6 @@ void RandomChopSamplerAudioProcessor::getStateInformation(juce::MemoryBlock& des
         juce::String(static_cast<int64_t>(
             internalSeed.load(std::memory_order_relaxed))), nullptr);
     state.setProperty("spectralCanvas", spectralMaskStore.encodeCanvas(), nullptr);
-    state.setProperty("outputMuted", outputMuted.load(std::memory_order_relaxed), nullptr);
     state.setProperty("uiScale", uiScaleIndex.load(std::memory_order_relaxed), nullptr);
     state.setProperty("selectedSampleId", getSelectedSampleId(), nullptr);
     state.setProperty("faultMutations",
@@ -320,15 +316,16 @@ void RandomChopSamplerAudioProcessor::setStateInformation(const void* data, int 
             return;
         const auto files = state.getChildWithName("SAMPLES");
         const auto spectralCanvas = state.getProperty("spectralCanvas").toString();
-        outputMuted.store(static_cast<bool>(state.getProperty("outputMuted", false)),
-                          std::memory_order_relaxed);
+        const auto restoredVersion = static_cast<int>(state.getProperty("stateVersion", 0));
+        if (restoredVersion < 14 && files.isValid())
+            for (auto source : files)
+                source.removeProperty("stretch", nullptr);
         setUiScaleIndex(static_cast<int>(state.getProperty("uiScale", 1)));
         setSelectedSampleId(state.getProperty("selectedSampleId").toString());
         setFaultMutations(static_cast<uint32_t>(static_cast<int>(
             state.getProperty("faultMutations", static_cast<int>(randomchop::FaultMutations::all)))));
         setSmearFeatures(static_cast<uint32_t>(static_cast<int>(
             state.getProperty("smearFeatures", static_cast<int>(randomchop::SmearFeatures::all)))));
-        const auto restoredVersion = static_cast<int>(state.getProperty("stateVersion", 0));
         if (restoredVersion < 13)
         {
             setEffectEnabled(0, true);

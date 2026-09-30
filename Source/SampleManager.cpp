@@ -65,13 +65,117 @@ SampleSettings readSettings(const juce::ValueTree& node)
         static_cast<int>(node.getProperty("transpose", 0)));
     s.fineTuneCents = randomchop::clampFineTune(
         static_cast<float>(node.getProperty("fineTune", 0.0f)));
+    s.stretchSpeed = randomchop::clampStretchSpeed(
+        static_cast<float>(node.getProperty("stretch", 1.0f)));
     return s;
 }
 }
 
-SampleManager::SampleManager()
+SampleManager::SampleManager(StretchPrepareFunction prepare)
+    : stretchPrepare(prepare ? std::move(prepare) : randomchop::prepareStretch)
 {
     formats.registerBasicFormats();
+    stretchWorker = std::thread([this] { stretchWorkerLoop(); });
+}
+
+SampleManager::~SampleManager()
+{
+    {
+        const std::lock_guard<std::mutex> lock(stretchMutex);
+        stoppingStretchWorker = true;
+        stretchJobs.clear();
+    }
+    stretchCondition.notify_one();
+    if (stretchWorker.joinable())
+        stretchWorker.join();
+}
+
+void SampleManager::enqueueStretch(StretchJob job)
+{
+    {
+        const std::lock_guard<std::mutex> lock(stretchMutex);
+        std::erase_if(stretchJobs, [&job](const auto& queued)
+        {
+            return queued.sourceId == job.sourceId;
+        });
+        stretchJobs.push_back(std::move(job));
+    }
+    stretchCondition.notify_one();
+}
+
+void SampleManager::discardQueuedStretch(const juce::String& sourceId)
+{
+    const std::lock_guard<std::mutex> lock(stretchMutex);
+    std::erase_if(stretchJobs, [&sourceId](const auto& queued)
+    {
+        return queued.sourceId == sourceId;
+    });
+}
+
+void SampleManager::discardAllQueuedStretch()
+{
+    const std::lock_guard<std::mutex> lock(stretchMutex);
+    stretchJobs.clear();
+}
+
+void SampleManager::stretchWorkerLoop()
+{
+    for (;;)
+    {
+        StretchJob job;
+        {
+            std::unique_lock<std::mutex> lock(stretchMutex);
+            stretchCondition.wait(lock, [this]
+            {
+                return stoppingStretchWorker || !stretchJobs.empty();
+            });
+            if (stoppingStretchWorker)
+                return;
+            job = std::move(stretchJobs.front());
+            stretchJobs.pop_front();
+        }
+
+        PreparedSamplePtr prepared;
+        try
+        {
+            prepared = stretchPrepare(job.decodedAudio, job.sampleRate,
+                                      job.speed, job.revision);
+        }
+        catch (...)
+        {
+            prepared.reset();
+        }
+        try
+        {
+            publishStretchResult(job, std::move(prepared));
+        }
+        catch (...)
+        {
+            // Publication allocates only on this worker. Preserve the previous
+            // valid prepared version if the host is out of memory.
+        }
+    }
+}
+
+void SampleManager::publishStretchResult(const StretchJob& job,
+                                         PreparedSamplePtr prepared)
+{
+    const std::lock_guard<std::mutex> lock(mutationMutex);
+    const auto current = getSnapshot();
+    const auto index = findSource(*current, job.sourceId);
+    if (index >= current->size()
+        || (*current)[index]->runtimeId != job.sourceRuntimeId
+        || (*current)[index]->requestedStretchRevision != job.revision)
+        return;
+
+    auto next = std::make_shared<Pool>(*current);
+    auto copy = std::make_shared<SampleData>(*(*next)[index]);
+    copy->stretchPending = false;
+    copy->stretchFailed = prepared == nullptr;
+    if (prepared != nullptr)
+        copy->prepared = std::move(prepared);
+    (*next)[index] = std::move(copy);
+    publish(std::shared_ptr<const Pool>(std::move(next)));
 }
 
 void SampleManager::publish(std::shared_ptr<const Pool> next)
@@ -193,10 +297,18 @@ SampleManager::SamplePtr SampleManager::loadFile(const juce::File& file,
         sample->audio = std::move(buffer);
         sample->sampleRate = reader->sampleRate;
         sample->bitDepth = static_cast<int>(reader->bitsPerSample);
-        auto prepared = std::make_shared<PreparedSampleData>();
-        prepared->audio = sample->audio;
-        prepared->sampleRate = sample->sampleRate;
-        sample->prepared = std::move(prepared);
+        sample->prepared = randomchop::prepareStretch(
+            sample->audio, sample->sampleRate, 1.0f, 0);
+        if (sample->prepared == nullptr)
+        {
+            errors.push_back(file.getFileName() + ": could not prepare decoded audio");
+            return {};
+        }
+        if (std::abs(sample->settings.stretchSpeed - 1.0f) >= 0.000001f)
+        {
+            sample->requestedStretchRevision = 1;
+            sample->stretchPending = true;
+        }
         sample->runtimeId = nextRuntimeId.fetch_add(1, std::memory_order_relaxed);
         return sample;
     }
@@ -229,13 +341,16 @@ std::vector<juce::String> SampleManager::addFiles(const juce::StringArray& paths
 
 void SampleManager::remove(const juce::String& id)
 {
-    const std::lock_guard<std::mutex> lock(mutationMutex);
-    auto current = getSnapshot();
-    const auto index = findSource(*current, id);
-    if (index >= current->size()) return;
-    auto next = std::make_shared<Pool>(*current);
-    next->erase(next->begin() + static_cast<std::ptrdiff_t>(index));
-    publish(std::shared_ptr<const Pool>(std::move(next)));
+    {
+        const std::lock_guard<std::mutex> lock(mutationMutex);
+        auto current = getSnapshot();
+        const auto index = findSource(*current, id);
+        if (index >= current->size()) return;
+        auto next = std::make_shared<Pool>(*current);
+        next->erase(next->begin() + static_cast<std::ptrdiff_t>(index));
+        publish(std::shared_ptr<const Pool>(std::move(next)));
+    }
+    discardQueuedStretch(id);
 }
 
 void SampleManager::setEnabled(const juce::String& id, bool enabled)
@@ -246,25 +361,67 @@ void SampleManager::setEnabled(const juce::String& id, bool enabled)
 void SampleManager::updateSettings(const juce::String& id,
                                    const std::function<void(SampleSettings&)>& update)
 {
-    const std::lock_guard<std::mutex> lock(mutationMutex);
-    const auto current = getSnapshot();
-    const auto index = findSource(*current, id);
-    if (index >= current->size())
-        return;
-    auto next = std::make_shared<Pool>(*current);
-    auto copy = std::make_shared<SampleData>(*(*next)[index]);
-    update(copy->settings);
-    const auto region = randomchop::clampNormalisedRegion(copy->settings.startNormalised,
-                                                          copy->settings.endNormalised);
-    copy->settings.startNormalised = region.start;
-    copy->settings.endNormalised = region.end;
-    copy->settings.sourceKey = randomchop::clampTonic(copy->settings.sourceKey);
-    copy->settings.transposeSemitones = randomchop::clampTranspose(
-        copy->settings.transposeSemitones);
-    copy->settings.fineTuneCents = randomchop::clampFineTune(copy->settings.fineTuneCents);
-    copy->settings.gainDb = clampGainDb(copy->settings.gainDb);
-    (*next)[index] = std::move(copy);
-    publish(std::shared_ptr<const Pool>(std::move(next)));
+    StretchJob job;
+    bool shouldEnqueue = false;
+    bool shouldDiscardQueued = false;
+    {
+        const std::lock_guard<std::mutex> lock(mutationMutex);
+        const auto current = getSnapshot();
+        const auto index = findSource(*current, id);
+        if (index >= current->size())
+            return;
+        auto next = std::make_shared<Pool>(*current);
+        auto copy = std::make_shared<SampleData>(*(*next)[index]);
+        const auto previousStretchSpeed = copy->settings.stretchSpeed;
+        update(copy->settings);
+        const auto region = randomchop::clampNormalisedRegion(copy->settings.startNormalised,
+                                                              copy->settings.endNormalised);
+        copy->settings.startNormalised = region.start;
+        copy->settings.endNormalised = region.end;
+        copy->settings.sourceKey = randomchop::clampTonic(copy->settings.sourceKey);
+        copy->settings.transposeSemitones = randomchop::clampTranspose(
+            copy->settings.transposeSemitones);
+        copy->settings.fineTuneCents = randomchop::clampFineTune(copy->settings.fineTuneCents);
+        copy->settings.gainDb = clampGainDb(copy->settings.gainDb);
+        copy->settings.stretchSpeed = randomchop::clampStretchSpeed(
+            copy->settings.stretchSpeed);
+
+        const auto stretchChanged = std::abs(copy->settings.stretchSpeed
+                                               - previousStretchSpeed) >= 0.000001f;
+        if (stretchChanged || (copy->stretchFailed
+                               && std::abs(copy->settings.stretchSpeed - 1.0f) >= 0.000001f))
+        {
+            copy->requestedStretchRevision = (*next)[index]->requestedStretchRevision + 1;
+            copy->stretchFailed = false;
+            if (copy->audio == nullptr)
+            {
+                copy->stretchPending = false;
+            }
+            else if (std::abs(copy->settings.stretchSpeed - 1.0f) < 0.000001f)
+            {
+                copy->prepared = randomchop::prepareStretch(
+                    copy->audio, copy->sampleRate, 1.0f, copy->requestedStretchRevision);
+                copy->stretchPending = false;
+                copy->stretchFailed = copy->prepared == nullptr;
+            }
+            else
+            {
+                copy->stretchPending = true;
+                job = { copy->settings.id, copy->runtimeId, copy->audio, copy->sampleRate,
+                        copy->settings.stretchSpeed, copy->requestedStretchRevision };
+                shouldEnqueue = true;
+            }
+            shouldDiscardQueued = !shouldEnqueue;
+        }
+
+        (*next)[index] = std::move(copy);
+        publish(std::shared_ptr<const Pool>(std::move(next)));
+    }
+
+    if (shouldEnqueue)
+        enqueueStretch(std::move(job));
+    else if (shouldDiscardQueued)
+        discardQueuedStretch(id);
 }
 
 std::shared_ptr<const SampleManager::Pool> SampleManager::getSnapshot() const noexcept
@@ -289,6 +446,7 @@ juce::ValueTree SampleManager::createState() const
         node.setProperty("gain", s.gainDb, nullptr);
         node.setProperty("transpose", s.transposeSemitones, nullptr);
         node.setProperty("fineTune", s.fineTuneCents, nullptr);
+        node.setProperty("stretch", s.stretchSpeed, nullptr);
         root.appendChild(node, nullptr);
     }
     return root;
@@ -297,6 +455,7 @@ juce::ValueTree SampleManager::createState() const
 std::vector<juce::String> SampleManager::restoreState(const juce::ValueTree& state)
 {
     std::vector<juce::String> errors;
+    std::vector<StretchJob> pendingJobs;
     {
         const std::lock_guard<std::mutex> lock(mutationMutex);
         auto next = std::make_shared<Pool>();
@@ -307,7 +466,13 @@ std::vector<juce::String> SampleManager::restoreState(const juce::ValueTree& sta
             auto settings = readSettings(state.getChild(i));
             const juce::File file(settings.filePath);
             if (auto loaded = loadFile(file, &settings, errors))
+            {
+                if (loaded->stretchPending)
+                    pendingJobs.push_back({ loaded->settings.id, loaded->runtimeId, loaded->audio,
+                                            loaded->sampleRate, loaded->settings.stretchSpeed,
+                                            loaded->requestedStretchRevision });
                 next->push_back(std::move(loaded));
+            }
             else
             {
                 auto missing = std::make_shared<SampleData>();
@@ -321,6 +486,9 @@ std::vector<juce::String> SampleManager::restoreState(const juce::ValueTree& sta
         }
         publish(std::shared_ptr<const Pool>(std::move(next)));
     }
+    discardAllQueuedStretch();
+    for (auto& job : pendingJobs)
+        enqueueStretch(std::move(job));
     return errors;
 }
 
