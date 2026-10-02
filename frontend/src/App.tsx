@@ -7,6 +7,8 @@ import { EffectCanvas, FaultCanvas, SpectralDrawCanvas, StereoMeterCanvas, Wavef
 import productLogo from './assets/recompiler-logo.png'
 import damnnprodigyLogo from './assets/damnnprodigy-logo.png'
 import shadx2Logo from './assets/shadx2-logo.png'
+import infoIcon from './assets/info-icon.png'
+import closeIcon from './assets/close-icon.png'
 
 declare const __RECOMPILER_VERSION__: string
 declare const __RECOMPILER_BUILD_ID__: string
@@ -276,7 +278,7 @@ function SpectralModule({ values, width, height, enabled, onInfo }: { values: nu
     <PixelDisplay className="effect-display"><SpectralDrawCanvas values={values} width={width} height={height} scan={visualisation.spectralScan}
       spectrum={visualisation.spectrum} resetSignal={resetSignal} active={enabled} /></PixelDisplay>
     <div className="etch-footer"><div className="etch-brand"><img src={productLogo} alt="RECOMPILER" />
-      <button type="button" className="info-button" aria-label="Open About" onClick={onInfo}>i</button></div>
+      <button type="button" className="info-button" aria-label="Open About" onClick={onInfo}><img src={infoIcon} alt="" /></button></div>
       <div className="creative-controls"><PressureControl id="spectralDepth" accessibleLabel="Etch pressure" /></div></div>
     <BypassOverlay enabled={enabled} />
   </RecompilerPanel>
@@ -383,6 +385,7 @@ const builtByRevealIndex = aboutCopy.indexOf('BUILT BY') + 'BUILT BY'.length
 function AboutPage({ uiScale, onClose }: { uiScale: number, onClose: () => void }) {
   const pageRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<number | null>(null)
+  const delayRef = useRef<number | null>(null)
   const skippedRef = useRef(false)
   const [visible, setVisible] = useState(0)
   const [skipped, setSkipped] = useState(false)
@@ -390,6 +393,8 @@ function AboutPage({ uiScale, onClose }: { uiScale: number, onClose: () => void 
   const revealAll = () => {
     skippedRef.current = true
     setSkipped(true)
+    if (delayRef.current !== null) window.clearTimeout(delayRef.current)
+    delayRef.current = null
     if (frameRef.current !== null) cancelAnimationFrame(frameRef.current)
     frameRef.current = null
     setVisible(aboutCopy.length)
@@ -397,11 +402,18 @@ function AboutPage({ uiScale, onClose }: { uiScale: number, onClose: () => void 
   useEffect(() => { pageRef.current?.focus() }, [])
   useEffect(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setVisible(aboutCopy.length); return }
-    const started = performance.now(); const draw = (time: number) => {
+    const begin = () => {
       if (skippedRef.current) return
-      const next = Math.min(aboutCopy.length, Math.floor((time - started) * .46)); setVisible(next)
-      frameRef.current = next < aboutCopy.length ? requestAnimationFrame(draw) : null
-    }; frameRef.current = requestAnimationFrame(draw); return () => {
+      const started = performance.now(); const draw = (time: number) => {
+        if (skippedRef.current) return
+        const next = Math.min(aboutCopy.length, Math.floor((time - started) * .46)); setVisible(next)
+        frameRef.current = next < aboutCopy.length ? requestAnimationFrame(draw) : null
+      }
+      frameRef.current = requestAnimationFrame(draw)
+    }
+    delayRef.current = window.setTimeout(begin, 2000); return () => {
+      if (delayRef.current !== null) window.clearTimeout(delayRef.current)
+      delayRef.current = null
       if (frameRef.current !== null) cancelAnimationFrame(frameRef.current)
       frameRef.current = null
     }
@@ -416,7 +428,7 @@ function AboutPage({ uiScale, onClose }: { uiScale: number, onClose: () => void 
   const beforeCredits = aboutCopy.slice(0, Math.min(visible, builtByRevealIndex))
   const afterCredits = visible > builtByRevealIndex ? aboutCopy.slice(builtByRevealIndex, visible) : ''
   return <div ref={pageRef} className="about-page" style={{ position: 'relative' }} tabIndex={-1}>
-    <button type="button" className="about-close" aria-label="Close About" onClick={onClose}>X</button>
+    <button type="button" className="about-close" aria-label="Close About" onClick={onClose}><img src={closeIcon} alt="" /></button>
     <section className="about-terminal" aria-label="About and getting started manual"><div className="terminal-document">
       <pre>{beforeCredits}</pre>
       {visible >= builtByRevealIndex && <div className="terminal-credit-marks">
@@ -452,7 +464,7 @@ export default function App() {
           <RecompilerPanel title="POOL" className={`samples-panel ${samples.length === 0 ? 'is-empty' : ''}`}>{samples.length === 0
             ? <button type="button" className={`pool-empty-action ${draggingFiles ? 'drag-active' : ''}`} onClick={() => sendPluginCommand('importSamples')}>{draggingFiles ? 'RELEASE TO IMPORT' : 'DROP / CLICK TO IMPORT AUDIO'}</button>
             : <><div className="sample-list">{samples.map((sample) => <SampleRow key={sample.id} sample={sample} selected={sample.id === selectedSample?.id} />)}</div>
-              <button className={`action-button drop-zone ${draggingFiles ? 'drag-active' : ''}`} onClick={() => sendPluginCommand('importSamples')}>{draggingFiles ? 'RELEASE TO IMPORT' : 'DROP / CLICK TO IMPORT AUDIO'}</button></>}
+              <button className={`pool-loaded-action ${draggingFiles ? 'drag-active' : ''}`} onClick={() => sendPluginCommand('importSamples')}>{draggingFiles ? 'RELEASE TO IMPORT' : 'DROP / CLICK TO IMPORT AUDIO'}</button></>}
           </RecompilerPanel>
         </div>
         <RecompilerPanel title="SOURCE" className="selected-source"><div className="source-title"><strong>{selectedSample?.name ?? 'NO SOURCE SELECTED'}</strong><span>{selectedSample ? `${(selectedSample.sampleRate / 1000).toFixed(1)} kHz  ${selectedSample.bitDepth || '--'} bit  ${selectedSample.durationSeconds.toFixed(1)} s` : ''}</span></div><Waveform sample={selectedSample} /><SourceControls sample={selectedSample} /></RecompilerPanel>

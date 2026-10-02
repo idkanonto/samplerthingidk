@@ -55,6 +55,12 @@ std::optional<juce::WebBrowserComponent::Resource> makeResource(
     if (path == "/assets/shadx2-logo.png")
         return juce::WebBrowserComponent::Resource {
             bytesFrom(BinaryData::shadx2logo_png, BinaryData::shadx2logo_pngSize), "image/png" };
+    if (path == "/assets/info-icon.png")
+        return juce::WebBrowserComponent::Resource {
+            bytesFrom(BinaryData::infoicon_png, BinaryData::infoicon_pngSize), "image/png" };
+    if (path == "/assets/close-icon.png")
+        return juce::WebBrowserComponent::Resource {
+            bytesFrom(BinaryData::closeicon_png, BinaryData::closeicon_pngSize), "image/png" };
     return std::nullopt;
 }
 }
@@ -236,6 +242,14 @@ juce::var RandomChopSamplerWebViewEditor::createVisualisationState() const
     object->setProperty("faultResampleSemitones", processor.getFaultResampleSemitones());
     object->setProperty("smearActivity", processor.getSmearVisualActivity());
     object->setProperty("smearGain", processor.getSmearVisualGain());
+    juce::Array<juce::var> bleedScopeLeft;
+    juce::Array<juce::var> bleedScopeRight;
+    for (const auto value : processor.getBleedScope(0))
+        bleedScopeLeft.add(value);
+    for (const auto value : processor.getBleedScope(1))
+        bleedScopeRight.add(value);
+    object->setProperty("bleedScopeLeft", bleedScopeLeft);
+    object->setProperty("bleedScopeRight", bleedScopeRight);
     object->setProperty("spectralScan", processor.getSpectralScanPosition());
     juce::Array<juce::var> spectrum;
     for (const auto value : processor.getDisplaySpectrum())

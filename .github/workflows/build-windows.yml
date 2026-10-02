@@ -123,6 +123,14 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Upload standalone verification build
+        uses: actions/upload-artifact@v7
+        with:
+          name: recompiler-dll-Windows-Standalone
+          path: build/RandomChopSampler_artefacts/Release/Standalone/recompiler.dll.exe
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Upload listening renders
         uses: actions/upload-artifact@v7
         with:

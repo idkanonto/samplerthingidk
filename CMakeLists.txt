@@ -98,6 +98,9 @@ set(frontend_dist_files
     "${frontend_directory}/dist/assets/recompiler-logo.png"
     "${frontend_directory}/dist/assets/damnnprodigy-logo.png"
     "${frontend_directory}/dist/assets/shadx2-logo.png")
+list(APPEND frontend_dist_files
+    "${frontend_directory}/dist/assets/info-icon.png"
+    "${frontend_directory}/dist/assets/close-icon.png")
 
 if (RECOMPILER_REBUILD_FRONTEND)
     find_program(NPM_EXECUTABLE npm)
@@ -126,6 +129,8 @@ if (RECOMPILER_REBUILD_FRONTEND)
                 "${frontend_directory}/src/assets/recompiler-logo.png"
                 "${frontend_directory}/src/assets/damnnprodigy-logo.png"
                 "${frontend_directory}/src/assets/shadx2-logo.png"
+                "${frontend_directory}/src/assets/info-icon.png"
+                "${frontend_directory}/src/assets/close-icon.png"
             BYPRODUCTS ${frontend_dist_files}
             COMMENT "Building embedded React WebView frontend"
             VERBATIM)

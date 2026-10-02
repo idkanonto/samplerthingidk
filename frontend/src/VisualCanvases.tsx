@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { sendPluginCommand, type VisualisationState } from './juceBridge'
 
-const setup = (canvas: HTMLCanvasElement, width: number, height: number) => {
+const setup = (canvas: HTMLCanvasElement, width: number, height: number, clear = true) => {
   const bounds = canvas.getBoundingClientRect()
   const cssWidth = Math.max(1, bounds.width || width)
   const cssHeight = Math.max(1, bounds.height || height)
   const pixelRatio = Math.max(1, window.devicePixelRatio || 1)
   const backingWidth = Math.max(1, Math.round(cssWidth * pixelRatio))
   const backingHeight = Math.max(1, Math.round(cssHeight * pixelRatio))
+  const resized = canvas.width !== backingWidth || canvas.height !== backingHeight
   if (canvas.width !== backingWidth) canvas.width = backingWidth
   if (canvas.height !== backingHeight) canvas.height = backingHeight
   const context = canvas.getContext('2d')
@@ -15,8 +16,10 @@ const setup = (canvas: HTMLCanvasElement, width: number, height: number) => {
   context.setTransform(pixelRatio * cssWidth / width, 0, 0,
     pixelRatio * cssHeight / height, 0, 0)
   context.imageSmoothingEnabled = false
-  context.fillStyle = '#101010'
-  context.fillRect(0, 0, width, height)
+  if (clear || resized) {
+    context.fillStyle = '#101010'
+    context.fillRect(0, 0, width, height)
+  }
   return context
 }
 
@@ -44,61 +47,82 @@ export function FaultCanvas({ pressure, visualisation, active }: {
   pressure: number, visualisation: VisualisationState, active: boolean
 }) {
   const ref = useRef<HTMLCanvasElement>(null)
-  const history = useRef<{ mutation: number, division: number, direction: number }[]>([])
-  const previousProgress = useRef(0)
+  const data = useRef({ pressure, visualisation })
+  data.current = { pressure, visualisation }
   useEffect(() => {
-    if (!active) return
-    const progress = Math.max(0, Math.min(1, visualisation.faultProgress || 0))
-    if (progress < previousProgress.current) {
-      history.current = [...history.current.slice(-11), {
-        mutation: visualisation.faultMutation || 0,
-        division: visualisation.faultDivision || 16,
-        direction: visualisation.faultResampleSemitones || 0
-      }]
-    }
-    previousProgress.current = progress
     const canvas = ref.current
-    if (!canvas) return
-    const context = setup(canvas, 256, 140)
-    if (!context) return
-    const segments = [...history.current, {
-      mutation: visualisation.faultMutation || 0,
-      division: visualisation.faultDivision || 16,
-      direction: visualisation.faultResampleSemitones || 0
-    }].slice(-12)
-    const blockWidth = 256 / 12
-    segments.forEach((segment, index) => {
-      const x = Math.floor(index * blockWidth) + 2
-      const width = Math.max(3, Math.floor(blockWidth) - 4)
-      context.fillStyle = segment.mutation === 0 ? '#343434' : '#eeeeee'
-      if (segment.mutation === 1) {
-        const cycles = segment.direction > 0 ? 5 : 1.5
-        for (let px = 0; px < width; px += 2) {
-          const y = 70 - Math.round(Math.sin((px / Math.max(1, width)) * Math.PI * cycles) * 31)
-          context.fillRect(x + px, y, segment.direction > 0 ? 2 : 4, 3)
+    if (!canvas || !active) return
+    type Mark = { x: number, y: number, mutation: number, direction: number, born: number }
+    let marks: Mark[] = []
+    let frame = 0
+    let previousFrame = 0
+    let previousProgress = -1
+    let previousMutation = -1
+    const draw = (time: number) => {
+      frame = requestAnimationFrame(draw)
+      if (time - previousFrame < 33) return
+      previousFrame = time
+      const current = data.current
+      const telemetry = current.visualisation
+      const mutation = telemetry.faultMutation || 0
+      const progress = Math.max(0, Math.min(1, telemetry.faultProgress || 0))
+      const changed = mutation !== previousMutation || Math.abs(progress - previousProgress) > .008
+        || progress < previousProgress
+      if (changed && mutation > 0 && current.pressure > 0) {
+        const x = 8 + progress * 240
+        const divisionLift = Math.max(0, Math.min(24, (telemetry.faultDivision || 16) * 1.5))
+        const phase = progress * Math.PI * 2
+        const y = mutation === 1
+          ? 70 - Math.sin(phase * (telemetry.faultResampleSemitones > 0 ? 2 : 1)) * (24 + divisionLift)
+          : mutation === 2 ? 24 + ((Math.floor(progress * 64) * 17 + telemetry.faultDivision) % 88)
+            : 70 + Math.sin(phase * 3) * (18 + divisionLift)
+        marks.push({ x, y, mutation, direction: telemetry.faultResampleSemitones, born: time })
+        marks = marks.slice(-96)
+      }
+      previousProgress = progress
+      previousMutation = mutation
+
+      const context = setup(canvas, 256, 140, false)
+      if (!context) return
+      context.fillStyle = 'rgba(16,16,16,.18)'
+      context.fillRect(0, 0, 256, 140)
+      marks = marks.filter((mark) => time - mark.born < 1300)
+      for (const mark of marks) {
+        const age = (time - mark.born) / 1300
+        context.globalAlpha = Math.max(0, 1 - age) * .92
+        context.strokeStyle = '#eeeeee'
+        context.fillStyle = '#eeeeee'
+        if (mark.mutation === 1) {
+          context.beginPath()
+          context.moveTo(mark.x - 9, mark.y + (mark.direction > 0 ? 5 : -5))
+          context.lineTo(mark.x, mark.y)
+          context.lineTo(mark.x + 9, mark.y + (mark.direction > 0 ? -5 : 5))
+          context.stroke()
+        } else if (mark.mutation === 2) {
+          context.fillRect(Math.round(mark.x) - 2, Math.round(mark.y) - 2, 4, 4)
+          context.globalAlpha *= .55
+          context.fillRect(Math.round(mark.x) + 4, 132 - Math.round(mark.y), 2, 2)
+        } else {
+          context.beginPath()
+          context.moveTo(mark.x - 8, 140 - mark.y)
+          context.lineTo(mark.x + 8, mark.y)
+          context.stroke()
         }
-      } else if (segment.mutation === 2) {
-        for (let y = 17; y < 124; y += 7) for (let px = 0; px < width; px += 4)
-          if ((px + y + index) % 3 !== 0) context.fillRect(x + px, y, 2, 3)
-      } else if (segment.mutation === 3) {
-        for (let px = 0; px < width; px += 2) context.fillRect(x + width - px - 2,
-          70 - Math.round(Math.sin(px * .34) * 33), 2, 3)
-      } else context.fillRect(x, 68, width, 3)
-      context.font = '10px "Cozette Local", monospace'
+      }
+      context.globalAlpha = 1
+      if (mutation > 0) {
+        context.fillStyle = '#eeeeee'
+        context.fillRect(Math.round(7 + progress * 240), 18, 1, 112)
+      }
       context.fillStyle = '#969696'
-      context.fillText(`1/${segment.division}`, x, 134)
-    })
-    const currentX = Math.floor((segments.length - 1) * blockWidth) + 1
-    context.fillStyle = '#eeeeee'
-    context.fillRect(currentX, 6, Math.max(1, Math.floor(blockWidth * progress)), 4)
-    context.fillStyle = '#969696'
-    context.font = '10px "Cozette Local", monospace'
-    const names = ['DRY', 'WARP', 'DUST', 'FLIP']
-    const direction = visualisation.faultMutation === 1
-      ? ` ${visualisation.faultResampleSemitones > 0 ? '+12' : '−12'}` : ''
-    context.fillText(`${names[visualisation.faultMutation] ?? 'DRY'}${direction}  ${Math.round(pressure)}%`, 5, 12)
-  }, [active, pressure, visualisation.faultDivision, visualisation.faultMutation,
-    visualisation.faultProgress, visualisation.faultResampleSemitones])
+      context.font = '10px "Cozette Local", monospace'
+      const names = ['DRY', 'WARP', 'DUST', 'FLIP']
+      const direction = mutation === 1 ? ` ${telemetry.faultResampleSemitones > 0 ? '+12' : '−12'}` : ''
+      context.fillText(`${names[mutation] ?? 'DRY'}${direction}  1/${telemetry.faultDivision || 16}  ${Math.round(current.pressure)}%`, 5, 12)
+    }
+    frame = requestAnimationFrame(draw)
+    return () => cancelAnimationFrame(frame)
+  }, [active])
   return <canvas ref={ref} className="pixel-canvas fault-canvas"
     aria-label="Live Fault segment activity, mutation type, division, and progress" />
 }
@@ -118,33 +142,38 @@ export function EffectCanvas({ amount, visualisation, active }: {
       frame = requestAnimationFrame(draw)
       if (time - previous < 33) return
       previous = time
-      const context = setup(canvas, 128, 68)
+      const context = setup(canvas, 128, 68, false)
       if (!context) return
       const current = data.current
       const telemetry = current.visualisation
-      const strength = Math.max(0, Math.min(1, current.amount / 100))
-      context.fillStyle = '#eeeeee'
-      const activity = Math.max(strength * .45, telemetry.smearActivity)
-      const gain = Math.max(.2, telemetry.smearGain)
-      const liveTime = telemetry.smearActivity > .002 || telemetry.smearGain > .002 ? time : 0
-      for (let particle = 0; particle < 62; particle += 1) {
-        const drift = (liveTime * .012 * (1 + activity) + particle * 19) % 148
-        const x = Math.floor(drift - 10)
-        const y = 8 + ((particle * 29 + Math.floor(liveTime * .018)) % 52)
-        const length = 1 + Math.floor((particle % 7) * activity * 2.4)
-        context.globalAlpha = .25 + ((particle * 13) % 70) / 100 * gain
-        context.fillRect(x, y, Math.max(1, length), particle % 5 === 0 ? 2 : 1)
+      const left = telemetry.bleedScopeLeft ?? []
+      const right = telemetry.bleedScopeRight ?? []
+      const count = Math.min(left.length, right.length)
+      const activity = Math.max(0, Math.min(1, telemetry.smearActivity || 0))
+      const gain = Math.max(0, Math.min(1, telemetry.smearGain || 0))
+      context.fillStyle = `rgba(16,16,16,${.12 + activity * .1})`
+      context.fillRect(0, 0, 128, 68)
+      if (count > 1) {
+        context.beginPath()
+        for (let index = 0; index < count; index += 1) {
+          const x = 64 + Math.max(-1, Math.min(1, left[index])) * 57
+          const y = 34 - Math.max(-1, Math.min(1, right[index])) * 29
+          if (index === 0) context.moveTo(x, y)
+          else context.lineTo(x, y)
+        }
+        const strength = Math.max(0, Math.min(1, current.amount / 100))
+        context.globalAlpha = .5 + Math.max(activity, gain) * .5
+        context.lineWidth = 1 + strength * 1.25
+        context.strokeStyle = '#eeeeee'
+        context.stroke()
       }
       context.globalAlpha = 1
-      for (let x = 0; x < 128; x += 3) {
-        const amplitude = Math.sin(x * .23 + liveTime * .002) * (4 + strength * 8)
-        context.fillRect(x, Math.round(34 + amplitude), 5 + Math.round(activity * 9), 1)
-      }
+      context.lineWidth = 1
     }
     frame = requestAnimationFrame(draw)
     return () => cancelAnimationFrame(frame)
   }, [active])
-  return <canvas ref={ref} className="pixel-canvas effect-canvas" aria-label="Bleed activity display" />
+  return <canvas ref={ref} className="pixel-canvas effect-canvas" aria-label="Live Bleed stereo Lissajous display" />
 }
 
 const paintLine = (mask: Float32Array, width: number, height: number,

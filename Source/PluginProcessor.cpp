@@ -259,6 +259,20 @@ void RandomChopSamplerAudioProcessor::processBlock(
                               std::memory_order_relaxed);
     smearVisualGain.store(smearProcessor.getLastOverlapGain() / 1.10f,
                           std::memory_order_relaxed);
+    if (buffer.getNumSamples() > 0)
+    {
+        const auto rightChannel = buffer.getNumChannels() > 1 ? 1 : 0;
+        for (size_t point = 0; point < bleedScopeSampleCount; ++point)
+        {
+            const auto frame = juce::jlimit(0, buffer.getNumSamples() - 1,
+                static_cast<int>(point * static_cast<size_t>(buffer.getNumSamples())
+                    / bleedScopeSampleCount));
+            bleedScopeLeft[point].store(buffer.getSample(0, frame),
+                                        std::memory_order_relaxed);
+            bleedScopeRight[point].store(buffer.getSample(rightChannel, frame),
+                                         std::memory_order_relaxed);
+        }
+    }
     outputGain.setTargetValue(randomchop::outputPercentToGain(
         parameters.getRawParameterValue(IDs::output)->load()));
     float leftPeak = 0.0f;

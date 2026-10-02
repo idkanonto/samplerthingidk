@@ -59,6 +59,8 @@ export type VisualisationState = {
   faultResampleSemitones: number
   smearActivity: number
   smearGain: number
+  bleedScopeLeft?: number[]
+  bleedScopeRight?: number[]
   spectralScan: number
   spectrum?: number[]
 }
@@ -123,7 +125,7 @@ let backendState: BackendState | null = window.__JUCE__?.backend ? null : previe
 let visualisationState: VisualisationState = {
   outputPeak: 0, outputPeakLeft: 0, outputPeakRight: 0, voiceCount: 0,
   faultMutation: 0, faultDivision: 16, faultProgress: 0, faultResampleSemitones: 0,
-  smearActivity: 0, smearGain: 0, spectralScan: 0
+  smearActivity: 0, smearGain: 0, bleedScopeLeft: [], bleedScopeRight: [], spectralScan: 0
 }
 const backendSubscribers = new Set<(state: BackendState) => void>()
 const visualisationSubscribers = new Set<(state: VisualisationState) => void>()
