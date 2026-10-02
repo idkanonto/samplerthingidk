@@ -6,7 +6,7 @@
 
 namespace randomchop
 {
-inline constexpr int currentStateVersion = 14;
+inline constexpr int currentStateVersion = 15;
 
 inline void migrateOutputToPercent(juce::ValueTree& state, int restoredVersion)
 {

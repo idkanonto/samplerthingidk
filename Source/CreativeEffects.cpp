@@ -381,6 +381,9 @@ void SmearProcessor::prepare(double newSampleRate)
             0.5 - 0.5 * std::cos(juce::MathConstants<double>::twoPi * phase));
     }
     amountSmoother.reset(sampleRate, 0.010);
+    mixSmoother.reset(sampleRate, 0.020);
+    sizeSmoother.reset(sampleRate, 0.040);
+    pitchSmoother.reset(sampleRate, 0.040);
     reset();
 }
 
@@ -398,6 +401,7 @@ void SmearProcessor::resetRealtimeState() noexcept
         grain = {};
     lowState.fill(0.0f);
     feedbackState.fill(0.0f);
+    softnessState.fill(0.0f);
     for (auto& channel : mediumFilterState)
         channel.fill(0.0f);
     for (auto& channel : highFilterState)
@@ -409,6 +413,9 @@ void SmearProcessor::resetRealtimeState() noexcept
     overlapEnergy = 0.0f;
     lastOverlapGain = 0.0f;
     amountSmoother.setCurrentAndTargetValue(0.0f);
+    mixSmoother.setCurrentAndTargetValue(0.0f);
+    sizeSmoother.setCurrentAndTargetValue(40.0f);
+    pitchSmoother.setCurrentAndTargetValue(0.0f);
     writePosition = 0;
     validFrames = 0;
     grainCountdown = 0;
@@ -469,7 +476,7 @@ float SmearProcessor::lookupWindow(float phase) const noexcept
                 hannTable[static_cast<std::size_t>(second)], scaled - first);
 }
 
-void SmearProcessor::startGrain(float amount, uint32_t features) noexcept
+void SmearProcessor::startGrain(float amount, uint32_t features, float sizeMs, float pitch) noexcept
 {
     Grain* destination = nullptr;
     for (auto& grain : grains)
@@ -483,9 +490,10 @@ void SmearProcessor::startGrain(float amount, uint32_t features) noexcept
     if (destination == nullptr)
         return;
 
-    const auto shortestSeconds = 0.060 - 0.052 * static_cast<double>(amount);
-    const auto longestSeconds = 0.100 - 0.070 * static_cast<double>(amount);
-    const auto shortBiasExponent = 2.40 - 1.80 * static_cast<double>(amount);
+    const auto durationScale = static_cast<double>(sizeMs / 40.0f) * std::pow(2.0, -pitch);
+    const auto shortestSeconds = 0.032 * durationScale;
+    const auto longestSeconds = 0.048 * durationScale;
+    const auto shortBiasExponent = 1.0;
     const auto shortness = std::pow(random.unit(), shortBiasExponent);
     const auto lengthSeconds = longestSeconds
         + (shortestSeconds - longestSeconds) * shortness;
@@ -506,16 +514,18 @@ void SmearProcessor::startGrain(float amount, uint32_t features) noexcept
     else if (selector < 0.90)
         semitones = amount > 0.55f ? 19 : 7;
     else
-        semitones = amount > 0.72f ? (random.bounded(2) == 0 ? -12 : 24) : 12;
+        semitones = amount > 0.72f ? 24 : 12;
+    // The bipolar control voices each new grain; active grains finish without pitch jumps.
+    const auto voicedSemitones = std::clamp(static_cast<float>(semitones) + pitch * 12.0f, -12.0f, 24.0f);
     const auto increment = (features & SmearFeatures::pitch) != 0
-        ? std::pow(2.0, static_cast<double>(semitones) / 12.0) : 1.0;
-    const auto minimumDelay = static_cast<int>(std::ceil(length * std::max(1.0, increment))) + 4;
+        ? std::pow(2.0, static_cast<double>(voicedSemitones) / 12.0) : 1.0;
+    const auto minimumDelay = static_cast<int>(std::ceil(length * std::max(1.0, increment * 1.02))) + 4;
     if (validFrames <= minimumDelay)
         return;
     const auto scatterChoice = random.unit();
     const auto scatter = (features & SmearFeatures::scatter) != 0
         ? static_cast<int>(std::llround(sampleRate
-            * (0.035 + 0.24 * amount) * scatterChoice)) : 0;
+            * (0.035 + 0.12 * amount) * (1.0 - 0.65 * std::max(0.0f, pitch)) * scatterChoice)) : 0;
     const auto maximumDelay = std::max(minimumDelay,
         std::min(validFrames - 2, delayBuffer.getNumSamples() - 2));
     const auto delay = std::clamp(minimumDelay + scatter, minimumDelay, maximumDelay);
@@ -550,6 +560,9 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
     const auto features = settings.features & SmearFeatures::all;
     const auto targetAmount = features != 0 ? normalisePercent(settings.amount) : 0.0f;
     amountSmoother.setTargetValue(targetAmount);
+    mixSmoother.setTargetValue(normalisePercent(settings.mix));
+    sizeSmoother.setTargetValue(std::clamp(std::isfinite(settings.grainSizeMs) ? settings.grainSizeMs : 40.0f, 8.0f, 120.0f));
+    pitchSmoother.setTargetValue(std::clamp(std::isfinite(settings.grainPitch) ? settings.grainPitch / 100.0f : 0.0f, -1.0f, 1.0f));
     const auto channels = std::min(2, buffer.getNumChannels());
     const auto fastCoefficient = 1.0f - std::exp(-1.0f
         / static_cast<float>(sampleRate * 0.004));
@@ -564,14 +577,18 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
     for (int frame = 0; frame < buffer.getNumSamples(); ++frame)
     {
         const auto amount = amountSmoother.getNextValue();
+        const auto mix = mixSmoother.getNextValue();
+        const auto sizeMs = sizeSmoother.getNextValue();
+        const auto pitch = pitchSmoother.getNextValue();
+        const auto brightBias = std::max(0.0f, pitch);
+        const auto softBias = std::max(0.0f, -pitch);
         lastMotionAmount = amount;
-        const auto highPassCutoff = 1200.0f + 3600.0f * amount;
+        const auto highPassCutoff = 350.0f + 1450.0f * amount + 1800.0f * brightBias;
         const auto lowCoefficient = 1.0f - std::exp(
             -juce::MathConstants<float>::twoPi * highPassCutoff
             / static_cast<float>(sampleRate));
-        const auto wetBase = std::pow(amount, 0.72f);
         const auto feedbackGain = (features & SmearFeatures::feedback) != 0
-            ? 0.20f * std::pow(amount, 1.45f) : 0.0f;
+            ? (0.10f + 0.04f * softBias) * (1.0f - 0.8f * brightBias) * std::pow(amount, 1.45f) : 0.0f;
         const auto pitchOrbitCents = (features & SmearFeatures::orbit) != 0
             ? 3.0f + 11.0f * amount : 0.0f;
         const auto panOrbitDepth = (features & SmearFeatures::orbit) != 0
@@ -612,10 +629,10 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
                 static_cast<double>(maximumGrains - 2) * densityCurve)),
                 2, maximumGrains);
             if (activeGrainCount < targetGrains)
-                startGrain(amount, features);
+                startGrain(amount, features, sizeMs, pitch);
             peakActiveGrainCount = std::max(peakActiveGrainCount, activeGrainCount);
             const auto nominalLength = sampleRate
-                * (0.088 - 0.072 * std::pow(static_cast<double>(amount), 0.85));
+                * std::clamp(sizeMs * 0.001 * std::pow(2.0, -pitch), 0.006, 0.25);
             const auto pulse = 0.90f + 0.10f * std::sin(
                 juce::MathConstants<float>::twoPi * motionPhase);
             grainCountdown = std::max(1, static_cast<int>(std::llround(
@@ -665,7 +682,7 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
         slowEnvelope += slowCoefficient * (inputEnvelope - slowEnvelope);
         const auto transient = std::clamp((fastEnvelope - slowEnvelope) * 5.0f,
                                           0.0f, 1.0f);
-        const auto wet = wetBase * (1.0f - 0.68f * transient);
+        const auto wet = std::clamp(amount * 100.0f, 0.0f, 1.0f);
         overlapEnergy += overlapCoefficient * (windowEnergy - overlapEnergy);
         const auto grainNormalisation = windowEnergy > 0.0f || overlapEnergy > 0.0001f
             ? std::clamp(0.82f / std::sqrt(std::max(0.55f, overlapEnergy)),
@@ -679,16 +696,21 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
             low = sanitise(low + lowCoefficient * (texture[channel] - low));
             const auto bright = sanitise(texture[channel] - low);
             const auto crystal = (features & SmearFeatures::brightness) != 0
-                ? sanitise(0.10f * texture[channel]
-                    + (1.34f + 0.72f * amount) * bright)
+                ? sanitise((0.10f + 0.15f * softBias) * texture[channel]
+                    + (1.34f + 0.72f * amount + 0.45f * brightBias) * bright)
                 : texture[channel];
+            auto& softened = softnessState[static_cast<std::size_t>(channel)];
+            const auto softCoefficient = 1.0f - std::exp(-juce::MathConstants<float>::twoPi
+                * (16000.0f - 12500.0f * softBias) / static_cast<float>(sampleRate));
+            softened = sanitise(softened + softCoefficient * (crystal - softened));
+            const auto voiced = lerp(crystal, softened, softBias);
             auto& feedback = feedbackState[static_cast<std::size_t>(channel)];
             feedback += feedbackCoefficient
                 * (std::tanh(bright * (1.0f + 0.65f * amount)) - feedback);
             feedback = sanitise(feedback);
-            const auto output = dry[channel] * (1.0f - 0.08f * wet)
-                + (1.26f + 0.44f * amount) * wet
-                    * std::tanh(crystal * 1.25f);
+            const auto blend = mix * wet;
+            const auto output = dry[channel] * (1.0f - blend)
+                + blend * (1.0f - 0.35f * transient) * 1.5f * std::tanh(voiced * 1.25f);
             buffer.setSample(channel, frame, sanitise(output));
         }
 
@@ -712,4 +734,3 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
     }
 }
 }
-

@@ -121,12 +121,12 @@ function RotaryKnob({ label, value, min, max, step, defaultValue, disabled = fal
   </div>
 }
 
-function PressureControl({ id, accessibleLabel }: { id: string, accessibleLabel: string }) {
+function PressureControl({ id, accessibleLabel, label = 'PRESSURE' }: { id: string, accessibleLabel: string, label?: string }) {
   const parameter = usePluginParameter(id)
   const descriptor = parameter.descriptor
   const min = descriptor?.min ?? 0; const max = descriptor?.max ?? 100; const step = descriptor?.interval || 1
   const commit = (value: number) => { parameter.beginGesture(); parameter.setValue(value); parameter.endGesture() }
-  return <div className="pressure-control"><b className="control-label">PRESSURE</b>
+  return <div className="pressure-control"><b className="control-label">{label}</b>
     <RotaryKnob label={accessibleLabel} value={parameter.value} min={min} max={max} step={step}
       defaultValue={descriptor?.defaultValue ?? 0} onBegin={parameter.beginGesture} onSet={parameter.setValue} onEnd={parameter.endGesture} />
     <EditableValue label={`${accessibleLabel} exact value`} value={parameter.value} min={min} max={max} step={step}
@@ -164,11 +164,11 @@ function BypassOverlay({ enabled }: { enabled: boolean }) {
 
 function SampleRow({ sample, selected }: { sample: SampleSummary, selected: boolean }) {
   const select = () => sendPluginCommand('selectSample', { id: sample.id })
-  return <div className={`sample-row ${selected ? 'selected' : ''}`} role="button" tabIndex={0} onClick={select}
+  return <div className={`sample-row ${selected ? 'selected' : ''} ${sample.enabled ? '' : 'sample-disabled'}`} role="button" aria-pressed={selected} tabIndex={0} onClick={select}
     onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); select() } }}>
-    <button className={`pixel-check ${sample.enabled ? 'checked' : ''}`} aria-label={`${sample.enabled ? 'Disable' : 'Enable'} ${sample.name}`}
+    <button className={`pixel-check ${sample.enabled ? 'checked' : ''}`} aria-pressed={sample.enabled} aria-label={`${sample.enabled ? 'Disable' : 'Enable'} ${sample.name}`}
       onClick={(event) => { event.stopPropagation(); sendPluginCommand('setSampleEnabled', { id: sample.id, enabled: !sample.enabled }) }}>
-      {sample.enabled ? 'X' : ''}
+      <span aria-hidden="true" />
     </button>
     <span className={sample.missing ? 'missing' : ''}>{sample.name}</span>
     <button type="button" className="remove-button" onClick={(event) => { event.stopPropagation(); sendPluginCommand('removeSample', { id: sample.id }) }}>REMOVE</button>
@@ -249,9 +249,23 @@ function SourceControls({ sample }: { sample?: SampleSummary }) {
 
 function BleedModule({ enabled }: { enabled: boolean }) {
   const parameter = usePluginParameter('smearAmount'); const visualisation = useVisualisationState()
+  const pitch = usePluginParameter('bleedGrainPitch')
+  const mix = usePluginParameter('bleedMix')
+  const commitPitch = (value: number) => { pitch.beginGesture(); pitch.setValue(value); pitch.endGesture() }
   return <RecompilerPanel title="BLEED" className={`effect-module bleed-module ${enabled ? '' : 'bypassed'}`} headerAction={<EffectPower effect={1} enabled={enabled} />}>
-    <div className="creative-controls"><PressureControl id="smearAmount" accessibleLabel="Bleed pressure" /></div>
-    <PixelDisplay className="effect-display"><EffectCanvas type="smear" amount={parameter.value} visualisation={visualisation} active={enabled} /></PixelDisplay>
+    <div className="bleed-controls">
+      <PressureControl id="smearAmount" accessibleLabel="Bleed pressure" />
+      <PressureControl id="bleedMix" accessibleLabel="Bleed mix" label="MIX" />
+      <PressureControl id="bleedGrainSize" accessibleLabel="Bleed grain size in milliseconds" label="SIZE ms" />
+    </div>
+    <div className="bleed-pitch"><label htmlFor="bleed-grain-pitch">GRAIN PITCH</label>
+      <input id="bleed-grain-pitch" aria-label="Bleed grain pitch" type="range" min={-100} max={100} step={0.1} value={pitch.value}
+        onPointerDown={pitch.beginGesture} onPointerUp={pitch.endGesture} onPointerCancel={pitch.endGesture}
+        onKeyDown={pitch.beginGesture} onKeyUp={pitch.endGesture} onChange={(event) => pitch.setValue(Number(event.target.value))}
+        onDoubleClick={() => commitPitch(0)} />
+      <div className="bleed-pitch-values"><span>SOFT</span><EditableValue label="Bleed grain pitch exact value" value={pitch.value} min={-100} max={100} step={1} onCommit={commitPitch} /><span>CRYSTAL</span></div>
+    </div>
+    <PixelDisplay className="effect-display bleed-display"><EffectCanvas amount={parameter.value * mix.value / 100} visualisation={visualisation} active={enabled} /></PixelDisplay>
     <BypassOverlay enabled={enabled} />
   </RecompilerPanel>
 }
@@ -271,11 +285,11 @@ function FaultModule({ mutations, enabled }: { mutations: number, enabled: boole
 }
 
 function SpectralModule({ values, width, height, enabled, onInfo }: { values: number[], width: number, height: number, enabled: boolean, onInfo: () => void }) {
-  const [resetSignal, setResetSignal] = useState(0); const visualisation = useVisualisationState()
+  const [resetSignal, setResetSignal] = useState(0)
   const reset = () => { setResetSignal((current) => current + 1); sendPluginCommand('resetSpectral') }
   return <RecompilerPanel title="ETCH" className={`effect-module spectral-module ${enabled ? '' : 'bypassed'}`} headerAction={<><ActionButton className="spectral-reset" onClick={reset}>CLEAR</ActionButton><EffectPower effect={2} enabled={enabled} /></>}>
-    <PixelDisplay className="effect-display"><SpectralDrawCanvas values={values} width={width} height={height} scan={visualisation.spectralScan}
-      spectrum={visualisation.spectrum} resetSignal={resetSignal} active={enabled} /></PixelDisplay>
+    <PixelDisplay className="effect-display"><SpectralDrawCanvas values={values} width={width} height={height}
+      resetSignal={resetSignal} active={enabled} /></PixelDisplay>
     <div className="etch-footer"><button type="button" className="etch-brand-button" aria-label="Open About" onClick={onInfo}>
       <img src={productLogo} alt="RECOMPILER" /></button>
       <div className="creative-controls"><PressureControl id="spectralDepth" accessibleLabel="Etch pressure" /></div></div>
@@ -337,7 +351,7 @@ FAULT introduces tempo-synced mutations into the combined sampler output. PRESSU
 FAULT uses 1/2, 1/4, 1/8 and 1/16 divisions. FLIP plays a slice backward. DUST reduces digital resolution and sample rate. WARP replays a slice one octave up or down using varispeed, changing speed and pitch together. Enable any combination; FAULT chooses once per event.
 
 06 / BLEED
-BLEED PRESSURE controls how intensely recent audio is broken into overlapping fragments and spread into a moving stereo texture. Lower settings add subtle movement. Higher settings create denser, less stable textures.
+BLEED PRESSURE sets grain density. MIX blends the dry source with the grains. SIZE sets the base grain duration in milliseconds. GRAIN PITCH is centered by default: left makes longer, softer grains; right makes shorter, higher, crystalline grains with less feedback. The compact display shows audio-driven facets.
 
 07 / ETCH
 ETCH lets you draw directly into the spectral content. ETCH PRESSURE controls the depth of spectral removal. Frequency runs vertically and time horizontally. Draw to remove spectral energy as the scanner passes through the mask. CLEAR removes the drawing.

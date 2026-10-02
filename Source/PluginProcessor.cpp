@@ -14,6 +14,9 @@ constexpr auto voiceMode = "voiceMode";
 constexpr auto faultPressure = "faultPressure";
 constexpr auto spectralDepth = "spectralDepth";
 constexpr auto smearAmount = "smearAmount";
+constexpr auto bleedMix = "bleedMix";
+constexpr auto bleedGrainSize = "bleedGrainSize";
+constexpr auto bleedGrainPitch = "bleedGrainPitch";
 }
 
 namespace
@@ -49,6 +52,12 @@ RandomChopSamplerAudioProcessor::createParameterLayout()
         juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, "%"));
     layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::smearAmount, "Bleed",
         juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, "%"));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::bleedMix, "Bleed Mix",
+        juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 50.0f, "%"));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::bleedGrainSize, "Bleed Grain Size",
+        juce::NormalisableRange<float>(8.0f, 120.0f, 0.1f), 40.0f, "ms"));
+    layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::bleedGrainPitch, "Bleed Grain Pitch",
+        juce::NormalisableRange<float>(-100.0f, 100.0f, 0.1f), 0.0f, "%"));
     return layout;
 }
 
@@ -252,7 +261,10 @@ void RandomChopSamplerAudioProcessor::processBlock(
           lastGridBoundaries.transportDiscontinuity });
     smearProcessor.process(buffer,
         { isEffectEnabled(1) ? parameters.getRawParameterValue(IDs::smearAmount)->load() : 0.0f,
-          smearFeatures.load(std::memory_order_relaxed) });
+          smearFeatures.load(std::memory_order_relaxed),
+          parameters.getRawParameterValue(IDs::bleedMix)->load(),
+          parameters.getRawParameterValue(IDs::bleedGrainSize)->load(),
+          parameters.getRawParameterValue(IDs::bleedGrainPitch)->load() });
     smearVisualActivity.store(static_cast<float>(smearProcessor.getActiveGrainCount())
                                   / static_cast<float>(
                                       randomchop::SmearProcessor::maximumGrains),
@@ -378,12 +390,20 @@ void RandomChopSamplerAudioProcessor::setStateInformation(const void* data, int 
         randomchop::removeLegacyState(state);
         const auto ensureParameter = [&state](const char* id, float value)
         {
-            if (!state.hasProperty(id))
-                state.setProperty(id, value, nullptr);
+            if (state.hasProperty(id)) return;
+            for (auto child : state)
+                if (child.getProperty("id").toString() == id) return;
+            juce::ValueTree parameter("PARAM");
+            parameter.setProperty("id", id, nullptr);
+            parameter.setProperty("value", value, nullptr);
+            state.addChild(parameter, -1, nullptr);
         };
         ensureParameter(IDs::faultPressure, 0.0f);
         ensureParameter(IDs::spectralDepth, 0.0f);
         ensureParameter(IDs::smearAmount, 0.0f);
+        ensureParameter(IDs::bleedMix, 50.0f);
+        ensureParameter(IDs::bleedGrainSize, 40.0f);
+        ensureParameter(IDs::bleedGrainPitch, 0.0f);
         ensureParameter(IDs::globalPitch, 0.0f);
         parameters.replaceState(state);
         samples.restoreState(files);

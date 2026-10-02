@@ -998,10 +998,34 @@ void testSmearProcessor()
     check(dense.getPeakActiveGrainCount() > sparse.getPeakActiveGrainCount()
               && dense.getPeakActiveGrainCount() >= 12
               && dense.getLastGrainLengthFrames() > 0
-              && dense.getLastGrainLengthFrames() < sparse.getLastGrainLengthFrames()
+              && dense.getLastGrainLengthFrames() <= 2400
               && bufferFiniteAndBounded(sparseInput)
               && bufferFiniteAndBounded(denseInput),
-          "Smear Amount did not introduce a denser cloud of smaller grains");
+          "Bleed Pressure did not raise density while respecting grain size");
+
+    const auto controlInput = makeTemporalInput(96000);
+    const auto renderControls = [&](float mix, float size, float pitch) {
+        auto output = copyBuffer(controlInput);
+        randomchop::SmearProcessor effect;
+        effect.prepare(48000.0);
+        effect.setSeed(913);
+        effect.process(output, { 100.0f, randomchop::SmearFeatures::all, mix, size, pitch });
+        check(bufferFiniteAndBounded(output), "Bleed control extremes produced invalid output");
+        return output;
+    };
+    check(buffersEqual(controlInput, renderControls(0.0f, 40.0f, 100.0f)),
+          "Bleed Mix zero was not exact dry");
+    const auto soft = renderControls(100.0f, 40.0f, -100.0f);
+    const auto crystal = renderControls(100.0f, 40.0f, 100.0f);
+    check(differenceRms(soft, crystal) > 0.002f,
+          "Bleed pitch directions did not produce different audio");
+    check(firstDifferenceRms(crystal) > firstDifferenceRms(soft),
+          "Bleed bright direction did not increase high-frequency detail");
+    check(differenceRms(renderControls(100.0f, 8.0f, 0.0f),
+                        renderControls(100.0f, 120.0f, 0.0f)) > 0.002f,
+          "Bleed Grain Size did not change the rendered texture");
+    renderControls(100.0f, 120.0f, -100.0f);
+    renderControls(100.0f, 8.0f, 100.0f);
 
     juce::AudioBuffer<float> unsafe(2, 256);
     unsafe.clear();

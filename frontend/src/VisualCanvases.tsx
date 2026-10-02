@@ -123,7 +123,7 @@ export function FaultCanvas({ pressure, visualisation, active }: {
 }
 
 export function EffectCanvas({ amount, visualisation, active }: {
-  type: 'smear', amount: number, visualisation: VisualisationState, active: boolean
+  amount: number, visualisation: VisualisationState, active: boolean
 }) {
   const ref = useRef<HTMLCanvasElement>(null)
   const data = useRef({ amount, visualisation })
@@ -146,21 +146,28 @@ export function EffectCanvas({ amount, visualisation, active }: {
       const count = Math.min(left.length, right.length)
       const activity = Math.max(0, Math.min(1, telemetry.smearActivity || 0))
       const gain = Math.max(0, Math.min(1, telemetry.smearGain || 0))
-      context.fillStyle = `rgba(16,16,16,${.12 + activity * .1})`
+      context.fillStyle = '#101010'
       context.fillRect(0, 0, 128, 68)
-      if (count > 1) {
-        context.beginPath()
-        for (let index = 0; index < count; index += 1) {
-          const x = 64 + Math.max(-1, Math.min(1, left[index])) * 57
-          const y = 34 - Math.max(-1, Math.min(1, right[index])) * 29
-          if (index === 0) context.moveTo(x, y)
-          else context.lineTo(x, y)
-        }
-        const strength = Math.max(0, Math.min(1, current.amount / 100))
-        context.globalAlpha = .5 + Math.max(activity, gain) * .5
-        context.lineWidth = 1 + strength * 1.25
+      if (count > 1 && current.amount > 0 && activity > 0) {
+        // Audio amplitude and stereo difference shape thin facets; silence draws nothing.
         context.strokeStyle = '#eeeeee'
-        context.stroke()
+        context.lineWidth = .75
+        for (let facet = 0; facet < 8; facet += 1) {
+          const index = Math.min(count - 1, Math.floor(facet * count / 8))
+          const amplitude = Math.min(1, Math.abs(left[index]) + Math.abs(right[index]))
+          if (amplitude < .002) continue
+          const difference = Math.max(-1, Math.min(1, left[index] - right[index]))
+          const x = 10 + facet * 15
+          const y = 34 + difference * 18
+          const reach = 2 + amplitude * 25
+          context.globalAlpha = Math.min(1, .25 + amplitude * .7 + gain * .1)
+          context.beginPath()
+          context.moveTo(x - 3, y + reach * .5)
+          context.lineTo(x + difference * 8, y - reach)
+          context.lineTo(x + 4, y + reach * .2)
+          context.closePath()
+          context.stroke()
+        }
       }
       context.globalAlpha = 1
       context.lineWidth = 1
@@ -168,7 +175,7 @@ export function EffectCanvas({ amount, visualisation, active }: {
     frame = requestAnimationFrame(draw)
     return () => cancelAnimationFrame(frame)
   }, [active])
-  return <canvas ref={ref} className="pixel-canvas effect-canvas" aria-label="Live Bleed stereo Lissajous display" />
+  return <canvas ref={ref} className="pixel-canvas effect-canvas" aria-label="Live Bleed crystalline audio facets" />
 }
 
 const paintLine = (mask: Float32Array, width: number, height: number,
@@ -192,8 +199,8 @@ const paintLine = (mask: Float32Array, width: number, height: number,
   }
 }
 
-export function SpectralDrawCanvas({ values, width, height, scan, spectrum, resetSignal, active }: {
-  values: number[], width: number, height: number, scan: number, spectrum?: number[], resetSignal: number, active: boolean
+export function SpectralDrawCanvas({ values, width, height, resetSignal, active }: {
+  values: number[], width: number, height: number, resetSignal: number, active: boolean
 }) {
   const ref = useRef<HTMLCanvasElement>(null)
   const raster = useRef<HTMLCanvasElement | null>(null)
@@ -244,16 +251,7 @@ export function SpectralDrawCanvas({ values, width, height, scan, spectrum, rese
     context.imageSmoothingEnabled = false
     context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
     context.restore()
-    if (spectrum?.length) {
-      context.fillStyle = '#747474'
-      spectrum.forEach((value, index) => {
-        const y = height - 1 - Math.floor(index * height / spectrum.length)
-        context.fillRect(0, y, Math.max(1, Math.round(value * width * .18)), 1)
-      })
-    }
-    context.fillStyle = '#eeeeee'
-    context.fillRect(Math.max(0, Math.min(width - 1, Math.floor(scan * width))), 0, 1, height)
-  }, [active, revision, scan, spectrum, width, height])
+  }, [active, revision, width, height])
 
   const point = useCallback((event: React.PointerEvent<HTMLCanvasElement>): [number, number] => {
     const bounds = event.currentTarget.getBoundingClientRect()

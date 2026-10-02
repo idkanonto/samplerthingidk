@@ -103,6 +103,9 @@ struct SmearSettings
 {
     float amount = 0.0f;
     uint32_t features = SmearFeatures::all;
+    float mix = 50.0f;
+    float grainSizeMs = 40.0f;
+    float grainPitch = 0.0f;
 };
 
 class SmearProcessor final
@@ -142,7 +145,7 @@ private:
     float readDelay(int channel, double position, double increment) const noexcept;
     float lookupSine(float phase) const noexcept;
     float lookupWindow(float phase) const noexcept;
-    void startGrain(float amount, uint32_t features) noexcept;
+    void startGrain(float amount, uint32_t features, float sizeMs, float pitch) noexcept;
     void resetRealtimeState() noexcept;
 
     juce::AudioBuffer<float> delayBuffer;
@@ -153,6 +156,7 @@ private:
     std::array<float, modulationTableSize> hannTable {};
     std::array<float, 2> lowState { 0.0f, 0.0f };
     std::array<float, 2> feedbackState { 0.0f, 0.0f };
+    std::array<float, 2> softnessState { 0.0f, 0.0f };
     std::array<std::array<float, 4>, 2> mediumFilterState {};
     std::array<std::array<float, 4>, 2> highFilterState {};
     RandomizationEngine random;
@@ -166,6 +170,9 @@ private:
     float mediumFilterCoefficient = 0.0f;
     float highFilterCoefficient = 0.0f;
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> amountSmoother { 0.0f };
+    juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> mixSmoother { 0.5f };
+    juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> sizeSmoother { 40.0f };
+    juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> pitchSmoother { 0.0f };
     int writePosition = 0;
     int validFrames = 0;
     int grainCountdown = 0;
@@ -174,4 +181,3 @@ private:
     int lastGrainLengthFrames = 0;
 };
 }
-

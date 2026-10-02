@@ -10,6 +10,13 @@ status: active
 
 These decisions govern implementation together with [[PRODUCT_SPEC_V2]].
 
+## Drawing-only ETCH and crystalline BLEED (2026-10-02)
+
+- ETCH displays only the user's stored drawing. Remove its scan line and spectrum overlay; retain spectral processing and editing.
+- Keep BLEED PRESSURE as density and expose independent MIX (0–100%), GRAIN SIZE (8–120 ms base duration), and GRAIN PITCH (−100 to +100, centered at zero). Right shortens and raises grains, reduces scatter/feedback, and emphasizes upper detail; left lengthens grains and softens their upper frequencies. Existing parameter IDs remain stable and new controls receive explicit saved-state defaults.
+- Replace BLEED's oscilloscope with a smaller audio-driven facet display. FAULT retains broken trajectories and mutation-driven rupture marks. Preserve monochrome frames and the current main layout.
+- Pool enable uses a small filled/empty square; selection uses the row background without an X or left rule. Retain the current ABOUT close asset until the user provides its replacement.
+
 ## Release-candidate identity and FAULT lock (2026-10-01)
 
 - Lock the WebView editor to 1080×675 logical pixels with 75/100/125/150 preset scaling.
