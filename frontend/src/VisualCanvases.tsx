@@ -20,12 +20,6 @@ const setup = (canvas: HTMLCanvasElement, width: number, height: number) => {
   return context
 }
 
-const grid = (context: CanvasRenderingContext2D, width: number, height: number, columns: number, rows: number) => {
-  context.fillStyle = '#3e3e3e'
-  for (let x = 1; x < columns; x += 1) context.fillRect(Math.round(x * width / columns), 0, 1, height)
-  for (let y = 1; y < rows; y += 1) context.fillRect(0, Math.round(y * height / rows), width, 1)
-}
-
 export function WaveformCanvas({ waveform }: { waveform?: [number, number][] }) {
   const ref = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
@@ -33,7 +27,6 @@ export function WaveformCanvas({ waveform }: { waveform?: [number, number][] }) 
     if (!canvas) return
     const context = setup(canvas, 256, 96)
     if (!context) return
-    grid(context, 256, 96, 8, 4)
     if (!waveform?.length) return
     context.fillStyle = '#eeeeee'
     waveform.forEach((pair, index) => {
@@ -47,13 +40,14 @@ export function WaveformCanvas({ waveform }: { waveform?: [number, number][] }) 
   return <canvas ref={ref} className="pixel-canvas waveform-canvas" aria-label="Selected sample waveform" />
 }
 
-export function FaultCanvas({ pressure, visualisation }: {
-  pressure: number, visualisation: VisualisationState
+export function FaultCanvas({ pressure, visualisation, active }: {
+  pressure: number, visualisation: VisualisationState, active: boolean
 }) {
   const ref = useRef<HTMLCanvasElement>(null)
   const history = useRef<{ mutation: number, division: number, direction: number }[]>([])
   const previousProgress = useRef(0)
   useEffect(() => {
+    if (!active) return
     const progress = Math.max(0, Math.min(1, visualisation.faultProgress || 0))
     if (progress < previousProgress.current) {
       history.current = [...history.current.slice(-11), {
@@ -67,7 +61,6 @@ export function FaultCanvas({ pressure, visualisation }: {
     if (!canvas) return
     const context = setup(canvas, 256, 140)
     if (!context) return
-    grid(context, 256, 140, 16, 8)
     const segments = [...history.current, {
       mutation: visualisation.faultMutation || 0,
       division: visualisation.faultDivision || 16,
@@ -104,21 +97,21 @@ export function FaultCanvas({ pressure, visualisation }: {
     const direction = visualisation.faultMutation === 1
       ? ` ${visualisation.faultResampleSemitones > 0 ? '+12' : '−12'}` : ''
     context.fillText(`${names[visualisation.faultMutation] ?? 'DRY'}${direction}  ${Math.round(pressure)}%`, 5, 12)
-  }, [pressure, visualisation.faultDivision, visualisation.faultMutation,
+  }, [active, pressure, visualisation.faultDivision, visualisation.faultMutation,
     visualisation.faultProgress, visualisation.faultResampleSemitones])
   return <canvas ref={ref} className="pixel-canvas fault-canvas"
     aria-label="Live Fault segment activity, mutation type, division, and progress" />
 }
 
-export function EffectCanvas({ amount, visualisation }: {
-  type: 'smear', amount: number, visualisation: VisualisationState
+export function EffectCanvas({ amount, visualisation, active }: {
+  type: 'smear', amount: number, visualisation: VisualisationState, active: boolean
 }) {
   const ref = useRef<HTMLCanvasElement>(null)
   const data = useRef({ amount, visualisation })
   data.current = { amount, visualisation }
   useEffect(() => {
     const canvas = ref.current
-    if (!canvas) return
+    if (!canvas || !active) return
     let frame = 0
     let previous = 0
     const draw = (time: number) => {
@@ -150,7 +143,7 @@ export function EffectCanvas({ amount, visualisation }: {
     }
     frame = requestAnimationFrame(draw)
     return () => cancelAnimationFrame(frame)
-  }, [])
+  }, [active])
   return <canvas ref={ref} className="pixel-canvas effect-canvas" aria-label="Bleed activity display" />
 }
 
@@ -175,8 +168,8 @@ const paintLine = (mask: Float32Array, width: number, height: number,
   }
 }
 
-export function SpectralDrawCanvas({ values, width, height, scan, spectrum, resetSignal }: {
-  values: number[], width: number, height: number, scan: number, spectrum?: number[], resetSignal: number
+export function SpectralDrawCanvas({ values, width, height, scan, spectrum, resetSignal, active }: {
+  values: number[], width: number, height: number, scan: number, spectrum?: number[], resetSignal: number, active: boolean
 }) {
   const ref = useRef<HTMLCanvasElement>(null)
   const mask = useRef(new Float32Array(Math.max(1, width * height)))
@@ -201,10 +194,9 @@ export function SpectralDrawCanvas({ values, width, height, scan, spectrum, rese
 
   useEffect(() => {
     const canvas = ref.current
-    if (!canvas) return
+    if (!canvas || !active) return
     const context = setup(canvas, width, height)
     if (!context) return
-    grid(context, width, height, 8, 4)
     const current = mask.current
     for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) {
       const value = current[y * width + x]
@@ -227,7 +219,7 @@ export function SpectralDrawCanvas({ values, width, height, scan, spectrum, rese
       context.fillRect(Math.max(0, x - 2), y, 5, 1)
       context.fillRect(x, Math.max(0, y - 2), 1, 5)
     }
-  }, [revision, scan, spectrum, width, height, keyboardFocused])
+  }, [active, revision, scan, spectrum, width, height, keyboardFocused])
 
   const point = useCallback((event: React.PointerEvent<HTMLCanvasElement>): [number, number] => {
     const bounds = event.currentTarget.getBoundingClientRect()
@@ -271,7 +263,6 @@ export function SpectralDrawCanvas({ values, width, height, scan, spectrum, rese
       onContextMenu={(event) => event.preventDefault()}
       onPointerDown={(event) => { drawing.current = true; erasing.current = event.button === 2 || event.shiftKey || event.altKey; previous.current = null; event.currentTarget.setPointerCapture(event.pointerId); apply(event) }}
       onPointerMove={(event) => { if (drawing.current) apply(event) }} onPointerUp={finish} onPointerCancel={finish} />
-    <span className="spectral-label high">HIGH</span><span className="spectral-label low">LOW</span><span className="spectral-label time">TIME →</span>
   </div>
 }
 

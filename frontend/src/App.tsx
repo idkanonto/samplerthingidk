@@ -157,6 +157,10 @@ function PixelDisplay({ children, className = '' }: { children: ReactNode, class
   return <div className={`pixel-display crt-window ${className}`}>{children}</div>
 }
 
+function BypassOverlay({ enabled }: { enabled: boolean }) {
+  return enabled ? null : <div className="bypass-overlay" role="status">BYPASSED</div>
+}
+
 function SampleRow({ sample, selected }: { sample: SampleSummary, selected: boolean }) {
   const select = () => sendPluginCommand('selectSample', { id: sample.id })
   return <div className={`sample-row ${selected ? 'selected' : ''}`} role="button" tabIndex={0} onClick={select}
@@ -166,7 +170,7 @@ function SampleRow({ sample, selected }: { sample: SampleSummary, selected: bool
       {sample.enabled ? 'X' : ''}
     </button>
     <span className={sample.missing ? 'missing' : ''}>{sample.name}</span>
-    <ActionButton className="remove-button" onClick={(event) => { event.stopPropagation(); sendPluginCommand('removeSample', { id: sample.id }) }}>REMOVE</ActionButton>
+    <button type="button" className="remove-button" onClick={(event) => { event.stopPropagation(); sendPluginCommand('removeSample', { id: sample.id }) }}>REMOVE</button>
   </div>
 }
 
@@ -200,7 +204,7 @@ function Waveform({ sample }: { sample?: SampleSummary }) {
     const finalRegion = handle === 'start' ? { ...region, start: Math.max(0, Math.min(next, region.end - minimumRegion)) } : { ...region, end: Math.min(1, Math.max(next, region.start + minimumRegion)) }
     setRegion(finalRegion); sendPluginCommand('setSampleRegion', { id: sample.id, ...finalRegion })
   }
-  return <PixelDisplay className="waveform-display">
+  return <PixelDisplay className="waveform-display"><div className="waveform-track">
     <WaveformCanvas waveform={sample?.waveform} />
     {sample && <>
       <div className="region-shade left" style={{ width: `${region.start * 100}%` }} /><div className="region-shade right" style={{ width: `${(1 - region.end) * 100}%` }} />
@@ -211,7 +215,7 @@ function Waveform({ sample }: { sample?: SampleSummary }) {
         onPointerMove={(event) => { if (dragging.current) move(position(event), dragging.current) }} onPointerUp={finish}
         onPointerCancel={(event) => { dragging.current = null; setRegion({ start: sample.start, end: sample.end }); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId) }} />
     </>}
-  </PixelDisplay>
+  </div></PixelDisplay>
 }
 
 function SampleNumber({ sample, property, value, min, max, step, suffix }: {
@@ -244,32 +248,37 @@ function SourceControls({ sample }: { sample?: SampleSummary }) {
 
 function BleedModule({ enabled }: { enabled: boolean }) {
   const parameter = usePluginParameter('smearAmount'); const visualisation = useVisualisationState()
-  return <RecompilerPanel title="BLEED" className="effect-module bleed-module" headerAction={<EffectPower effect={1} enabled={enabled} />}>
+  return <RecompilerPanel title="BLEED" className={`effect-module bleed-module ${enabled ? '' : 'bypassed'}`} headerAction={<EffectPower effect={1} enabled={enabled} />}>
     <div className="creative-controls"><PressureControl id="smearAmount" accessibleLabel="Bleed pressure" /></div>
-    <PixelDisplay className="effect-display"><EffectCanvas type="smear" amount={parameter.value} visualisation={visualisation} /></PixelDisplay>
+    <PixelDisplay className="effect-display"><EffectCanvas type="smear" amount={parameter.value} visualisation={visualisation} active={enabled} /></PixelDisplay>
+    <BypassOverlay enabled={enabled} />
   </RecompilerPanel>
 }
 
 function FaultModule({ mutations, enabled }: { mutations: number, enabled: boolean }) {
   const pressure = usePluginParameter('faultPressure'); const visualisation = useVisualisationState()
   const choices = [{ label: 'FLIP', bit: 4 }, { label: 'DUST', bit: 2 }, { label: 'WARP', bit: 1 }]
-  return <RecompilerPanel title="FAULT" className="effect-module fault-module" headerAction={<EffectPower effect={0} enabled={enabled} />}>
+  return <RecompilerPanel title="FAULT" className={`effect-module fault-module ${enabled ? '' : 'bypassed'}`} headerAction={<EffectPower effect={0} enabled={enabled} />}>
     <div className="creative-controls fault-controls"><PressureControl id="faultPressure" accessibleLabel="Fault pressure" />
       <div className="mutation-select" role="group" aria-label="Enabled fault mutations">
         {choices.map(({ label, bit }) => <PixelButton key={label} active={(mutations & bit) !== 0}
           onClick={() => sendPluginCommand('setFaultMutations', { mutations: mutations ^ bit })}>{label}</PixelButton>)}
       </div></div>
-    <PixelDisplay className="fault-display"><FaultCanvas pressure={pressure.value} visualisation={visualisation} /></PixelDisplay>
+    <PixelDisplay className="fault-display"><FaultCanvas pressure={pressure.value} visualisation={visualisation} active={enabled} /></PixelDisplay>
+    <BypassOverlay enabled={enabled} />
   </RecompilerPanel>
 }
 
-function SpectralModule({ values, width, height, enabled }: { values: number[], width: number, height: number, enabled: boolean }) {
+function SpectralModule({ values, width, height, enabled, onInfo }: { values: number[], width: number, height: number, enabled: boolean, onInfo: () => void }) {
   const [resetSignal, setResetSignal] = useState(0); const visualisation = useVisualisationState()
   const reset = () => { setResetSignal((current) => current + 1); sendPluginCommand('resetSpectral') }
-  return <RecompilerPanel title="ETCH" className="effect-module spectral-module" headerAction={<><ActionButton className="spectral-reset" onClick={reset}>CLEAR</ActionButton><EffectPower effect={2} enabled={enabled} /></>}>
-    <div className="creative-controls"><PressureControl id="spectralDepth" accessibleLabel="Etch pressure" /></div>
+  return <RecompilerPanel title="ETCH" className={`effect-module spectral-module ${enabled ? '' : 'bypassed'}`} headerAction={<><ActionButton className="spectral-reset" onClick={reset}>CLEAR</ActionButton><EffectPower effect={2} enabled={enabled} /></>}>
     <PixelDisplay className="effect-display"><SpectralDrawCanvas values={values} width={width} height={height} scan={visualisation.spectralScan}
-      spectrum={visualisation.spectrum} resetSignal={resetSignal} /></PixelDisplay>
+      spectrum={visualisation.spectrum} resetSignal={resetSignal} active={enabled} /></PixelDisplay>
+    <div className="etch-footer"><div className="etch-brand"><img src={productLogo} alt="RECOMPILER" />
+      <button type="button" className="info-button" aria-label="Open About" onClick={onInfo}>i</button></div>
+      <div className="creative-controls"><PressureControl id="spectralDepth" accessibleLabel="Etch pressure" /></div></div>
+    <BypassOverlay enabled={enabled} />
   </RecompilerPanel>
 }
 
@@ -297,14 +306,6 @@ function OutputModule() {
     <OutputFader id="output" label="VOL" reference={100} format={(value) => value <= 0 ? '−∞' : `${Math.round(value)}`} />
     <OutputFader id="globalPitch" label="PITCH" reference={0} format={(value) => `${value > 0 ? '+' : ''}${Math.round(value)}`} />
   </div></RecompilerPanel>
-}
-
-function Header({ page, setPage }: { page: 'main' | 'about', setPage: (page: 'main' | 'about') => void }) {
-  const visualisation = useVisualisationState()
-  return <header className="app-header"><div className="header-brand"><img src={productLogo} alt="RECOMPILER" /></div>
-    <div className="header-actions"><div className="voice-counter"><b>{String(visualisation.voiceCount).padStart(2, '0')} / 16 VOICES</b></div>
-      <nav aria-label="Editor mode"><PixelButton active={page === 'main'} onClick={() => setPage('main')}>MAIN</PixelButton><PixelButton active={page === 'about'} onClick={() => setPage('about')}>ABOUT</PixelButton></nav></div>
-  </header>
 }
 
 const aboutCopy = `ABOUT
@@ -379,7 +380,7 @@ INTERFACE SCALE`
 
 const builtByRevealIndex = aboutCopy.indexOf('BUILT BY') + 'BUILT BY'.length
 
-function AboutPage({ uiScale }: { uiScale: number }) {
+function AboutPage({ uiScale, onClose }: { uiScale: number, onClose: () => void }) {
   const pageRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<number | null>(null)
   const skippedRef = useRef(false)
@@ -415,6 +416,7 @@ function AboutPage({ uiScale }: { uiScale: number }) {
   const beforeCredits = aboutCopy.slice(0, Math.min(visible, builtByRevealIndex))
   const afterCredits = visible > builtByRevealIndex ? aboutCopy.slice(builtByRevealIndex, visible) : ''
   return <div ref={pageRef} className="about-page" style={{ position: 'relative' }} tabIndex={-1}>
+    <button type="button" className="about-close" aria-label="Close About" onClick={onClose}>X</button>
     <section className="about-terminal" aria-label="About and getting started manual"><div className="terminal-document">
       <pre>{beforeCredits}</pre>
       {visible >= builtByRevealIndex && <div className="terminal-credit-marks">
@@ -439,23 +441,26 @@ export default function App() {
     return () => { document.removeEventListener('dragover', prevent); document.removeEventListener('drop', prevent) }
   }, [])
   const enabled = backendState?.effectEnabled ?? [true, true, true]
-  return <main className="recompiler-shell"><Header page={page} setPage={setPage} />
-    {page === 'about' ? <AboutPage uiScale={backendState?.uiScale ?? 1} /> : <>
+  return <main className="recompiler-shell">
+    {page === 'about' ? <AboutPage uiScale={backendState?.uiScale ?? 1} onClose={() => setPage('main')} /> : <>
       <div className="source-zone">
         <div className={`pool-drop-target ${draggingFiles ? 'drag-active' : ''}`}
           onDragEnter={(event) => { event.preventDefault(); event.stopPropagation(); setDraggingFiles(true) }}
           onDragOver={(event) => { event.preventDefault(); event.stopPropagation(); setDraggingFiles(true) }}
           onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDraggingFiles(false) }}
           onDrop={(event) => { event.preventDefault(); event.stopPropagation(); setDraggingFiles(false); postDroppedFiles(event.dataTransfer.files) }}>
-          <RecompilerPanel title="POOL" className="samples-panel"><div className="sample-list">{samples.map((sample) => <SampleRow key={sample.id} sample={sample} selected={sample.id === selectedSample?.id} />)}</div>
-            <button className={`action-button drop-zone ${draggingFiles ? 'drag-active' : ''}`} onClick={() => sendPluginCommand('importSamples')}>{draggingFiles ? 'RELEASE TO IMPORT' : (backendState?.importMessage || 'DROP / CLICK TO IMPORT AUDIO')}</button>
+          <RecompilerPanel title="POOL" className={`samples-panel ${samples.length === 0 ? 'is-empty' : ''}`}>{samples.length === 0
+            ? <button type="button" className={`pool-empty-action ${draggingFiles ? 'drag-active' : ''}`} onClick={() => sendPluginCommand('importSamples')}>{draggingFiles ? 'RELEASE TO IMPORT' : 'DROP / CLICK TO IMPORT AUDIO'}</button>
+            : <><div className="sample-list">{samples.map((sample) => <SampleRow key={sample.id} sample={sample} selected={sample.id === selectedSample?.id} />)}</div>
+              <button className={`action-button drop-zone ${draggingFiles ? 'drag-active' : ''}`} onClick={() => sendPluginCommand('importSamples')}>{draggingFiles ? 'RELEASE TO IMPORT' : 'DROP / CLICK TO IMPORT AUDIO'}</button></>}
           </RecompilerPanel>
         </div>
         <RecompilerPanel title="SOURCE" className="selected-source"><div className="source-title"><strong>{selectedSample?.name ?? 'NO SOURCE SELECTED'}</strong><span>{selectedSample ? `${(selectedSample.sampleRate / 1000).toFixed(1)} kHz  ${selectedSample.bitDepth || '--'} bit  ${selectedSample.durationSeconds.toFixed(1)} s` : ''}</span></div><Waveform sample={selectedSample} /><SourceControls sample={selectedSample} /></RecompilerPanel>
       </div>
-      <div className="lower-zone"><div className="global-strip"><label>STACK <PixelToggle id="midiPitch" left="OFF" right="ON" /></label><Divider /><label>VOICES <PixelToggle id="voiceMode" left="POLY" right="MONO" /></label></div>
-        <FaultModule mutations={backendState?.faultMutations ?? 7} enabled={enabled[0] !== false} /><BleedModule enabled={enabled[1] !== false} />
-        <SpectralModule values={backendState?.spectralCanvas ?? []} width={backendState?.spectralWidth ?? 128} height={backendState?.spectralHeight ?? 64} enabled={enabled[2] !== false} /><OutputModule /></div>
+      <div className="lower-zone"><SpectralModule values={backendState?.spectralCanvas ?? []} width={backendState?.spectralWidth ?? 128} height={backendState?.spectralHeight ?? 64} enabled={enabled[2] !== false} onInfo={() => setPage('about')} />
+        <div className="middle-rack"><div className="global-strip"><label>STACK <PixelToggle id="midiPitch" left="OFF" right="ON" /></label><Divider /><label>VOICES <PixelToggle id="voiceMode" left="POLY" right="MONO" /></label></div>
+          <div className="effect-pair"><FaultModule mutations={backendState?.faultMutations ?? 7} enabled={enabled[0] !== false} /><BleedModule enabled={enabled[1] !== false} /></div></div>
+        <OutputModule /></div>
     </>}
   </main>
 }

@@ -103,7 +103,23 @@ const descriptors = new Map<string, ParameterDescriptor>(
 )
 
 const parameterSubscribers = new Map<string, Set<(value: number) => void>>()
-let backendState: BackendState | null = null
+const previewWaveform = Array.from({ length: 128 }, (_, index): [number, number] => {
+  const envelope = .22 + .68 * Math.sin(index / 127 * Math.PI)
+  const sample = Math.sin(index * .34) * envelope
+  return [Math.min(0, sample), Math.max(0, sample)]
+})
+const previewSample = (): SampleSummary => ({
+  id: 'preview-sample', name: 'approved_loop.wav', enabled: true, missing: false,
+  start: 0, end: 1, transpose: 0, fineTune: 0, gainDb: 0, stretch: 1,
+  stretchPending: false, sampleRate: 48000, bitDepth: 24, durationSeconds: 3.2,
+  waveform: previewWaveform
+})
+const previewBackendState = (): BackendState => ({
+  selectedSampleId: '', sampleCount: 0, maximumSampleCount: 20, voiceCount: 0,
+  importMessage: '', uiScale: 1, samples: [], spectralWidth: 128, spectralHeight: 64,
+  spectralCanvas: [], effectEnabled: [true, true, true], faultMutations: 7
+})
+let backendState: BackendState | null = window.__JUCE__?.backend ? null : previewBackendState()
 let visualisationState: VisualisationState = {
   outputPeak: 0, outputPeakLeft: 0, outputPeakRight: 0, voiceCount: 0,
   faultMutation: 0, faultDivision: 16, faultProgress: 0, faultResampleSemitones: 0,
@@ -113,6 +129,11 @@ const backendSubscribers = new Set<(state: BackendState) => void>()
 const visualisationSubscribers = new Set<(state: VisualisationState) => void>()
 
 const backend = window.__JUCE__?.backend
+
+const publishPreviewState = (next: BackendState) => {
+  backendState = next
+  backendSubscribers.forEach((listener) => listener(next))
+}
 
 backend?.addEventListener('parameterChanged', (update) => {
   const descriptor = descriptors.get(update.id)
@@ -191,12 +212,39 @@ export function useVisualisationState() {
 }
 
 export function sendPluginCommand(type: string, payload: Record<string, unknown> = {}) {
-  backend?.emitEvent('backendCommand', { type, ...payload })
+  if (backend) { backend.emitEvent('backendCommand', { type, ...payload }); return }
+  if (!backendState) return
+  if (type === 'importSamples') {
+    const sample = previewSample()
+    publishPreviewState({ ...backendState, selectedSampleId: sample.id, sampleCount: 1, samples: [sample] })
+  } else if (type === 'removeSample') {
+    const samples = backendState.samples.filter((sample) => sample.id !== payload.id)
+    publishPreviewState({ ...backendState, samples, sampleCount: samples.length,
+      selectedSampleId: samples[0]?.id ?? '' })
+  } else if (type === 'selectSample') {
+    publishPreviewState({ ...backendState, selectedSampleId: String(payload.id ?? '') })
+  } else if (type === 'setSampleEnabled') {
+    publishPreviewState({ ...backendState, samples: backendState.samples.map((sample) => sample.id === payload.id
+      ? { ...sample, enabled: Boolean(payload.enabled) } : sample) })
+  } else if (type === 'setSampleRegion') {
+    publishPreviewState({ ...backendState, samples: backendState.samples.map((sample) => sample.id === payload.id
+      ? { ...sample, start: Number(payload.start), end: Number(payload.end) } : sample) })
+  } else if (type === 'setSampleProperty') {
+    publishPreviewState({ ...backendState, samples: backendState.samples.map((sample) => sample.id === payload.id
+      ? { ...sample, [String(payload.property)]: Number(payload.value) } : sample) })
+  } else if (type === 'setEffectEnabled') {
+    const effectEnabled = [...backendState.effectEnabled]
+    effectEnabled[Number(payload.effect)] = Boolean(payload.enabled)
+    publishPreviewState({ ...backendState, effectEnabled })
+  } else if (type === 'setFaultMutations') {
+    publishPreviewState({ ...backendState, faultMutations: Number(payload.mutations) })
+  }
 }
 
 export function postDroppedFiles(files: FileList) {
   const webview = window.chrome?.webview
-  if (!webview?.postMessageWithAdditionalObjects || files.length === 0) return false
+  if (files.length === 0) return false
+  if (!webview?.postMessageWithAdditionalObjects) { sendPluginCommand('importSamples'); return true }
   webview.postMessageWithAdditionalObjects('__recompilerFileDrop', files)
   return true
 }
