@@ -18,7 +18,8 @@ verified: 2026-10-02
 - BLEED's smaller display draws clean angular facets from real stereo telemetry. FAULT retains mutation telemetry with broken trajectories and faster decay; neither uses synthetic idle movement.
 - POOL uses small filled/empty enable indicators and an integrated grey selected row, without X marks or a selection stripe. The existing terminal close icon is retained at the user's request.
 - The production frontend build passes. The actual rendered frontend was checked for control extremes/center reset, pool states, panel balance, and pointer-drawn ETCH content. The preview uses a sample fixture and does not provide native audio telemetry; live visual/audio verification and subjective listening are not claimed from it.
-- Windows release compilation passed on the first candidate. The final native test/build gate is pending after updating the old PRESSURE-as-mix assertion and adding three pitch-comparison WAVs plus settled-bypass coverage.
+- Commit `01f6bcee86388b6e21f316d55fe56152191f7234` passed [Windows release run 37060379396](https://github.com/idkanonto/samplerthingidk/actions/runs/37060379396): VST3/standalone compilation, CTest, all 19 listening renders (including soft/center/crystalline pitch comparisons), artifact verification, and uploads. Tests cover independent density, pitch-direction detail, size differences, finite/bounded extremes, deterministic scheduling, Mix-zero dry output, and settled bypass.
+- VST3 artifact [`11251365237`](https://github.com/idkanonto/samplerthingidk/actions/runs/37060379396/artifacts/11251365237) has SHA-256 `b60f5bd08421886738fd1a51f2a2adc50c636c9a317fcccb0ed4cdde5933a414`. [Listening renders](https://github.com/idkanonto/samplerthingidk/actions/runs/37060379396/artifacts/11251080502) are available for subjective audition; live native/DAW visual verification remains outstanding.
 
 ## Previous final editor and reactive-visualizer pass (visual behavior superseded above)
 
