@@ -11,7 +11,16 @@ verified: 2026-10-02
 
 # Current Implementation State
 
-## Verified final editor and reactive-visualizer pass
+## Crystalline BLEED and drawing-only ETCH pass
+
+- ETCH displays only the user-painted mask; audio telemetry and the scanning overlay no longer affect its canvas.
+- BLEED exposes independent MIX (default 50%), GRAIN SIZE (8–120 ms, default 40 ms), and centered GRAIN PITCH controls alongside PRESSURE. Positive pitch shortens and raises grains with less feedback; negative pitch lengthens and softens them. All controls are smoothed and state-backed; state version is 15.
+- BLEED's smaller display draws clean angular facets from real stereo telemetry. FAULT retains mutation telemetry with broken trajectories and faster decay; neither uses synthetic idle movement.
+- POOL uses small filled/empty enable indicators and an integrated grey selected row, without X marks or a selection stripe. The existing terminal close icon is retained at the user's request.
+- The production frontend build passes. The actual rendered frontend was checked for control extremes/center reset, pool states, panel balance, and pointer-drawn ETCH content. The preview uses a sample fixture and does not provide native audio telemetry; live visual/audio verification and subjective listening are not claimed from it.
+- Windows release compilation passed on the first candidate. The final native test/build gate is pending after updating the old PRESSURE-as-mix assertion and adding three pitch-comparison WAVs plus settled-bypass coverage.
+
+## Previous final editor and reactive-visualizer pass (visual behavior superseded above)
 
 - FAULT renders only real mutation, division, progress, direction, and pressure telemetry with bounded persistence and decay; BLEED renders a real stereo Lissajous trace from the published left/right scope samples. Both animation loops stop while their modules are bypassed. Phosphor was used as a behavioral reference only; no source or monitor styling was copied.
 - SOURCE remains the loaded sample waveform, and ETCH remains the interactive spectral mask. ETCH's focused crosshair is removed and the mask is rasterized as one nearest-neighbour bitmap so fully painted regions are solid instead of showing cell seams.

@@ -170,6 +170,7 @@ private:
     float mediumFilterCoefficient = 0.0f;
     float highFilterCoefficient = 0.0f;
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> amountSmoother { 0.0f };
+    juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> enabledSmoother { 0.0f };
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> mixSmoother { 0.5f };
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> sizeSmoother { 40.0f };
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> pitchSmoother { 0.0f };

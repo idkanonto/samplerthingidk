@@ -381,6 +381,7 @@ void SmearProcessor::prepare(double newSampleRate)
             0.5 - 0.5 * std::cos(juce::MathConstants<double>::twoPi * phase));
     }
     amountSmoother.reset(sampleRate, 0.010);
+    enabledSmoother.reset(sampleRate, 0.010);
     mixSmoother.reset(sampleRate, 0.020);
     sizeSmoother.reset(sampleRate, 0.040);
     pitchSmoother.reset(sampleRate, 0.040);
@@ -413,6 +414,7 @@ void SmearProcessor::resetRealtimeState() noexcept
     overlapEnergy = 0.0f;
     lastOverlapGain = 0.0f;
     amountSmoother.setCurrentAndTargetValue(0.0f);
+    enabledSmoother.setCurrentAndTargetValue(0.0f);
     mixSmoother.setCurrentAndTargetValue(0.0f);
     sizeSmoother.setCurrentAndTargetValue(40.0f);
     pitchSmoother.setCurrentAndTargetValue(0.0f);
@@ -560,6 +562,7 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
     const auto features = settings.features & SmearFeatures::all;
     const auto targetAmount = features != 0 ? normalisePercent(settings.amount) : 0.0f;
     amountSmoother.setTargetValue(targetAmount);
+    enabledSmoother.setTargetValue(targetAmount > 0.0f ? 1.0f : 0.0f);
     mixSmoother.setTargetValue(normalisePercent(settings.mix));
     sizeSmoother.setTargetValue(std::clamp(std::isfinite(settings.grainSizeMs) ? settings.grainSizeMs : 40.0f, 8.0f, 120.0f));
     pitchSmoother.setTargetValue(std::clamp(std::isfinite(settings.grainPitch) ? settings.grainPitch / 100.0f : 0.0f, -1.0f, 1.0f));
@@ -682,7 +685,7 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
         slowEnvelope += slowCoefficient * (inputEnvelope - slowEnvelope);
         const auto transient = std::clamp((fastEnvelope - slowEnvelope) * 5.0f,
                                           0.0f, 1.0f);
-        const auto wet = std::clamp(amount * 100.0f, 0.0f, 1.0f);
+        const auto wet = enabledSmoother.getNextValue();
         overlapEnergy += overlapCoefficient * (windowEnergy - overlapEnergy);
         const auto grainNormalisation = windowEnergy > 0.0f || overlapEnergy > 0.0001f
             ? std::clamp(0.82f / std::sqrt(std::max(0.55f, overlapEnergy)),

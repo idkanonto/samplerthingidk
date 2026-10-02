@@ -797,10 +797,13 @@ void testCreativeMacroProgressionAndRender()
           "Scramble did not create consistent medium or stronger maximum transformation");
     check(meltDistance[2] > 0.01f && meltDistance[4] > meltDistance[1],
           "Melt did not create a meaningful macro intensity progression");
-    check(smearDistance[2] > 0.002f && smearDistance[4] > smearDistance[1]
-              && firstDifferenceRms(renderSmear(75.0f, dry))
-                    > firstDifferenceRms(dry),
-          "Smear did not retain meaningful crystalline/high-frequency activity");
+    // MIX now owns wet/dry intensity; PRESSURE owns grain density. Distance
+    // from dry need not increase monotonically as differently phased grains overlap.
+    // Density and pitch-direction brightness are checked in testSmearProcessor.
+    check(smearDistance[1] > 0.002f && smearDistance[2] > 0.002f
+              && smearDistance[4] > 0.002f
+              && differenceRms(renderSmear(25.0f, dry), renderSmear(100.0f, dry)) > 0.002f,
+          "Bleed did not produce an audible, pressure-dependent texture");
 
     std::cout << "Macro render difference RMS"
               << " | Scramble " << scrambleDistance[0] << ',' << scrambleDistance[1]
@@ -1017,6 +1020,7 @@ void testSmearProcessor()
           "Bleed Mix zero was not exact dry");
     const auto soft = renderControls(100.0f, 40.0f, -100.0f);
     const auto crystal = renderControls(100.0f, 40.0f, 100.0f);
+    const auto centered = renderControls(100.0f, 40.0f, 0.0f);
     check(differenceRms(soft, crystal) > 0.002f,
           "Bleed pitch directions did not produce different audio");
     check(firstDifferenceRms(crystal) > firstDifferenceRms(soft),
@@ -1026,6 +1030,24 @@ void testSmearProcessor()
           "Bleed Grain Size did not change the rendered texture");
     renderControls(100.0f, 120.0f, -100.0f);
     renderControls(100.0f, 8.0f, 100.0f);
+    std::cout << "Bleed pitch detail (soft/center/crystal): "
+              << firstDifferenceRms(soft) << '/' << firstDifferenceRms(centered)
+              << '/' << firstDifferenceRms(crystal) << '\n';
+    const auto bleedRenderPath = juce::SystemStats::getEnvironmentVariable("RANDOM_CHOP_RENDER_DIR", {});
+    if (bleedRenderPath.isNotEmpty())
+    {
+        const juce::File bleedRenderDirectory(bleedRenderPath);
+        check(writeListeningWave(bleedRenderDirectory.getChildFile("bleed_pitch_soft.wav"), soft)
+                  && writeListeningWave(bleedRenderDirectory.getChildFile("bleed_pitch_center.wav"), centered)
+                  && writeListeningWave(bleedRenderDirectory.getChildFile("bleed_pitch_crystal.wav"), crystal),
+              "Could not write Bleed pitch comparison renders");
+    }
+
+    auto settling = makeTemporalInput(2048);
+    continuous.process(settling, { 0.0f });
+    auto settled = copyBuffer(dry);
+    continuous.process(settled, { 0.0f });
+    check(buffersEqual(settled, dry), "Bleed bypass did not settle to exact dry");
 
     juce::AudioBuffer<float> unsafe(2, 256);
     unsafe.clear();

@@ -189,6 +189,7 @@ export function usePluginParameter(id: string) {
       : finiteValue
     if (currentDescriptor) currentDescriptor.value = safeValue
     setLocalValue(safeValue)
+    if (!backend) parameterSubscribers.get(id)?.forEach((listener) => listener(safeValue))
     backend?.emitEvent('parameterValue', { id, value: safeValue })
   }, [id])
   const endGesture = useCallback(() => {

@@ -89,13 +89,14 @@ export function FaultCanvas({ pressure, visualisation, active }: {
       marks = marks.filter((mark) => time - mark.born < 1300)
       for (const mark of marks) {
         const age = (time - mark.born) / 1300
-        context.globalAlpha = Math.max(0, 1 - age) * .92
+        context.globalAlpha = Math.pow(Math.max(0, 1 - age), 2) * .92
         context.strokeStyle = '#eeeeee'
         context.fillStyle = '#eeeeee'
         if (mark.mutation === 1) {
           context.beginPath()
           context.moveTo(mark.x - 9, mark.y + (mark.direction > 0 ? 5 : -5))
-          context.lineTo(mark.x, mark.y)
+          context.lineTo(mark.x - 2, mark.y + 2)
+          context.moveTo(mark.x + 2, mark.y - 3)
           context.lineTo(mark.x + 9, mark.y + (mark.direction > 0 ? -5 : 5))
           context.stroke()
         } else if (mark.mutation === 2) {
@@ -105,6 +106,9 @@ export function FaultCanvas({ pressure, visualisation, active }: {
         } else {
           context.beginPath()
           context.moveTo(mark.x - 8, 140 - mark.y)
+          context.lineTo(mark.x - 2, 70)
+          context.lineTo(mark.x + 4, 76)
+          context.moveTo(mark.x + 1, 65)
           context.lineTo(mark.x + 8, mark.y)
           context.stroke()
         }

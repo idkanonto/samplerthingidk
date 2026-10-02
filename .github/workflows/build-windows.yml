@@ -66,8 +66,8 @@ jobs:
         run: |
           $renderDir = Join-Path $env:GITHUB_WORKSPACE 'build\listening-renders'
           $renders = Get-ChildItem -LiteralPath $renderDir -Filter '*.wav' -File
-          if ($renders.Count -ne 16) {
-            throw "Expected 16 deterministic listening renders, found $($renders.Count)."
+          if ($renders.Count -ne 19) {
+            throw "Expected 19 deterministic listening renders, found $($renders.Count)."
           }
           foreach ($render in $renders) {
             if ($render.Length -eq 0) {
