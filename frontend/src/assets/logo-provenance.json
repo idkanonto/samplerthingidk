@@ -1,14 +1,14 @@
 {
-  "recompiler-logo.png": {
-    "origin": "User-supplied release asset",
-    "sha256": "24F9E9F63AE5326A49892501A1D675744B1CADA1D79E9D3B8614B8CD3446CD79"
+  "recompiler-logo.svg": {
+    "origin": "User-supplied vector asset: logo_2_raster_clean_vector.svg",
+    "sha256": "7528A1C71F001BD623540B38BEDE4E15C61059E7194B6D9FDF74AE5A8DE0F7E4"
   },
-  "damnnprodigy-logo.png": {
-    "origin": "User-supplied release asset",
-    "sha256": "E6CCCA237B58E0D141AB1FFF5565AD32FF325C13FAAAD16B81F9D53405D37578"
+  "damnnprodigy-logo.svg": {
+    "origin": "User-supplied vector asset: damnprodigy.svg",
+    "sha256": "DAAA6A6B5BD3E53559535AEE4470546D3CF809868869406F9FFA8627C76FEE9F"
   },
-  "shadx2-logo.png": {
-    "origin": "User-supplied release asset",
-    "sha256": "EE866A5AEA652C1F7EC5A4DB37D474CB1033A18B249058CAB6AABD32C82C6057"
+  "shadx2-logo.svg": {
+    "origin": "User-supplied vector asset: logo_1_raster_clean_vector.svg",
+    "sha256": "11010B0F2B928F2534A2F27CF5820D5240709C2D15B23115E678673F5C5769BC"
   }
 }

@@ -4,10 +4,9 @@ import {
   usePluginParameter, useVisualisationState
 } from './juceBridge'
 import { EffectCanvas, FaultCanvas, SpectralDrawCanvas, StereoMeterCanvas, WaveformCanvas } from './VisualCanvases'
-import productLogo from './assets/recompiler-logo.png'
-import damnnprodigyLogo from './assets/damnnprodigy-logo.png'
-import shadx2Logo from './assets/shadx2-logo.png'
-import infoIcon from './assets/info-icon.png'
+import productLogo from './assets/recompiler-logo.svg'
+import damnnprodigyLogo from './assets/damnnprodigy-logo.svg'
+import shadx2Logo from './assets/shadx2-logo.svg'
 import closeIcon from './assets/close-icon.png'
 
 declare const __RECOMPILER_VERSION__: string
@@ -277,8 +276,8 @@ function SpectralModule({ values, width, height, enabled, onInfo }: { values: nu
   return <RecompilerPanel title="ETCH" className={`effect-module spectral-module ${enabled ? '' : 'bypassed'}`} headerAction={<><ActionButton className="spectral-reset" onClick={reset}>CLEAR</ActionButton><EffectPower effect={2} enabled={enabled} /></>}>
     <PixelDisplay className="effect-display"><SpectralDrawCanvas values={values} width={width} height={height} scan={visualisation.spectralScan}
       spectrum={visualisation.spectrum} resetSignal={resetSignal} active={enabled} /></PixelDisplay>
-    <div className="etch-footer"><div className="etch-brand"><img src={productLogo} alt="RECOMPILER" />
-      <button type="button" className="info-button" aria-label="Open About" onClick={onInfo}><img src={infoIcon} alt="" /></button></div>
+    <div className="etch-footer"><button type="button" className="etch-brand-button" aria-label="Open About" onClick={onInfo}>
+      <img src={productLogo} alt="RECOMPILER" /></button>
       <div className="creative-controls"><PressureControl id="spectralDepth" accessibleLabel="Etch pressure" /></div></div>
     <BypassOverlay enabled={enabled} />
   </RecompilerPanel>

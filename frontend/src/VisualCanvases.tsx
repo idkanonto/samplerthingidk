@@ -114,11 +114,6 @@ export function FaultCanvas({ pressure, visualisation, active }: {
         context.fillStyle = '#eeeeee'
         context.fillRect(Math.round(7 + progress * 240), 18, 1, 112)
       }
-      context.fillStyle = '#969696'
-      context.font = '10px "Cozette Local", monospace'
-      const names = ['DRY', 'WARP', 'DUST', 'FLIP']
-      const direction = mutation === 1 ? ` ${telemetry.faultResampleSemitones > 0 ? '+12' : '−12'}` : ''
-      context.fillText(`${names[mutation] ?? 'DRY'}${direction}  1/${telemetry.faultDivision || 16}  ${Math.round(current.pressure)}%`, 5, 12)
     }
     frame = requestAnimationFrame(draw)
     return () => cancelAnimationFrame(frame)
@@ -201,12 +196,12 @@ export function SpectralDrawCanvas({ values, width, height, scan, spectrum, rese
   values: number[], width: number, height: number, scan: number, spectrum?: number[], resetSignal: number, active: boolean
 }) {
   const ref = useRef<HTMLCanvasElement>(null)
+  const raster = useRef<HTMLCanvasElement | null>(null)
   const mask = useRef(new Float32Array(Math.max(1, width * height)))
   const drawing = useRef(false)
   const erasing = useRef(false)
   const previous = useRef<[number, number] | null>(null)
   const keyboardCursor = useRef<[number, number]>([Math.floor(width / 2), Math.floor(height / 2)])
-  const [keyboardFocused, setKeyboardFocused] = useState(false)
   const [revision, setRevision] = useState(0)
 
   useEffect(() => {
@@ -227,13 +222,28 @@ export function SpectralDrawCanvas({ values, width, height, scan, spectrum, rese
     const context = setup(canvas, width, height)
     if (!context) return
     const current = mask.current
-    for (let y = 0; y < height; y += 1) for (let x = 0; x < width; x += 1) {
-      const value = current[y * width + x]
-      if (value <= .02) continue
-      const shade = Math.round(95 + value * 142)
-      context.fillStyle = `rgb(${shade},${shade},${shade})`
-      context.fillRect(x, y, 1, 1)
+    const bitmap = raster.current ?? document.createElement('canvas')
+    raster.current = bitmap
+    if (bitmap.width !== width) bitmap.width = width
+    if (bitmap.height !== height) bitmap.height = height
+    const bitmapContext = bitmap.getContext('2d')
+    if (!bitmapContext) return
+    const pixels = bitmapContext.createImageData(width, height)
+    for (let index = 0; index < width * height; index += 1) {
+      const value = current[index] ?? 0
+      const shade = value > .02 ? Math.round(95 + value * 142) : 16
+      const offset = index * 4
+      pixels.data[offset] = shade
+      pixels.data[offset + 1] = shade
+      pixels.data[offset + 2] = shade
+      pixels.data[offset + 3] = 255
     }
+    bitmapContext.putImageData(pixels, 0, 0)
+    context.save()
+    context.setTransform(1, 0, 0, 1, 0, 0)
+    context.imageSmoothingEnabled = false
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+    context.restore()
     if (spectrum?.length) {
       context.fillStyle = '#747474'
       spectrum.forEach((value, index) => {
@@ -243,12 +253,7 @@ export function SpectralDrawCanvas({ values, width, height, scan, spectrum, rese
     }
     context.fillStyle = '#eeeeee'
     context.fillRect(Math.max(0, Math.min(width - 1, Math.floor(scan * width))), 0, 1, height)
-    if (keyboardFocused) {
-      const [x, y] = keyboardCursor.current
-      context.fillRect(Math.max(0, x - 2), y, 5, 1)
-      context.fillRect(x, Math.max(0, y - 2), 1, 5)
-    }
-  }, [active, revision, scan, spectrum, width, height, keyboardFocused])
+  }, [active, revision, scan, spectrum, width, height])
 
   const point = useCallback((event: React.PointerEvent<HTMLCanvasElement>): [number, number] => {
     const bounds = event.currentTarget.getBoundingClientRect()
@@ -287,8 +292,8 @@ export function SpectralDrawCanvas({ values, width, height, scan, spectrum, rese
     }
   }
   return <div className="spectral-editor">
-    <canvas ref={ref} className="pixel-canvas spectral-canvas" aria-label="Spectral mask drawing surface. Arrow keys move the cursor; Space draws; Delete erases." tabIndex={0}
-      onFocus={() => setKeyboardFocused(true)} onBlur={() => setKeyboardFocused(false)} onKeyDown={handleKey}
+    <canvas ref={ref} className="pixel-canvas spectral-canvas" aria-label="Spectral mask drawing surface. Drag to draw; right-click or Shift-drag erases." tabIndex={0}
+      onKeyDown={handleKey}
       onContextMenu={(event) => event.preventDefault()}
       onPointerDown={(event) => { drawing.current = true; erasing.current = event.button === 2 || event.shiftKey || event.altKey; previous.current = null; event.currentTarget.setPointerCapture(event.pointerId); apply(event) }}
       onPointerMove={(event) => { if (drawing.current) apply(event) }} onPointerUp={finish} onPointerCancel={finish} />

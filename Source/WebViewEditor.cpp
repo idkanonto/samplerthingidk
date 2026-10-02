@@ -46,18 +46,15 @@ std::optional<juce::WebBrowserComponent::Resource> makeResource(
     if (path == "/assets/cozette-vector.woff2")
         return juce::WebBrowserComponent::Resource {
             bytesFrom(BinaryData::cozettevector_woff2, BinaryData::cozettevector_woff2Size), "font/woff2" };
-    if (path == "/assets/recompiler-logo.png")
+    if (path == "/assets/recompiler-logo.svg")
         return juce::WebBrowserComponent::Resource {
-            bytesFrom(BinaryData::recompilerlogo_png, BinaryData::recompilerlogo_pngSize), "image/png" };
-    if (path == "/assets/damnnprodigy-logo.png")
+            bytesFrom(BinaryData::recompilerlogo_svg, BinaryData::recompilerlogo_svgSize), "image/svg+xml" };
+    if (path == "/assets/damnnprodigy-logo.svg")
         return juce::WebBrowserComponent::Resource {
-            bytesFrom(BinaryData::damnnprodigylogo_png, BinaryData::damnnprodigylogo_pngSize), "image/png" };
-    if (path == "/assets/shadx2-logo.png")
+            bytesFrom(BinaryData::damnnprodigylogo_svg, BinaryData::damnnprodigylogo_svgSize), "image/svg+xml" };
+    if (path == "/assets/shadx2-logo.svg")
         return juce::WebBrowserComponent::Resource {
-            bytesFrom(BinaryData::shadx2logo_png, BinaryData::shadx2logo_pngSize), "image/png" };
-    if (path == "/assets/info-icon.png")
-        return juce::WebBrowserComponent::Resource {
-            bytesFrom(BinaryData::infoicon_png, BinaryData::infoicon_pngSize), "image/png" };
+            bytesFrom(BinaryData::shadx2logo_svg, BinaryData::shadx2logo_svgSize), "image/svg+xml" };
     if (path == "/assets/close-icon.png")
         return juce::WebBrowserComponent::Resource {
             bytesFrom(BinaryData::closeicon_png, BinaryData::closeicon_pngSize), "image/png" };

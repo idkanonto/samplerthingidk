@@ -95,11 +95,10 @@ set(frontend_dist_files
     "${frontend_directory}/dist/assets/spleen-8x16.woff2"
     "${frontend_directory}/dist/assets/spleen-6x12.woff2"
     "${frontend_directory}/dist/assets/cozette-vector.woff2"
-    "${frontend_directory}/dist/assets/recompiler-logo.png"
-    "${frontend_directory}/dist/assets/damnnprodigy-logo.png"
-    "${frontend_directory}/dist/assets/shadx2-logo.png")
+    "${frontend_directory}/dist/assets/recompiler-logo.svg"
+    "${frontend_directory}/dist/assets/damnnprodigy-logo.svg"
+    "${frontend_directory}/dist/assets/shadx2-logo.svg")
 list(APPEND frontend_dist_files
-    "${frontend_directory}/dist/assets/info-icon.png"
     "${frontend_directory}/dist/assets/close-icon.png")
 
 if (RECOMPILER_REBUILD_FRONTEND)
@@ -126,10 +125,9 @@ if (RECOMPILER_REBUILD_FRONTEND)
                 "${frontend_directory}/src/assets/spleen-8x16.woff2"
                 "${frontend_directory}/src/assets/spleen-6x12.woff2"
                 "${frontend_directory}/src/assets/cozette-vector.woff2"
-                "${frontend_directory}/src/assets/recompiler-logo.png"
-                "${frontend_directory}/src/assets/damnnprodigy-logo.png"
-                "${frontend_directory}/src/assets/shadx2-logo.png"
-                "${frontend_directory}/src/assets/info-icon.png"
+                "${frontend_directory}/src/assets/recompiler-logo.svg"
+                "${frontend_directory}/src/assets/damnnprodigy-logo.svg"
+                "${frontend_directory}/src/assets/shadx2-logo.svg"
                 "${frontend_directory}/src/assets/close-icon.png"
             BYPRODUCTS ${frontend_dist_files}
             COMMENT "Building embedded React WebView frontend"
