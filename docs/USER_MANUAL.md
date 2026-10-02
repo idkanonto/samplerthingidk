@@ -13,7 +13,7 @@ The final-pass control names are authoritative throughout the current UI:
 - **TUNE**, **DRIFT**, and global **PITCH** are the complete pitch path. Old Source Key and Play In Key values are ignored.
 - **STACK** off ignores incoming MIDI-note pitch. STACK on follows MIDI relative to neutral note 72 without sample-key correction.
 - **STRETCH** is independent for every source. It changes timing from 0.25× speed (about four times as long) through 1× original timing to 2× speed (about half as long) while preserving pitch.
-- **FAULT PRESSURE** controls how often mutations occur and how small its 1/2, 1/4, 1/8, and 1/16 segments can become. Select any combination of **PITCH**, **BITCRUSH**, and **REVERSE**. PITCH changes rate and duration together; REVERSE affects only the selected slice. With none selected, FAULT is dry.
+- **FAULT PRESSURE** controls how often mutations occur and how small its 1/2, 1/4, 1/8, and 1/16 segments can become. Select any combination of **REVERSE**, **BITCRUSH**, and **RESAMPLE**. RESAMPLE chooses one octave down or up and changes rate, pitch, and duration together; REVERSE affects only the selected slice. With none selected, FAULT is dry.
 - **ETCH CLEAR** immediately clears the visible mask and the saved backend mask.
 - **MASTER VOL** reads 0–125% and **PITCH** reads -12 to +12 semitones.
 
@@ -269,10 +269,10 @@ These labels are status information, not controls.
 
 Choose one of four fixed editor sizes:
 
-- 75 percent: 720 x 485
-- 100 percent: 960 x 647
-- 125 percent: 1200 x 809
-- 150 percent: 1440 x 971
+- 75 percent: 810 x 506
+- 100 percent: 1080 x 675
+- 125 percent: 1350 x 844
+- 150 percent: 1620 x 1013
 
 The scale setting is saved with the plug-in state. Some DAWs may constrain the window size.
 

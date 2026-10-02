@@ -1527,7 +1527,7 @@ RandomChopSamplerAudioProcessorEditor::RandomChopSamplerAudioProcessorEditor(Ran
     smearAmount.setName("Smear amount");
     spectralDepth.setName("Spectral depth");
     output.setName("Volume");
-    midiPitch.setName("Chords mode");
+    midiPitch.setName("Stack mode");
     voiceMode.setName("Voice mode");
 
     int focusOrder = 1;
@@ -2142,7 +2142,7 @@ void RandomChopSamplerAudioProcessorEditor::selectTab(int tab)
     }
     else if (selectedTab == 3)
     {
-        pageMessage.setText("SETTINGS  /  RECOMPILER.DLL\n\n"
+        pageMessage.setText("ABOUT  /  RECOMPILER.DLL\n\n"
                             "Drop or add up to 20 samples, shape them, then play from MIDI.\n"
                             "Use the About button for plugin information.",
                             juce::dontSendNotification);
@@ -2319,7 +2319,7 @@ void RandomChopSamplerAudioProcessorEditor::timerCallback()
     if (transientMessageTicks > 0)
         --transientMessageTicks;
     voiceMode.setButtonText(voiceMode.getToggleState() ? "MONO" : "POLY");
-    midiPitch.setButtonText(midiPitch.getToggleState() ? "CHORDS ON" : "CHORDS OFF");
+    midiPitch.setButtonText(midiPitch.getToggleState() ? "STACK ON" : "STACK OFF");
     chordsOffButton.setToggleState(!midiPitch.getToggleState(), juce::dontSendNotification);
     chordsOnButton.setToggleState(midiPitch.getToggleState(), juce::dontSendNotification);
     polyButton.setToggleState(!voiceMode.getToggleState(), juce::dontSendNotification);

@@ -2,14 +2,14 @@
 name: recompiler.dll — Black Calibration Bench
 description: A fixed-scale, monochrome instrument panel built from machined black surfaces, warm ivory markings, and live signal chambers.
 colors:
-  bench-black: "#090a09"
-  panel-black: "#111210"
-  raised-black: "#191a17"
-  control-black: "#242520"
-  warm-ivory: "#e8e4d8"
-  calibration-line: "#d7d3c8"
-  muted-marking: "#96958d"
-  dim-rule: "#5e605a"
+  bench-black: "#070806"
+  panel-black: "#121410"
+  raised-black: "#1a1d18"
+  control-black: "#252921"
+  warm-ivory: "#e9e8df"
+  calibration-line: "#d5d6cc"
+  muted-marking: "#a5a79c"
+  dim-rule: "#5c6158"
   graticule: "#3e413a"
   telemetry-white: "#eeede5"
 typography:
@@ -25,12 +25,12 @@ typography:
     fontWeight: 700
     lineHeight: 1
   data:
-    fontFamily: "IBM Plex Mono Local, monospace"
+    fontFamily: "Cozette Local, monospace"
     fontSize: "10px"
     fontWeight: 600
     lineHeight: 1
   micro-data:
-    fontFamily: "IBM Plex Mono Local, monospace"
+    fontFamily: "Cozette Local, monospace"
     fontSize: "8px"
     fontWeight: 600
     lineHeight: 1
@@ -76,12 +76,12 @@ components:
     typography: "{typography.data}"
     rounded: "{rounded.square}"
     padding: "0 4px"
-    height: "23px"
+    height: "20px"
   primary-knob:
     backgroundColor: "{colors.panel-black}"
     textColor: "{colors.warm-ivory}"
     rounded: "{rounded.dial}"
-    size: "66px"
+    size: "58px"
   source-gain-knob:
     backgroundColor: "{colors.panel-black}"
     textColor: "{colors.warm-ivory}"
@@ -95,13 +95,13 @@ components:
 
 **Creative North Star: "Black Calibration Bench"**
 
-This is a compact operating surface, not a branded landing page: a near-black machined panel whose hierarchy comes from exact partitions, warm ivory calibration marks, and instrument-like readouts. Display chambers are the dominant black masses. Their waveform, particle, spectral, and meter graphics carry the visual energy while the surrounding hardware stays quiet, dense, and mechanically legible.
+This is a compact operating surface, not a website: a near-black machined sampler workstation whose hierarchy comes from exact partitions, warm ivory calibration marks, supplied pixel artwork, and instrument-like readouts. Recessed CRT chambers carry the waveform, FAULT, BLEED, ETCH, and meter telemetry while the surrounding chassis stays quiet, dense, and mechanically legible.
 
-The interface preserves the approved fixed 960×647 logical geometry and treats every line as functional construction. Type is deliberately split between a pixel-built display face and a tabular data face. The left side of the header is an intentionally empty, unbranded equipment bay; its restraint is part of the identity, not missing content.
+The interface uses a fixed 1080×675 logical geometry and treats every line as functional construction. Spleen names and commands; Cozette measures and reports. The primary supplied RECOMPILER mark is fitted into the workstation's top rail, while the two creator marks support the ABOUT manual.
 
 **Key Characteristics:**
 
-- Fixed 960×647 logical instrument canvas with whole-UI scale presets only.
+- Fixed 1080×675 logical instrument canvas with whole-UI scale presets only.
 - Near-black tiered surfaces with warm ivory labels, rules, and state inversion.
 - Dense 4px top-level rhythm and one-pixel construction lines.
 - Square controls and containers; circles belong only to rotary controls.
@@ -139,9 +139,9 @@ The palette is a warm, green-biased monochrome calibrated for long low-light ses
 **Module Font:** Spleen 8×16 Local at its native 16px strike.
 
 **Control Font:** Spleen 6×12 Local at its native 12px strike.
-**Data Font:** IBM Plex Mono Local, regular and semibold.
+**Data Font:** Cozette Local.
 
-**Character:** Spleen gives module names and actions a crisp industrial bitmap voice without arcade styling. IBM Plex Mono carries filenames, values, units, scales, and telemetry with stable widths and tabular alignment.
+**Character:** Spleen gives module names and actions a crisp industrial bitmap voice without arcade styling. Cozette carries filenames, values, units, scales, metadata, and the ABOUT manual with compact bitmap rhythm.
 
 ### Hierarchy
 
@@ -153,34 +153,33 @@ The palette is a warm, green-biased monochrome calibrated for long low-light ses
 
 ### Named Rules
 
-**The Face Split Rule.** Spleen names and commands; IBM Plex Mono measures and reports. Do not swap their jobs.
+**The Face Split Rule.** Spleen names and commands; Cozette measures and reports. Do not swap their jobs.
 
 **The Uppercase Panel Rule.** Operational labels are terse uppercase equipment markings, not sentence-case application copy.
 
 ## Layout
 
-The full instrument is a fixed 960×647 logical canvas with 4px outer padding and 4px gaps. Its primary row stack is 44px header, 278px source area, 41px global strip, and 264px effect area. The source area splits into a 252px sample browser and the selected-source workspace; the effect rack uses five adjacent modules, with the first three equal and Spectral Draw and Output tuned slightly narrower/wider to fit their instruments.
+The full instrument is a fixed 1080×675 logical canvas with 4px outer padding and 4px gaps. Its primary row stack is 52px header, 286px source area, 40px global strip, and the remaining effect rack. The source area splits into a 270px POOL and the wider SOURCE workspace. The effect rack uses four adjacent modules: FAULT receives 420px and the largest visualizer; BLEED, ETCH, and MASTER use narrower task-specific widths.
 
-Top-level modules share a 28px header. Sample rows are 30px high. The source display reserves a 170px waveform chamber and a 72px control deck. The global strip is a fixed 41px bridge between editing and processing. Primary macro knobs are 66px; source gain uses the subordinate 38px knob.
+Top-level modules share a 28px header. Sample rows are 28px high. SOURCE reserves a 158px waveform chamber and a 68px control deck. The global strip is a fixed 40px bridge between editing and processing. FAULT, BLEED, and ETCH use the same 58px PRESSURE knob. SOURCE TRIM is intentionally a horizontal slider.
 
 There is no responsive reflow. The editor scales as one composition from the top-left at exactly 75%, 100%, 125%, or 150%. Internal proportions, type, borders, and interaction geometry remain unchanged at every preset.
 
-**The One Instrument Rule.** Scale the complete 960×647 bench; never rearrange, wrap, collapse, or independently resize its modules.
+**The One Instrument Rule.** Scale the complete 1080×675 bench; never rearrange, wrap, collapse, or independently resize its modules.
 
 **The Four-Pixel Rhythm Rule.** Top-level separation is 4px. Use smaller values only for internal optical fitting, not to create a competing spacing system.
 
 ## Elevation & Depth
 
-The system is flat by default and uses no ambient shadows. Depth is structural: nested black tones, one-pixel ivory or dim rules, inset selection bars, circular knob rings, and the contrast between panel planes and deep display chambers. The header’s empty equipment bay alone uses a restrained dark linear gradient to suggest a recessed metal slot.
+The system is flat by default. Depth is structural: nested black tones, one-pixel ivory or dim rules, inset selection bars, circular knob rings, and the contrast between panel planes and recessed display chambers. Only actual graphical CRT windows receive subtle inset phosphor falloff, scanlines, and edge vignette.
 
 ### Shadow Vocabulary
 
 - **Selected Row Inset** (`inset 2px 0 var(--ivory)`): the sole rectangular selection indicator.
 - **Primary Knob Rings** (`0 0 0 1px var(--black), 0 0 0 2px var(--muted)`): concentric calibration rings around 66px macro knobs.
-- **Source Gain Ring** (`0 0 0 1px var(--muted)`): the quieter ring for the subordinate 38px gain knob.
 - **Fader Cap Groove** (`inset 0 3px 0 var(--muted)`): a hard engraved line on the output fader cap.
 
-**The Structural Depth Rule.** Use rules, tonal nesting, and calibration rings for depth; never add blur, glass, glow, or floating-card shadows.
+**The Structural Depth Rule.** Use rules, tonal nesting, and calibration rings for chassis depth. Restrict subtle glow and glass falloff to graphical CRT windows; never float modules like web cards.
 
 ## Shapes
 
@@ -202,7 +201,7 @@ Panels, buttons, selects, rows, readouts, display chambers, and fader parts are 
 
 - **Selects:** Bench-black field, one-pixel calibration border, square corners, 32px source-control height or 28px global-strip height.
 - **Steppers:** A black numeric field joined to a 19px up/down rail; hover on the arrows uses hard ivory inversion.
-- **Readouts:** Small black chambers with one-pixel borders, 23px height, and bold tabular data.
+- **Editable values:** Plain, unboxed Cozette text lines with a subtle underline only on hover or edit. PRESSURE, TRIM, VOL, and PITCH share click-to-edit, Enter/blur commit, Escape cancel, and arrow-key adjustment.
 - **Focus:** Use the shared inset dashed outline; never add a glow.
 
 ### Cards / Containers
@@ -215,11 +214,20 @@ Panels, buttons, selects, rows, readouts, display chambers, and fader parts are 
 
 ### Navigation
 
-Navigation is a joined row of 30px-high Spleen UI buttons. Adjacent items share borders; the current page is the same hard ivory inversion used by every other selected state. The header’s 510×30 empty bay remains unlabelled and does not become a logo placeholder.
+Navigation is a joined row of mechanical MAIN / ABOUT keys. Adjacent items share borders; the current page uses the same hard ivory inversion as every other selected state. The supplied primary wordmark occupies the remaining top rail without becoming oversized.
 
 ### Rotary Controls
 
-The primary macro knob is 66px with a 9px ivory ring, a dashed outer calibration orbit, and a 276-degree operating sweep from −138 degrees. Source gain is a reduced 38px version with a 6px ring. The invisible range input extends over the ring so the visual silhouette stays mechanical while the hit area remains forgiving.
+The shared PRESSURE knob is 58px with an 8px ivory ring, a dashed outer calibration orbit, and a conventional 270° sweep from lower-left through straight up to lower-right. FAULT, BLEED, and ETCH use this exact component. Vertical dragging uses 180 logical pixels for full travel; Shift drag is 6× finer. Double-click resets and the wheel adjusts. SOURCE TRIM remains a horizontal gain slider because its job differs.
+
+### Control Families
+
+- **Selection keys:** MAIN / ABOUT, STACK, VOICES, and FAULT's FLIP / DUST / WARP mutations use the same hard ivory active inversion and dark inactive state.
+- **Action keys:** IMPORT, REMOVE, and CLEAR use the shared dashed hardware-action treatment and never imply selected state.
+- **Effect enables:** FAULT, BLEED, and ETCH use one 22px square status switch at the far-right edge of each module header.
+- **Creative macro:** Each creative engine presents `PRESSURE → knob → editable value`; the interface contract is shared while each DSP meaning remains specific.
+- **Source controls:** TUNE, DRIFT, and STRETCH are one stepper family. TRIM is a horizontal slider aligned to the same four-column control deck.
+- **Master controls:** VOL and PITCH are true sibling faders with identical tracks, caps, ticks, and editable-value baselines. Unity and zero are stronger ticks rather than duplicated endpoint labels.
 
 ### Display Chambers
 
@@ -227,15 +235,15 @@ Waveform, effect, spectral, and meter displays are true black instrument fields 
 
 ### Sample Rows
 
-Rows are exactly 30px high with a 20px square enable switch, an ellipsized IBM Plex Mono filename, and a compact action. Hover and selection raise the row one tonal step; selection also adds the two-pixel ivory inset bar.
+Rows are exactly 28px high with a 20px square enable switch, an ellipsized Cozette filename, and a compact action. Hover and selection raise the row one tonal step; selection also adds the two-pixel ivory inset bar.
 
 ## Do's and Don'ts
 
 ### Do:
 
-- **Do** preserve the 960×647 logical canvas and the 75/100/125/150 whole-interface scale presets.
-- **Do** keep top-level gaps at 4px, module headers at 28px, and sample rows at 30px.
-- **Do** reserve the header’s left equipment bay as intentionally empty and unbranded.
+- **Do** preserve the 1080×675 logical canvas and the 75/100/125/150 whole-interface scale presets.
+- **Do** keep top-level gaps at 4px, module headers at 28px, and sample rows at 28px.
+- **Do** use the supplied primary mark in the header and both creator marks on ABOUT without redrawing them.
 - **Do** use hard black/ivory inversion for active, selected, and hover states.
 - **Do** render waveform and telemetry canvases with image smoothing disabled.
 - **Do** let real signal telemetry be the only continuous motion on the surface.
@@ -246,5 +254,5 @@ Rows are exactly 30px high with a 20px square enable switch, an ellipsized IBM P
 - **Don't** introduce accent hues, gradients outside the recessed equipment bay, or more white variants.
 - **Don't** round panels, buttons, fields, rows, readouts, or display chambers.
 - **Don't** add ambient animation, decorative pulses, loading shimmer, or easing to audio controls.
-- **Don't** add a wordmark, subtitle, icon, or placeholder copy to the empty header bay.
-- **Don't** soften construction with blurred shadows, glass effects, glow, or anti-aliased canvas graphics.
+- **Don't** replace supplied raster marks with text, vectors, or invented artwork.
+- **Don't** extend scanlines, vignette, glass, or phosphor glow beyond actual graphical display windows.

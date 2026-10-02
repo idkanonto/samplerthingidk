@@ -4,7 +4,7 @@ import App from './App'
 import './styles.css'
 
 const updateEditorScale = () => {
-  const scale = Math.min(window.innerWidth / 960, window.innerHeight / 647)
+  const scale = Math.min(window.innerWidth / 1080, window.innerHeight / 675)
   document.documentElement.style.setProperty('--editor-scale', String(scale))
 }
 

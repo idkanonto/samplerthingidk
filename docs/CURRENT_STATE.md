@@ -13,8 +13,8 @@ verified: 2026-09-30
 
 ## Verified focused slice/source processing update
 
-- FAULT's only random choices are PITCH, BITCRUSH, and REVERSE. The mutation-mask bit positions remain 1/2/4 for saved-state continuity.
-- PITCH directly reads its captured slice at `2^(semitones/12)` for a non-zero integer interval from -12 through +12. It has no overlap-add, formant preservation, stretch compensation, or fixed-duration path; +12 produces half duration and -12 produces double duration.
+- FAULT's only random choices are RESAMPLE, BITCRUSH, and REVERSE. The mutation-mask bit positions remain 1/2/4 for saved-state continuity.
+- RESAMPLE chooses exactly −12 or +12 per event with approximately equal probability and directly reads its captured slice at 0.5× or 2×. It has no overlap-add, formant preservation, stretch compensation, or fixed-duration path; +12 produces half duration and −12 produces double duration.
 - BITCRUSH retains the existing 12/10/8/6-bit and 2×/3×/4×/6× quantize/hold profiles. REVERSE reads only the captured slice backward and keeps that slice's duration.
 - Every source persists an independent 0.25×–2× Stretch speed. Signalsmith prepares a pitch-preserving immutable source version on the background worker; the audio callback only reads the published version.
 - MASTER VOL remains automatable from 0–125%; 0% maps to exact zero gain and is displayed as `−∞`. Dedicated mute UI, bridge/state, and DSP gain are removed.
@@ -33,7 +33,7 @@ Commit `a5832bce33bf234cada5e88778af46e0f0365893` replaces the active SCRAMBLE/M
 - PULL uses a new fixed-storage short-window Hann overlap-add renderer; DUST uses fixed 12/10/8/6-bit profiles with 2×/3×/4×/6× holds; BEND uses fixed-overlap duration-preserving grain pitch shifts at ±5, ±7, and ±12 semitones.
 - The bridge publishes only real FAULT mutation/division/progress telemetry. The UI visualizer renders those values rather than unrelated animation.
 - POOL drop highlighting covers the intended panel. WebView2 additional objects are the only native file-drop route, preventing duplicate imports from the retired editor-level target.
-- The frontend production build passes locally and packages Spleen 8×16/6×12 plus IBM Plex Mono regular/semibold. The final Impeccable detector returned no findings, and a browser render was inspected at the fixed instrument canvas.
+- The frontend production build passes locally and packages Spleen 8×16/6×12 plus Cozette 1.30.0. The fixed 1080×675 browser render was inspected with the primary mark in the header, creator marks on ABOUT, recessed CRT windows, and the shared 270° vertical-drag knob.
 - The Windows VST3, Standalone, CTest suite, listening-render checks, and artifact structure passed. Artifact [`recompiler-dll-Windows-VST3`](https://github.com/idkanonto/samplerthingidk/actions/runs/36434374667/artifacts/10975167663) is 3,456,661 bytes with GitHub SHA-256 `6da17e212a86a0193ecc1b5ab1e40b5be66b9adc9545cce510e71eda6d57d7f2`.
 - Actual WebView2 drag/drop, DAW automation, and subjective FAULT listening remain hands-on checks.
 

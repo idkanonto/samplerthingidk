@@ -97,7 +97,10 @@ jobs:
             'JUCE_LICENSE.md',
             'SIGNALSMITH_LINEAR_LICENSE.txt',
             'SPLEEN_BSD.txt',
-            'IBM_PLEX_OFL.txt'
+            'COZETTE_MIT.txt',
+            'REACT_MIT.txt',
+            'REACT_DOM_MIT.txt',
+            'WEBVIEW2_LICENSE.txt'
           )
           foreach ($noticeName in $requiredNotices) {
             $notice = Join-Path $plugin "Contents\Resources\$noticeName"

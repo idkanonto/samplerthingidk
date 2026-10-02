@@ -18,7 +18,7 @@ status: approved
 6. Source TRIM.
 7. Internal click-safe envelope, boundary fade, and voice-steal crossfade.
 8. Mix up to 16 voices.
-9. FAULT deterministic tempo-aligned PITCH, BITCRUSH, or slice-local REVERSE.
+9. FAULT deterministic tempo-aligned RESAMPLE (exactly −12 or +12 varispeed), BITCRUSH, or slice-local REVERSE.
 10. ETCH spectral mask.
 11. BLEED crystalline grain cloud.
 12. MASTER: sample-smoothed perceptual VOL gain (0–125%, with 0% / `−∞` true silence).

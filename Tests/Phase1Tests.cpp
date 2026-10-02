@@ -1439,7 +1439,7 @@ void testFaultProcessor()
     check(buffersEqual(first, second), "FAULT fixed-seed rendering was not deterministic");
     check(!buffersEqual(dry, first), "FAULT maximum pressure produced no mutations");
 
-    for (const auto only : { randomchop::FaultMutations::pitch,
+    for (const auto only : { randomchop::FaultMutations::resample,
                              randomchop::FaultMutations::bitcrush,
                              randomchop::FaultMutations::reverse })
     {
@@ -1452,13 +1452,13 @@ void testFaultProcessor()
         processor.prepare(48000.0);
         processor.setSeed(4200 + only);
         processor.process(signal, boundaries, { 100.0f, only });
-        const auto selected = only == randomchop::FaultMutations::pitch
-            ? randomchop::FaultMutation::pitch
+        const auto selected = only == randomchop::FaultMutations::resample
+            ? randomchop::FaultMutation::resample
             : only == randomchop::FaultMutations::bitcrush
                 ? randomchop::FaultMutation::bitcrush : randomchop::FaultMutation::reverse;
         check(processor.getMutationCount(selected) > 0,
               "FAULT single-mutation selection never activated");
-        for (const auto other : { randomchop::FaultMutation::pitch,
+        for (const auto other : { randomchop::FaultMutation::resample,
                                   randomchop::FaultMutation::bitcrush,
                                   randomchop::FaultMutation::reverse })
             if (other != selected)
@@ -1472,28 +1472,27 @@ void testFaultProcessor()
                 check(std::isfinite(signal.getSample(channel, frame)),
                       "FAULT produced a non-finite sample");
 
-        if (selected == randomchop::FaultMutation::pitch)
+        if (selected == randomchop::FaultMutation::resample)
         {
-            check(processor.getLastPitchSemitones() >= -12
-                      && processor.getLastPitchSemitones() <= 12
-                      && processor.getLastPitchSemitones() != 0
+            check((processor.getLastResampleSemitones() == -12
+                   || processor.getLastResampleSemitones() == 12)
                       && processor.getLastPlaybackFrames()
-                          == randomchop::faultPitchPlaybackFrames(
+                          == randomchop::faultResamplePlaybackFrames(
                               processor.getLastSourceFrames(),
-                              processor.getLastPitchSemitones()),
-                  "FAULT Pitch did not use direct rate-coupled resampling");
+                              processor.getLastResampleSemitones()),
+                  "FAULT Resample did not use octave rate-coupled varispeed");
         }
         if (selected == randomchop::FaultMutation::reverse)
             check(processor.getLastPlaybackFrames() == processor.getLastSourceFrames(),
                   "FAULT Reverse changed the selected slice duration");
     }
 
-    check(std::abs(randomchop::faultPitchPlaybackRate(12) - 2.0) < 0.000001
-              && randomchop::faultPitchPlaybackFrames(48000, 12) == 24000,
-          "+12 semitone FAULT Pitch was not one octave up at twice speed/half duration");
-    check(std::abs(randomchop::faultPitchPlaybackRate(-12) - 0.5) < 0.000001
-              && randomchop::faultPitchPlaybackFrames(48000, -12) == 96000,
-          "-12 semitone FAULT Pitch was not one octave down at half speed/double duration");
+    check(std::abs(randomchop::faultResamplePlaybackRate(12) - 2.0) < 0.000001
+              && randomchop::faultResamplePlaybackFrames(48000, 12) == 24000,
+          "+12 semitone FAULT Resample was not one octave up at twice speed/half duration");
+    check(std::abs(randomchop::faultResamplePlaybackRate(-12) - 0.5) < 0.000001
+              && randomchop::faultResamplePlaybackFrames(48000, -12) == 96000,
+          "-12 semitone FAULT Resample was not one octave down at half speed/double duration");
 }
 
 void testCreativeFeatureMenus()

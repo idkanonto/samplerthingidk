@@ -10,30 +10,31 @@
 
 namespace randomchop
 {
-inline double faultPitchPlaybackRate(int semitones) noexcept
+inline double faultResamplePlaybackRate(int semitones) noexcept
 {
     return std::exp2(static_cast<double>(std::clamp(semitones, -12, 12)) / 12.0);
 }
 
-inline int faultPitchPlaybackFrames(int sourceFrames, int semitones) noexcept
+inline int faultResamplePlaybackFrames(int sourceFrames, int semitones) noexcept
 {
     return std::max(1, static_cast<int>(std::ceil(
         static_cast<double>(std::max(1, sourceFrames))
-            / faultPitchPlaybackRate(semitones))));
+            / faultResamplePlaybackRate(semitones))));
 }
 
 namespace FaultMutations
 {
-constexpr uint32_t pitch = 1u << 0;
+// Bit positions are intentionally stable for backward-compatible state restore.
+constexpr uint32_t resample = 1u << 0;
 constexpr uint32_t bitcrush = 1u << 1;
 constexpr uint32_t reverse = 1u << 2;
-constexpr uint32_t all = pitch | bitcrush | reverse;
+constexpr uint32_t all = resample | bitcrush | reverse;
 }
 
 enum class FaultMutation : uint8_t
 {
     none = 0,
-    pitch = 1,
+    resample = 1,
     bitcrush = 2,
     reverse = 3
 };
@@ -61,7 +62,7 @@ public:
     bool isMutating() const noexcept { return mutation != FaultMutation::none; }
     uint64_t getMutationCount(FaultMutation type) const noexcept;
     uint32_t getObservedDivisionMask() const noexcept { return observedDivisionMask; }
-    int getLastPitchSemitones() const noexcept { return pitchSemitones; }
+    int getLastResampleSemitones() const noexcept { return resampleSemitones; }
     int getLastSourceFrames() const noexcept { return lastMutationSourceFrames; }
     int getLastPlaybackFrames() const noexcept { return lastMutationPlaybackFrames; }
 
@@ -93,8 +94,8 @@ private:
     int dustHoldFrames = 2;
     int dustCountdown = 0;
     std::array<float, 2> dustHeld {};
-    double pitchRatio = 1.0;
-    int pitchSemitones = 0;
+    double resampleRatio = 1.0;
+    int resampleSemitones = 0;
     int lastMutationSourceFrames = 0;
     int lastMutationPlaybackFrames = 0;
     FaultMutation mutation = FaultMutation::none;

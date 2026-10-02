@@ -43,12 +43,18 @@ std::optional<juce::WebBrowserComponent::Resource> makeResource(
     if (path == "/assets/spleen-6x12.woff2")
         return juce::WebBrowserComponent::Resource {
             bytesFrom(BinaryData::spleen6x12_woff2, BinaryData::spleen6x12_woff2Size), "font/woff2" };
-    if (path == "/assets/ibm-plex-mono-regular.woff2")
+    if (path == "/assets/cozette-vector.woff2")
         return juce::WebBrowserComponent::Resource {
-            bytesFrom(BinaryData::ibmplexmonoregular_woff2, BinaryData::ibmplexmonoregular_woff2Size), "font/woff2" };
-    if (path == "/assets/ibm-plex-mono-semibold.woff2")
+            bytesFrom(BinaryData::cozettevector_woff2, BinaryData::cozettevector_woff2Size), "font/woff2" };
+    if (path == "/assets/recompiler-logo.png")
         return juce::WebBrowserComponent::Resource {
-            bytesFrom(BinaryData::ibmplexmonosemibold_woff2, BinaryData::ibmplexmonosemibold_woff2Size), "font/woff2" };
+            bytesFrom(BinaryData::recompilerlogo_png, BinaryData::recompilerlogo_pngSize), "image/png" };
+    if (path == "/assets/damnnprodigy-logo.png")
+        return juce::WebBrowserComponent::Resource {
+            bytesFrom(BinaryData::damnnprodigylogo_png, BinaryData::damnnprodigylogo_pngSize), "image/png" };
+    if (path == "/assets/shadx2-logo.png")
+        return juce::WebBrowserComponent::Resource {
+            bytesFrom(BinaryData::shadx2logo_png, BinaryData::shadx2logo_pngSize), "image/png" };
     return std::nullopt;
 }
 }
@@ -227,6 +233,7 @@ juce::var RandomChopSamplerWebViewEditor::createVisualisationState() const
     object->setProperty("faultMutation", processor.getFaultMutation());
     object->setProperty("faultDivision", processor.getFaultDivision());
     object->setProperty("faultProgress", processor.getFaultProgress());
+    object->setProperty("faultResampleSemitones", processor.getFaultResampleSemitones());
     object->setProperty("smearActivity", processor.getSmearVisualActivity());
     object->setProperty("smearGain", processor.getSmearVisualGain());
     object->setProperty("spectralScan", processor.getSpectralScanPosition());
@@ -406,8 +413,8 @@ void RandomChopSamplerWebViewEditor::addFiles(const juce::StringArray& files)
 void RandomChopSamplerWebViewEditor::applyEditorScale()
 {
     static constexpr std::array<juce::Point<int>, 4> sizes {
-        juce::Point<int> { 720, 485 }, juce::Point<int> { 960, 647 },
-        juce::Point<int> { 1200, 809 }, juce::Point<int> { 1440, 971 }
+        juce::Point<int> { 810, 506 }, juce::Point<int> { 1080, 675 },
+        juce::Point<int> { 1350, 844 }, juce::Point<int> { 1620, 1013 }
     };
     appliedUiScale = processor.getUiScaleIndex();
     const auto size = sizes[static_cast<size_t>(appliedUiScale)];

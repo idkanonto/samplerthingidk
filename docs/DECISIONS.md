@@ -10,6 +10,15 @@ status: active
 
 These decisions govern implementation together with [[PRODUCT_SPEC_V2]].
 
+## Release-candidate identity and FAULT lock (2026-10-01)
+
+- Lock the WebView editor to 1080×675 logical pixels with 75/100/125/150 preset scaling.
+- Use the supplied RECOMPILER mark in the header and the supplied damnnprodigy and shadx2 marks on ABOUT.
+- Replace SETTINGS with the typed, scrollable ABOUT manual; keep UI scale and creative-seed access there and move effect bypasses into module headers.
+- Use Spleen for module/control naming and Cozette 1.30.0 for values, counters, metadata, and technical copy.
+- Rename the bit-1 FAULT choice from PITCH to RESAMPLE without changing its persisted mask position. RESAMPLE is exactly −12 or +12 semitone varispeed, approximately 50/50 per event.
+- Standardize every rotary on one 270° component with 180 logical pixels of vertical full travel, 6× Shift fine control, double-click reset, and wheel adjustment.
+
 ## Accepted
 
 - Preserve the sampler core, stable parameter IDs that still exist, source identity, immutable prepared data, and deferred non-realtime reclamation.

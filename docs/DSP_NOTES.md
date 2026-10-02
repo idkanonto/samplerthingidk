@@ -9,7 +9,7 @@ status: active
 # DSP Notes
 
 > [!important] Active final-pass chain
-> FAULT → ETCH → BLEED → MASTER supersedes the historical SCRAMBLE/MELT sections below. `FaultProcessor` owns a prepared 18.1-second stereo history so a maximum captured slice can survive a complete -12-semitone half-speed replay without callback copying. A dedicated allocation-free 1/16 clock groups ticks into 1/2, 1/4, 1/8, or 1/16 segments. PITCH uses direct interpolated variable-rate reads, BITCRUSH keeps the established scalar quantize/hold path, and REVERSE reads only the captured slice backward. All share six-millisecond equal-power edges. The callback performs no file I/O, locks, dynamic allocation, formant processing, or time compensation.
+> FAULT → ETCH → BLEED → MASTER supersedes the historical SCRAMBLE/MELT sections below. `FaultProcessor` owns a prepared 18.1-second stereo history so a maximum captured slice can survive a complete −12-semitone half-speed replay without callback copying. A dedicated allocation-free 1/16 clock groups ticks into 1/2, 1/4, 1/8, or 1/16 segments. RESAMPLE chooses exactly −12 or +12 and uses direct interpolated variable-rate reads, BITCRUSH keeps the established scalar quantize/hold path, and REVERSE reads only the captured slice backward. All share six-millisecond equal-power edges. The callback performs no file I/O, locks, dynamic allocation, formant processing, or time compensation.
 
 ## Realtime contract
 

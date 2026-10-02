@@ -198,7 +198,7 @@ private:
     juce::TextButton addButton { "+ ADD" }, sampleMenuButton { "=" };
     juce::TextButton previousSourceButton { "<" }, nextSourceButton { ">" };
     juce::TextButton closeEditorButton { "X" };
-    juce::TextButton mainTab { "MAIN" }, fxTab { "FX" }, seqTab { "SEQ" }, settingsTab { "SETTINGS" };
+    juce::TextButton mainTab { "MAIN" }, fxTab { "FX" }, seqTab { "SEQ" }, settingsTab { "ABOUT" };
     juce::TextButton zoomInButton { "+" }, zoomOutButton { "-" }, focusRegionButton { "[]" }, fitButton { "FIT" };
     juce::TextButton randomSourceButton { "DICE" }, regenerateButton { "R" };
     juce::TextButton moreButton { "..." };
@@ -222,7 +222,7 @@ private:
     CreativeVisualizer scrambleVisual { CreativeVisualizer::Kind::scramble };
     CreativeVisualizer meltVisual { CreativeVisualizer::Kind::melt };
     CreativeVisualizer smearVisual { CreativeVisualizer::Kind::smear };
-    juce::ToggleButton midiPitch { "CHORDS" };
+    juce::ToggleButton midiPitch { "STACK" };
     juce::Slider output;
     OutputMeterComponent outputMeter;
     juce::Slider scrambleAmount, meltAmount, spectralDepth, smearAmount;

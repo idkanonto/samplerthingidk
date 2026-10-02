@@ -94,8 +94,10 @@ set(frontend_dist_files
     "${frontend_directory}/dist/assets/app.css"
     "${frontend_directory}/dist/assets/spleen-8x16.woff2"
     "${frontend_directory}/dist/assets/spleen-6x12.woff2"
-    "${frontend_directory}/dist/assets/ibm-plex-mono-regular.woff2"
-    "${frontend_directory}/dist/assets/ibm-plex-mono-semibold.woff2")
+    "${frontend_directory}/dist/assets/cozette-vector.woff2"
+    "${frontend_directory}/dist/assets/recompiler-logo.png"
+    "${frontend_directory}/dist/assets/damnnprodigy-logo.png"
+    "${frontend_directory}/dist/assets/shadx2-logo.png")
 
 if (RECOMPILER_REBUILD_FRONTEND)
     find_program(NPM_EXECUTABLE npm)
@@ -116,11 +118,14 @@ if (RECOMPILER_REBUILD_FRONTEND)
                 "${frontend_directory}/src/VisualCanvases.tsx"
                 "${frontend_directory}/src/juceBridge.ts"
                 "${frontend_directory}/src/main.tsx"
+                "${frontend_directory}/src/vite-env.d.ts"
                 "${frontend_directory}/src/styles.css"
                 "${frontend_directory}/src/assets/spleen-8x16.woff2"
                 "${frontend_directory}/src/assets/spleen-6x12.woff2"
-                "${frontend_directory}/src/assets/ibm-plex-mono-regular.woff2"
-                "${frontend_directory}/src/assets/ibm-plex-mono-semibold.woff2"
+                "${frontend_directory}/src/assets/cozette-vector.woff2"
+                "${frontend_directory}/src/assets/recompiler-logo.png"
+                "${frontend_directory}/src/assets/damnnprodigy-logo.png"
+                "${frontend_directory}/src/assets/shadx2-logo.png"
             BYPRODUCTS ${frontend_dist_files}
             COMMENT "Building embedded React WebView frontend"
             VERBATIM)
@@ -179,8 +184,17 @@ add_custom_command(TARGET RandomChopSampler_VST3 POST_BUILD
         "${CMAKE_CURRENT_SOURCE_DIR}/Licenses/SPLEEN_BSD.txt"
         "$<TARGET_FILE_DIR:RandomChopSampler_VST3>/../Resources/SPLEEN_BSD.txt"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_CURRENT_SOURCE_DIR}/Licenses/IBM_PLEX_OFL.txt"
-        "$<TARGET_FILE_DIR:RandomChopSampler_VST3>/../Resources/IBM_PLEX_OFL.txt"
+        "${CMAKE_CURRENT_SOURCE_DIR}/Licenses/COZETTE_MIT.txt"
+        "$<TARGET_FILE_DIR:RandomChopSampler_VST3>/../Resources/COZETTE_MIT.txt"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/Licenses/REACT_MIT.txt"
+        "$<TARGET_FILE_DIR:RandomChopSampler_VST3>/../Resources/REACT_MIT.txt"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/Licenses/REACT_DOM_MIT.txt"
+        "$<TARGET_FILE_DIR:RandomChopSampler_VST3>/../Resources/REACT_DOM_MIT.txt"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/Licenses/WEBVIEW2_LICENSE.txt"
+        "$<TARGET_FILE_DIR:RandomChopSampler_VST3>/../Resources/WEBVIEW2_LICENSE.txt"
     COMMENT "Copying third-party notices into the VST3 bundle")
 
 if (BUILD_TESTING)

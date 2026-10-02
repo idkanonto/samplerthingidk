@@ -241,6 +241,8 @@ void RandomChopSamplerAudioProcessor::processBlock(
     faultDivision.store(faultProcessor.getCurrentDivisionDenominator(),
                         std::memory_order_relaxed);
     faultProgress.store(faultProcessor.getSegmentProgress(), std::memory_order_relaxed);
+    faultResampleSemitones.store(faultProcessor.getLastResampleSemitones(),
+                                 std::memory_order_relaxed);
     spectralDrawProcessor.process(buffer, spectralMaskStore,
         { isEffectEnabled(2) ? parameters.getRawParameterValue(IDs::spectralDepth)->load() : 0.0f,
           randomchop::SpectralDrawProcessor::automaticCycleChoice(lastGridBoundaries.bpm),

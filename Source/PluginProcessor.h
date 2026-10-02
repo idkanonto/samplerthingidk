@@ -60,6 +60,10 @@ public:
     {
         return faultProgress.load(std::memory_order_relaxed);
     }
+    int getFaultResampleSemitones() const noexcept
+    {
+        return faultResampleSemitones.load(std::memory_order_relaxed);
+    }
     // Native-editor compatibility shims. The retired engines are never called
     // from processBlock; these values only keep the optional fallback editor
     // source-compatible while its old panels remain hidden.
@@ -180,6 +184,7 @@ private:
     std::atomic<int> faultMutation { 0 };
     std::atomic<int> faultDivision { 16 };
     std::atomic<float> faultProgress { 0.0f };
+    std::atomic<int> faultResampleSemitones { 0 };
     std::atomic<float> smearVisualActivity { 0.0f };
     std::atomic<float> smearVisualGain { 0.0f };
     std::atomic<uint64_t> previewRequestId { 0 };

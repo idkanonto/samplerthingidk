@@ -2,18 +2,26 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { sendPluginCommand, type VisualisationState } from './juceBridge'
 
 const setup = (canvas: HTMLCanvasElement, width: number, height: number) => {
-  if (canvas.width !== width) canvas.width = width
-  if (canvas.height !== height) canvas.height = height
+  const bounds = canvas.getBoundingClientRect()
+  const cssWidth = Math.max(1, bounds.width || width)
+  const cssHeight = Math.max(1, bounds.height || height)
+  const pixelRatio = Math.max(1, window.devicePixelRatio || 1)
+  const backingWidth = Math.max(1, Math.round(cssWidth * pixelRatio))
+  const backingHeight = Math.max(1, Math.round(cssHeight * pixelRatio))
+  if (canvas.width !== backingWidth) canvas.width = backingWidth
+  if (canvas.height !== backingHeight) canvas.height = backingHeight
   const context = canvas.getContext('2d')
   if (!context) return null
+  context.setTransform(pixelRatio * cssWidth / width, 0, 0,
+    pixelRatio * cssHeight / height, 0, 0)
   context.imageSmoothingEnabled = false
-  context.fillStyle = '#111210'
+  context.fillStyle = '#101010'
   context.fillRect(0, 0, width, height)
   return context
 }
 
 const grid = (context: CanvasRenderingContext2D, width: number, height: number, columns: number, rows: number) => {
-  context.fillStyle = '#3e3f3b'
+  context.fillStyle = '#3e3e3e'
   for (let x = 1; x < columns; x += 1) context.fillRect(Math.round(x * width / columns), 0, 1, height)
   for (let y = 1; y < rows; y += 1) context.fillRect(0, Math.round(y * height / rows), width, 1)
 }
@@ -27,7 +35,7 @@ export function WaveformCanvas({ waveform }: { waveform?: [number, number][] }) 
     if (!context) return
     grid(context, 256, 96, 8, 4)
     if (!waveform?.length) return
-    context.fillStyle = '#eeede5'
+    context.fillStyle = '#eeeeee'
     waveform.forEach((pair, index) => {
       const x0 = Math.floor(index * 256 / waveform.length)
       const x1 = Math.max(x0 + 1, Math.ceil((index + 1) * 256 / waveform.length))
@@ -43,14 +51,15 @@ export function FaultCanvas({ pressure, visualisation }: {
   pressure: number, visualisation: VisualisationState
 }) {
   const ref = useRef<HTMLCanvasElement>(null)
-  const history = useRef<{ mutation: number, division: number }[]>([])
+  const history = useRef<{ mutation: number, division: number, direction: number }[]>([])
   const previousProgress = useRef(0)
   useEffect(() => {
     const progress = Math.max(0, Math.min(1, visualisation.faultProgress || 0))
     if (progress < previousProgress.current) {
       history.current = [...history.current.slice(-11), {
         mutation: visualisation.faultMutation || 0,
-        division: visualisation.faultDivision || 16
+        division: visualisation.faultDivision || 16,
+        direction: visualisation.faultResampleSemitones || 0
       }]
     }
     previousProgress.current = progress
@@ -61,37 +70,42 @@ export function FaultCanvas({ pressure, visualisation }: {
     grid(context, 256, 140, 16, 8)
     const segments = [...history.current, {
       mutation: visualisation.faultMutation || 0,
-      division: visualisation.faultDivision || 16
+      division: visualisation.faultDivision || 16,
+      direction: visualisation.faultResampleSemitones || 0
     }].slice(-12)
     const blockWidth = 256 / 12
     segments.forEach((segment, index) => {
       const x = Math.floor(index * blockWidth) + 2
       const width = Math.max(3, Math.floor(blockWidth) - 4)
-      context.fillStyle = segment.mutation === 0 ? '#343630' : '#eeede5'
+      context.fillStyle = segment.mutation === 0 ? '#343434' : '#eeeeee'
       if (segment.mutation === 1) {
-        for (let y = 18; y < 122; y += 12) context.fillRect(x, y, width, 2)
-        for (let offset = 0; offset < width; offset += 5) context.fillRect(x + offset, 18 + offset * 2, 2, 80)
+        const cycles = segment.direction > 0 ? 5 : 1.5
+        for (let px = 0; px < width; px += 2) {
+          const y = 70 - Math.round(Math.sin((px / Math.max(1, width)) * Math.PI * cycles) * 31)
+          context.fillRect(x + px, y, segment.direction > 0 ? 2 : 4, 3)
+        }
       } else if (segment.mutation === 2) {
         for (let y = 17; y < 124; y += 7) for (let px = 0; px < width; px += 4)
           if ((px + y + index) % 3 !== 0) context.fillRect(x + px, y, 2, 3)
       } else if (segment.mutation === 3) {
-        for (let px = 0; px < width; px += 2) {
-          const y = 70 - Math.round(Math.sin((px / Math.max(1, width)) * Math.PI * 3) * 34)
-          context.fillRect(x + px, y, 3, 3)
-        }
+        for (let px = 0; px < width; px += 2) context.fillRect(x + width - px - 2,
+          70 - Math.round(Math.sin(px * .34) * 33), 2, 3)
       } else context.fillRect(x, 68, width, 3)
-      context.font = '600 9px "IBM Plex Mono Local", monospace'
-      context.fillStyle = '#96958d'
+      context.font = '10px "Cozette Local", monospace'
+      context.fillStyle = '#969696'
       context.fillText(`1/${segment.division}`, x, 134)
     })
     const currentX = Math.floor((segments.length - 1) * blockWidth) + 1
-    context.fillStyle = '#eeede5'
+    context.fillStyle = '#eeeeee'
     context.fillRect(currentX, 6, Math.max(1, Math.floor(blockWidth * progress)), 4)
-    context.fillStyle = '#96958d'
-    context.font = '600 9px "IBM Plex Mono Local", monospace'
-    const names = ['DRY', 'PITCH', 'BITCRUSH', 'REVERSE']
-    context.fillText(`${names[visualisation.faultMutation] ?? 'DRY'}  ${Math.round(pressure)}%`, 5, 12)
-  }, [pressure, visualisation.faultDivision, visualisation.faultMutation, visualisation.faultProgress])
+    context.fillStyle = '#969696'
+    context.font = '10px "Cozette Local", monospace'
+    const names = ['DRY', 'WARP', 'DUST', 'FLIP']
+    const direction = visualisation.faultMutation === 1
+      ? ` ${visualisation.faultResampleSemitones > 0 ? '+12' : '−12'}` : ''
+    context.fillText(`${names[visualisation.faultMutation] ?? 'DRY'}${direction}  ${Math.round(pressure)}%`, 5, 12)
+  }, [pressure, visualisation.faultDivision, visualisation.faultMutation,
+    visualisation.faultProgress, visualisation.faultResampleSemitones])
   return <canvas ref={ref} className="pixel-canvas fault-canvas"
     aria-label="Live Fault segment activity, mutation type, division, and progress" />
 }
@@ -116,7 +130,7 @@ export function EffectCanvas({ amount, visualisation }: {
       const current = data.current
       const telemetry = current.visualisation
       const strength = Math.max(0, Math.min(1, current.amount / 100))
-      context.fillStyle = '#eeede5'
+      context.fillStyle = '#eeeeee'
       const activity = Math.max(strength * .45, telemetry.smearActivity)
       const gain = Math.max(.2, telemetry.smearGain)
       const liveTime = telemetry.smearActivity > .002 || telemetry.smearGain > .002 ? time : 0
@@ -200,13 +214,13 @@ export function SpectralDrawCanvas({ values, width, height, scan, spectrum, rese
       context.fillRect(x, y, 1, 1)
     }
     if (spectrum?.length) {
-      context.fillStyle = '#74756f'
+      context.fillStyle = '#747474'
       spectrum.forEach((value, index) => {
         const y = height - 1 - Math.floor(index * height / spectrum.length)
         context.fillRect(0, y, Math.max(1, Math.round(value * width * .18)), 1)
       })
     }
-    context.fillStyle = '#eeede5'
+    context.fillStyle = '#eeeeee'
     context.fillRect(Math.max(0, Math.min(width - 1, Math.floor(scan * width))), 0, 1, height)
     if (keyboardFocused) {
       const [x, y] = keyboardCursor.current
@@ -279,13 +293,13 @@ export function StereoMeterCanvas({ left, right }: { left: number, right: number
       levels.current[1] = Math.max(Math.max(0, peaks.current[1]), levels.current[1] * .86)
       const context = setup(canvas, 56, 142)
       if (!context) return
-      context.font = 'bold 8px monospace'; context.textAlign = 'center'; context.fillStyle = '#eeede5'
+      context.font = 'bold 8px monospace'; context.textAlign = 'center'; context.fillStyle = '#eeeeee'
       context.fillText('L', 17, 9); context.fillText('R', 41, 9)
       for (let channel = 0; channel < 2; channel += 1) {
         const db = 20 * Math.log10(Math.max(.004, levels.current[channel]))
         const lit = Math.round(Math.max(0, Math.min(1, (db + 48) / 52)) * 20)
         for (let segment = 0; segment < 20; segment += 1) {
-          context.fillStyle = segment < lit ? '#eeede5' : '#383936'
+          context.fillStyle = segment < lit ? '#eeeeee' : '#383838'
           context.fillRect(8 + channel * 24, 130 - segment * 5, 17, 3)
         }
       }

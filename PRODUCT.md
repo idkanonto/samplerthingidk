@@ -16,24 +16,24 @@ A JUCE VST3 and standalone random-sample instrument that turns a pool of up to 2
 
 ## Positioning
 
-Each note selects an enabled source with equal probability and routes it through the fixed creative chain FAULT → ETCH → BLEED → MASTER. The source pool, independent pitch-preserving source Stretch controls, and FAULT's deterministic tempo-aligned PITCH/BITCRUSH/REVERSE choices are the product's defining mechanism.
+Each note selects an enabled source with equal probability and routes it through the fixed creative chain FAULT → ETCH → BLEED → MASTER. The source pool, independent pitch-preserving source STRETCH controls, and FAULT's deterministic tempo-aligned REVERSE/BITCRUSH/RESAMPLE choices are the product's defining mechanism.
 
 ## Operating Context
 
-The interface runs as an offline embedded WebView inside JUCE on Windows and is also used by the standalone build. It is operated primarily with mouse, keyboard, and DAW automation at a fixed logical 960×647 canvas with discrete whole-interface scale presets.
+The interface runs as an offline embedded WebView inside JUCE on Windows and is also used by the standalone build. It is operated primarily with mouse, keyboard, and DAW automation at a fixed logical 1080×675 canvas with discrete whole-interface scale presets.
 
 ## Capabilities and Constraints
 
 - Preserve the native C++ audio engine, parameter automation, project-state persistence, and existing JUCE bridge contract.
-- Support WAV, AIFF/AIF, MP3, and FLAC sources, with source region, TUNE, DRIFT, TRIM, and enabled state. Legacy source-key metadata remains inert.
+- Support WAV, AIFF/AIF, MP3, and FLAC sources, with source region, TUNE, DRIFT, pitch-preserving STRETCH, TRIM, and enabled state. Legacy source-key metadata remains inert and cannot affect audio.
 - Preserve STACK, POLY/MONO, ETCH, BLEED, stereo metering, 0–125% VOL, and global PITCH. VOL at 0% is the sole output-muting mechanism.
 - The UI ships completely offline with bundled fonts and assets.
-- The composition is fixed at 960×647 logical pixels and scales uniformly only at 75%, 100%, 125%, and 150%.
+- The composition is fixed at 1080×675 logical pixels and scales uniformly only at 75%, 100%, 125%, and 150%.
 - Do not reintroduce retired DSP or controls and do not begin a later development pass during this visual reconstruction.
 
 ## Brand Commitments
 
-The host-visible product name and bundle identity remain `recompiler.dll`, but this interface intentionally reserves an empty branding zone and displays no product wordmark, subtitle, or placeholder logo. The approved reference geometry is the supplied concept image; the approved replacement identity is a dark, monochrome, engineered instrument panel rather than the prior light sketch treatment.
+The host-visible product name and bundle identity remain `recompiler.dll`. The supplied RECOMPILER raster mark anchors the workstation header; the supplied damnnprodigy and shadx2 marks belong to ABOUT. The approved identity is a dark monochrome sampling workstation with small recessed CRT signal windows, hard mechanical controls, and no website, game, neon-cyberpunk, or VHS styling.
 
 ## Evidence on Hand
 

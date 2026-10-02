@@ -56,6 +56,7 @@ export type VisualisationState = {
   faultMutation: number
   faultDivision: number
   faultProgress: number
+  faultResampleSemitones: number
   smearActivity: number
   smearGain: number
   spectralScan: number
@@ -82,9 +83,9 @@ declare global {
 const fallbackParameters: ParameterDescriptor[] = [
   { id: 'faultPressure', name: 'Fault Pressure', label: '%', value: 0, defaultValue: 0,
     min: 0, max: 100, interval: 1, numSteps: 101, isDiscrete: false, isBoolean: false },
-  { id: 'smearAmount', name: 'Bleed', label: '%', value: 28, defaultValue: 28,
+  { id: 'smearAmount', name: 'Bleed Pressure', label: '%', value: 0, defaultValue: 0,
     min: 0, max: 100, interval: 1, numSteps: 101, isDiscrete: false, isBoolean: false },
-  { id: 'spectralDepth', name: 'Etch Depth', label: '%', value: 71, defaultValue: 71,
+  { id: 'spectralDepth', name: 'Etch Pressure', label: '%', value: 0, defaultValue: 0,
     min: 0, max: 100, interval: 1, numSteps: 101, isDiscrete: false, isBoolean: false },
   { id: 'output', name: 'Vol', label: '%', value: 100, defaultValue: 100,
     min: 0, max: 125, interval: 0.1, numSteps: 1251, isDiscrete: false, isBoolean: false },
@@ -105,7 +106,7 @@ const parameterSubscribers = new Map<string, Set<(value: number) => void>>()
 let backendState: BackendState | null = null
 let visualisationState: VisualisationState = {
   outputPeak: 0, outputPeakLeft: 0, outputPeakRight: 0, voiceCount: 0,
-  faultMutation: 0, faultDivision: 16, faultProgress: 0,
+  faultMutation: 0, faultDivision: 16, faultProgress: 0, faultResampleSemitones: 0,
   smearActivity: 0, smearGain: 0, spectralScan: 0
 }
 const backendSubscribers = new Set<(state: BackendState) => void>()

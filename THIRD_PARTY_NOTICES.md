@@ -1,20 +1,46 @@
 # Third-Party Notices
 
+The RECOMPILER binaries and embedded editor incorporate the components below.
+Complete license texts are copied into the VST3 bundle's `Resources` directory.
+
+## JUCE 8.0.13
+
+Copyright © Raw Material Software Limited.
+
+JUCE is available under the GNU Affero General Public License v3.0 or a
+commercial JUCE license. See `JUCE_LICENSE.md` and ensure the release is built
+and distributed under the license selected by the product owner.
+
 ## Signalsmith Stretch
 
-recompiler.dll uses Signalsmith Stretch at commit `57b93f4e9206a089a45387eaa39bdc9f310d3308`.
+Pinned commit: `57b93f4e9206a089a45387eaa39bdc9f310d3308`.
 
-The VST3 bundle also includes `JUCE_LICENSE.md` for JUCE 8.0.13 and
-`SIGNALSMITH_LINEAR_LICENSE.txt` for Signalsmith Linear 0.3.1, the pinned
-transitive dependency used by Signalsmith Stretch. Those files are copied
-unchanged from their respective upstream source packages at build time.
+MIT License. Copyright © 2022 Geraint Luff / Signalsmith Audio Ltd. The full
+license text is reproduced below.
 
-The embedded editor bundles Spleen 2.2.0 by Frederic Cambus under the BSD
-2-Clause license and IBM Plex Mono 2.5.0 by IBM under the SIL Open Font License
-1.1. The unchanged licenses are included as `SPLEEN_BSD.txt` and
-`IBM_PLEX_OFL.txt` in the VST3 resources.
+## Signalsmith Linear 0.3.1
 
-MIT License
+MIT License. See `SIGNALSMITH_LINEAR_LICENSE.txt`.
+
+## React 18.3.1 and React DOM 18.3.1
+
+MIT License. Copyright © Meta Platforms, Inc. and affiliates. See
+`REACT_MIT.txt` and `REACT_DOM_MIT.txt`.
+
+## Microsoft WebView2 1.0.3485.44
+
+Microsoft software license terms. See `WEBVIEW2_LICENSE.txt`.
+
+## Spleen 2.2.0
+
+BSD 2-Clause License. Copyright © 2018–2025 Frederic Cambus. See
+`SPLEEN_BSD.txt`.
+
+## Cozette 1.30.0
+
+MIT License. Copyright © the Cozette contributors. See `COZETTE_MIT.txt`.
+
+## Signalsmith Stretch MIT license text
 
 Copyright (c) 2022 Geraint Luff / Signalsmith Audio Ltd.
 

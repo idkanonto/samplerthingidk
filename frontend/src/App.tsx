@@ -1,57 +1,135 @@
-import { type CSSProperties, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
+import { type CSSProperties, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type WheelEvent, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  sendPluginCommand,
-  postDroppedFiles,
-  type SampleSummary,
-  useBackendState,
-  usePluginParameter,
-  useVisualisationState
+  postDroppedFiles, sendPluginCommand, type SampleSummary, useBackendState,
+  usePluginParameter, useVisualisationState
 } from './juceBridge'
 import { EffectCanvas, FaultCanvas, SpectralDrawCanvas, StereoMeterCanvas, WaveformCanvas } from './VisualCanvases'
+import productLogo from './assets/recompiler-logo.png'
+import damnnprodigyLogo from './assets/damnnprodigy-logo.png'
+import shadx2Logo from './assets/shadx2-logo.png'
+
+declare const __RECOMPILER_VERSION__: string
+declare const __RECOMPILER_BUILD_ID__: string
+
+const KNOB_TRAVEL_PX = 180
+const FINE_DRAG_DIVISOR = 6
 
 function HatchFill() { return <span className="hatch-fill" aria-hidden="true" /> }
 function Divider() { return <span className="divider" aria-hidden="true" /> }
 
-function PixelButton({ children, active = false, className = '', onClick, title }: {
-  children: ReactNode, active?: boolean, className?: string,
+function PixelButton({ children, active = false, className = '', onClick, title, disabled = false }: {
+  children: ReactNode, active?: boolean, className?: string, disabled?: boolean,
   onClick?: (event: MouseEvent<HTMLButtonElement>) => void, title?: string
 }) {
-  return <button type="button" title={title} className={`pixel-button ${active ? 'active' : ''} ${className}`} onClick={onClick}>{children}</button>
+  return <button type="button" disabled={disabled} title={title}
+    className={`pixel-button ${active ? 'active' : ''} ${className}`} onClick={onClick}>{children}</button>
 }
 
 function PixelToggle({ id, left, right }: { id: string, left: string, right: string }) {
   const parameter = usePluginParameter(id)
-  const set = (value: number) => {
-    parameter.beginGesture(); parameter.setValue(value); parameter.endGesture()
-  }
+  const set = (value: number) => { parameter.beginGesture(); parameter.setValue(value); parameter.endGesture() }
   return <div className="pixel-toggle" role="group" aria-label={parameter.descriptor?.name ?? id}>
-    <PixelButton active={parameter.value < 0.5} onClick={() => set(0)}>{left}</PixelButton>
-    <PixelButton active={parameter.value >= 0.5} onClick={() => set(1)}>{right}</PixelButton>
+    <PixelButton active={parameter.value < .5} onClick={() => set(0)}>{left}</PixelButton>
+    <PixelButton active={parameter.value >= .5} onClick={() => set(1)}>{right}</PixelButton>
   </div>
 }
 
-function NumericReadout({ value, digits = 0, suffix = '' }: { value: number, digits?: number, suffix?: string }) {
-  return <output className="numeric-readout">{value.toFixed(digits)}{suffix}</output>
+function EditableValue({ label, value, min, max, step, digits = 0, suffix = '', disabled = false, format, onCommit }: {
+  label: string, value: number, min: number, max: number, step: number, digits?: number, suffix?: string,
+  disabled?: boolean, format?: (value: number) => string, onCommit: (value: number) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value.toFixed(digits))
+  const input = useRef<HTMLInputElement>(null)
+  const skipNextBlur = useRef(false)
+  useEffect(() => { if (!editing) setDraft(value.toFixed(digits)) }, [digits, editing, value])
+  const clamp = (next: number) => Math.max(min, Math.min(max, Number(next.toFixed(Math.max(digits, 3)))))
+  const begin = () => {
+    if (disabled || editing) return
+    setEditing(true); setDraft(value.toFixed(digits))
+    requestAnimationFrame(() => input.current?.select())
+  }
+  const commit = (candidate = draft) => {
+    const parsed = Number(candidate)
+    const next = clamp(Number.isFinite(parsed) ? parsed : value)
+    onCommit(next); setDraft(next.toFixed(digits)); setEditing(false)
+  }
+  const cancel = () => { skipNextBlur.current = true; setDraft(value.toFixed(digits)); setEditing(false); input.current?.blur() }
+  const nudge = (direction: number, fine: boolean) => {
+    const current = Number(editing ? draft : value)
+    const increment = step * (fine ? .1 : 1)
+    const next = clamp((Number.isFinite(current) ? current : value) + direction * increment)
+    setEditing(true); setDraft(next.toFixed(digits))
+  }
+  return <span className={`editable-value ${editing ? 'editing' : ''} ${disabled ? 'disabled' : ''}`}>
+    <input ref={input} aria-label={label} inputMode="decimal" disabled={disabled} readOnly={!editing}
+      value={editing ? draft : (format?.(value) ?? value.toFixed(digits))}
+      onClick={begin} onFocus={begin} onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => { if (skipNextBlur.current) skipNextBlur.current = false; else if (editing) commit() }} onKeyDown={(event) => {
+        if (event.key === 'Enter') { event.preventDefault(); commit() }
+        else if (event.key === 'Escape') { event.preventDefault(); cancel() }
+        else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+          event.preventDefault(); nudge(event.key === 'ArrowUp' ? 1 : -1, event.shiftKey)
+        }
+      }} />
+    {suffix && <span className="value-unit">{suffix}</span>}
+  </span>
 }
 
-function PixelKnob({ id, label }: { id: string, label: string }) {
+function RotaryKnob({ label, value, min, max, step, defaultValue, disabled = false, onBegin, onSet, onEnd }: {
+  label: string, value: number, min: number, max: number, step: number, defaultValue: number,
+  disabled?: boolean, onBegin: () => void, onSet: (value: number) => void, onEnd: () => void
+}) {
+  const drag = useRef<{ pointerId: number, startY: number, startValue: number } | null>(null)
+  const clamped = Math.max(min, Math.min(max, value))
+  const percent = (clamped - min) / Math.max(.001, max - min)
+  const quantise = (next: number) => {
+    const snapped = step > 0 ? min + Math.round((next - min) / step) * step : next
+    return Math.max(min, Math.min(max, Number(snapped.toFixed(6))))
+  }
+  const begin = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (disabled || event.button !== 0) return
+    event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId)
+    drag.current = { pointerId: event.pointerId, startY: event.clientY, startValue: clamped }
+    onBegin()
+  }
+  const move = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const active = drag.current
+    if (!active || active.pointerId !== event.pointerId) return
+    const divisor = event.shiftKey ? FINE_DRAG_DIVISOR : 1
+    onSet(quantise(active.startValue + (active.startY - event.clientY) * (max - min) / (KNOB_TRAVEL_PX * divisor)))
+  }
+  const finish = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!drag.current || drag.current.pointerId !== event.pointerId) return
+    drag.current = null
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+    onEnd()
+  }
+  const wheel = (event: WheelEvent<HTMLDivElement>) => {
+    if (disabled) return
+    event.preventDefault()
+    const increment = step > 0 ? step : (max - min) / 100
+    onBegin(); onSet(quantise(clamped + (event.deltaY < 0 ? increment : -increment) * (event.shiftKey ? .2 : 1))); onEnd()
+  }
+  return <div className={`pixel-knob ${disabled ? 'disabled' : ''}`} role="presentation" onPointerDown={begin} onPointerMove={move}
+      onPointerUp={finish} onPointerCancel={finish} onWheel={wheel}
+      onDoubleClick={() => { if (!disabled) { onBegin(); onSet(defaultValue); onEnd() } }}>
+      <span className="knob-pointer" style={{ '--knob-angle': `${-135 + percent * 270}deg` } as CSSProperties} />
+      <input aria-label={label} type="range" min={min} max={max} step={step || .1} value={clamped} disabled={disabled}
+        onKeyDown={onBegin} onKeyUp={onEnd} onChange={(event) => onSet(Number(event.target.value))} />
+  </div>
+}
+
+function PressureControl({ id, accessibleLabel }: { id: string, accessibleLabel: string }) {
   const parameter = usePluginParameter(id)
   const descriptor = parameter.descriptor
-  const min = descriptor?.min ?? 0
-  const max = descriptor?.max ?? 100
-  const percent = Math.max(0, Math.min(1, (parameter.value - min) / Math.max(0.001, max - min)))
-  const finish = () => parameter.endGesture()
-  return <div className="knob-control">
-    <div className="pixel-knob" style={{ '--knob-angle': `${-138 + percent * 276}deg` } as CSSProperties}>
-      <i />
-      <input aria-label={label} type="range" min={min} max={max} step={descriptor?.interval || 0.1}
-        value={parameter.value} onPointerDown={parameter.beginGesture}
-        onChange={(event) => parameter.setValue(Number(event.target.value))}
-        onPointerUp={finish} onPointerCancel={finish}
-        onKeyDown={parameter.beginGesture} onKeyUp={finish} />
-    </div>
-    <div className="knob-scale"><span>{min}</span><span>{max}</span></div>
-    <NumericReadout value={parameter.value} digits={0} />
+  const min = descriptor?.min ?? 0; const max = descriptor?.max ?? 100; const step = descriptor?.interval || 1
+  const commit = (value: number) => { parameter.beginGesture(); parameter.setValue(value); parameter.endGesture() }
+  return <div className="pressure-control"><b className="control-label">PRESSURE</b>
+    <RotaryKnob label={accessibleLabel} value={parameter.value} min={min} max={max} step={step}
+      defaultValue={descriptor?.defaultValue ?? 0} onBegin={parameter.beginGesture} onSet={parameter.setValue} onEnd={parameter.endGesture} />
+    <EditableValue label={`${accessibleLabel} exact value`} value={parameter.value} min={min} max={max} step={step}
+      onCommit={commit} />
   </div>
 }
 
@@ -59,12 +137,24 @@ function ModuleHeader({ children, action }: { children: ReactNode, action?: Reac
   return <div className="module-header"><strong>{children}</strong><HatchFill />{action}</div>
 }
 
-function RecompilerPanel({ title, children, className = '', headerAction }: { title?: string, children: ReactNode, className?: string, headerAction?: ReactNode }) {
+function RecompilerPanel({ title, children, className = '', headerAction }: {
+  title?: string, children: ReactNode, className?: string, headerAction?: ReactNode
+}) {
   return <section className={`recompiler-panel ${className}`}>{title && <ModuleHeader action={headerAction}>{title}</ModuleHeader>}{children}</section>
 }
 
+function EffectPower({ effect, enabled }: { effect: number, enabled: boolean }) {
+  return <button type="button" className={`effect-power ${enabled ? 'active' : ''}`}
+    aria-label={`${enabled ? 'Disable' : 'Enable'} effect`} aria-pressed={enabled}
+    onClick={() => sendPluginCommand('setEffectEnabled', { effect, enabled: !enabled })} />
+}
+
+function ActionButton({ children, className = '', onClick }: { children: ReactNode, className?: string, onClick: (event: MouseEvent<HTMLButtonElement>) => void }) {
+  return <button type="button" className={`action-button ${className}`} onClick={onClick}>{children}</button>
+}
+
 function PixelDisplay({ children, className = '' }: { children: ReactNode, className?: string }) {
-  return <div className={`pixel-display ${className}`}>{children}</div>
+  return <div className={`pixel-display crt-window ${className}`}>{children}</div>
 }
 
 function SampleRow({ sample, selected }: { sample: SampleSummary, selected: boolean }) {
@@ -73,81 +163,53 @@ function SampleRow({ sample, selected }: { sample: SampleSummary, selected: bool
     onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); select() } }}>
     <button className={`pixel-check ${sample.enabled ? 'checked' : ''}`} aria-label={`${sample.enabled ? 'Disable' : 'Enable'} ${sample.name}`}
       onClick={(event) => { event.stopPropagation(); sendPluginCommand('setSampleEnabled', { id: sample.id, enabled: !sample.enabled }) }}>
-      {sample.enabled ? '✓' : ''}
+      {sample.enabled ? 'X' : ''}
     </button>
     <span className={sample.missing ? 'missing' : ''}>{sample.name}</span>
-    <PixelButton className="remove-button" onClick={(event) => {
-      event.stopPropagation(); sendPluginCommand('removeSample', { id: sample.id })
-    }}>REMOVE</PixelButton>
+    <ActionButton className="remove-button" onClick={(event) => { event.stopPropagation(); sendPluginCommand('removeSample', { id: sample.id }) }}>REMOVE</ActionButton>
   </div>
 }
 
 function Waveform({ sample }: { sample?: SampleSummary }) {
   const [region, setRegion] = useState({ start: sample?.start ?? 0, end: sample?.end ?? 1 })
   const dragging = useRef<'start' | 'end' | null>(null)
-  const minimumRegion = 0.002
-
-  useEffect(() => {
-    setRegion({ start: sample?.start ?? 0, end: sample?.end ?? 1 })
-    dragging.current = null
-  }, [sample?.id, sample?.start, sample?.end])
-
-  const pointerPosition = (event: ReactPointerEvent<HTMLDivElement>) => {
+  const minimumRegion = .002
+  useEffect(() => { setRegion({ start: sample?.start ?? 0, end: sample?.end ?? 1 }); dragging.current = null }, [sample?.id, sample?.start, sample?.end])
+  const position = (event: ReactPointerEvent<HTMLDivElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect()
     return Math.max(0, Math.min(1, (event.clientX - bounds.left) / Math.max(1, bounds.width)))
   }
-  const moveHandle = (position: number, handle: 'start' | 'end') => setRegion((current) => handle === 'start'
-    ? { ...current, start: Math.min(position, current.end - minimumRegion) }
-    : { ...current, end: Math.max(position, current.start + minimumRegion) })
-  const beginDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const position = pointerPosition(event)
-    dragging.current = Math.abs(position - region.start) <= Math.abs(position - region.end) ? 'start' : 'end'
-    event.currentTarget.setPointerCapture(event.pointerId)
-    moveHandle(position, dragging.current)
+  const move = (next: number, handle: 'start' | 'end') => setRegion((current) => handle === 'start'
+    ? { ...current, start: Math.min(next, current.end - minimumRegion) }
+    : { ...current, end: Math.max(next, current.start + minimumRegion) })
+  const begin = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const next = position(event); dragging.current = Math.abs(next - region.start) <= Math.abs(next - region.end) ? 'start' : 'end'
+    event.currentTarget.setPointerCapture(event.pointerId); move(next, dragging.current)
   }
-  const continueDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (dragging.current) moveHandle(pointerPosition(event), dragging.current)
-  }
-  const finishDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+  const finish = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!dragging.current || !sample) return
-    const position = pointerPosition(event)
-    const finalRegion = dragging.current === 'start'
-      ? { ...region, start: Math.min(position, region.end - minimumRegion) }
-      : { ...region, end: Math.max(position, region.start + minimumRegion) }
-    setRegion(finalRegion)
-    sendPluginCommand('setSampleRegion', { id: sample.id, ...finalRegion })
-    dragging.current = null
+    const next = position(event)
+    const finalRegion = dragging.current === 'start' ? { ...region, start: Math.min(next, region.end - minimumRegion) } : { ...region, end: Math.max(next, region.start + minimumRegion) }
+    setRegion(finalRegion); sendPluginCommand('setSampleRegion', { id: sample.id, ...finalRegion }); dragging.current = null
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
   }
-  const cancelDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
-    dragging.current = null
-    setRegion({ start: sample?.start ?? 0, end: sample?.end ?? 1 })
-    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-  }
-  const nudgeHandle = (event: React.KeyboardEvent<HTMLDivElement>, handle: 'start' | 'end') => {
+  const nudge = (event: React.KeyboardEvent<HTMLDivElement>, handle: 'start' | 'end') => {
     if (!sample || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
-    event.preventDefault()
-    const delta = event.shiftKey ? .025 : .005
-    const position = event.key === 'Home' ? 0 : event.key === 'End' ? 1
-      : region[handle] + (event.key === 'ArrowLeft' ? -delta : delta)
-    const next = handle === 'start'
-      ? { ...region, start: Math.max(0, Math.min(position, region.end - minimumRegion)) }
-      : { ...region, end: Math.min(1, Math.max(position, region.start + minimumRegion)) }
-    setRegion(next)
-    sendPluginCommand('setSampleRegion', { id: sample.id, ...next })
+    event.preventDefault(); const delta = event.shiftKey ? .025 : .005
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? 1 : region[handle] + (event.key === 'ArrowLeft' ? -delta : delta)
+    const finalRegion = handle === 'start' ? { ...region, start: Math.max(0, Math.min(next, region.end - minimumRegion)) } : { ...region, end: Math.min(1, Math.max(next, region.start + minimumRegion)) }
+    setRegion(finalRegion); sendPluginCommand('setSampleRegion', { id: sample.id, ...finalRegion })
   }
   return <PixelDisplay className="waveform-display">
     <WaveformCanvas waveform={sample?.waveform} />
-    {!sample && <span className="waveform-empty">NO WAVEFORM DATA</span>}
     {sample && <>
-      <div className="region-shade left" style={{ width: `${region.start * 100}%` }} />
-      <div className="region-shade right" style={{ width: `${(1 - region.end) * 100}%` }} />
-      <div className="marker start" role="slider" tabIndex={0} aria-label="Sample start" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(region.start * 100)}
-        style={{ left: `${region.start * 100}%` }} onKeyDown={(event) => nudgeHandle(event, 'start')}><b>START</b><i /></div>
-      <div className="marker end" role="slider" tabIndex={0} aria-label="Sample end" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(region.end * 100)}
-        style={{ left: `${region.end * 100}%` }} onKeyDown={(event) => nudgeHandle(event, 'end')}><b>END</b><i /></div>
-      <div className="waveform-interaction" role="group" aria-label="Sample playback region"
-        onPointerDown={beginDrag} onPointerMove={continueDrag} onPointerUp={finishDrag} onPointerCancel={cancelDrag} />
+      <div className="region-shade left" style={{ width: `${region.start * 100}%` }} /><div className="region-shade right" style={{ width: `${(1 - region.end) * 100}%` }} />
+      {(['start', 'end'] as const).map((handle) => <div key={handle} className={`marker ${handle}`} role="slider" tabIndex={0}
+        aria-label={`Sample ${handle}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(region[handle] * 100)}
+        style={{ left: `${region[handle] * 100}%` }} onKeyDown={(event) => nudge(event, handle)}><b>{handle.toUpperCase()}</b><i /></div>)}
+      <div className="waveform-interaction" role="group" aria-label="Sample playback region" onPointerDown={begin}
+        onPointerMove={(event) => { if (dragging.current) move(position(event), dragging.current) }} onPointerUp={finish}
+        onPointerCancel={(event) => { dragging.current = null; setRegion({ start: sample.start, end: sample.end }); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId) }} />
     </>}
   </PixelDisplay>
 }
@@ -156,190 +218,244 @@ function SampleNumber({ sample, property, value, min, max, step, suffix }: {
   sample?: SampleSummary, property: string, value: number, min: number, max: number, step: number, suffix: string
 }) {
   const set = (next: number) => sample && sendPluginCommand('setSampleProperty', { id: sample.id, property, value: Math.max(min, Math.min(max, next)) })
-  return <div className="stepper"><input type="number" min={min} max={max} step={step} value={value} aria-label={property}
-    disabled={!sample} onChange={(event) => set(Number(event.target.value))} /><div><button disabled={!sample} onClick={() => set(value + step)}>▲</button><button disabled={!sample} onClick={() => set(value - step)}>▼</button></div><span>{suffix}</span></div>
+  return <div className="stepper-shell"><div className="stepper"><input type="number" min={min} max={max} step={step} value={value} aria-label={property} disabled={!sample}
+    onChange={(event) => set(Number(event.target.value))} /><div><button disabled={!sample} onClick={() => set(value + step)}>+</button><button disabled={!sample} onClick={() => set(value - step)}>−</button></div></div><span className="unit-line">{suffix}</span></div>
 }
 
-function SourceGainKnob({ sample }: { sample?: SampleSummary }) {
-  const min = -60
-  const max = 12
+function SourceTrim({ sample }: { sample?: SampleSummary }) {
+  const set = (value: number) => sample && sendPluginCommand('setSampleProperty', { id: sample.id, property: 'gainDb', value })
   const value = sample?.gainDb ?? 0
-  const percent = (value - min) / (max - min)
-  return <div className="source-gain-control">
-    <div className="pixel-knob source-gain-knob" style={{ '--knob-angle': `${-138 + percent * 276}deg` } as CSSProperties}>
-      <i /><input aria-label="Sample gain" type="range" min={min} max={max} step="0.1" value={value} disabled={!sample}
-        onChange={(event) => sample && sendPluginCommand('setSampleProperty', { id: sample.id, property: 'gainDb', value: Number(event.target.value) })} />
-    </div>
-    <NumericReadout value={value} digits={1} suffix=" dB" />
+  return <div className={`source-trim ${sample ? '' : 'disabled'}`}><input type="range" aria-label="Sample trim" min={-60} max={12} step={.1}
+    value={value} disabled={!sample} onChange={(event) => set(Number(event.target.value))}
+    onDoubleClick={() => set(0)} />
+    <EditableValue label="Sample trim exact value" value={value} min={-60} max={12} step={.1} digits={1}
+      suffix="dB" disabled={!sample} onCommit={set} />
   </div>
 }
 
 function SourceControls({ sample }: { sample?: SampleSummary }) {
   return <div className="source-controls">
     <label><b>TUNE</b><SampleNumber sample={sample} property="transpose" value={sample?.transpose ?? 0} min={-24} max={24} step={1} suffix="st" /></label>
-    <Divider />
     <label><b>DRIFT</b><SampleNumber sample={sample} property="fineTune" value={sample?.fineTune ?? 0} min={-100} max={100} step={1} suffix="ct" /></label>
-    <Divider />
-    <label><b>STRETCH{sample?.stretchPending ? '…' : ''}</b><SampleNumber sample={sample} property="stretch" value={sample?.stretch ?? 1} min={0.25} max={2} step={0.05} suffix="×" /></label>
-    <Divider />
-    <label className="gain-source"><b>TRIM</b><SourceGainKnob sample={sample} /></label>
+    <label><b>STRETCH{sample?.stretchPending ? '…' : ''}</b><SampleNumber sample={sample} property="stretch" value={sample?.stretch ?? 1} min={.25} max={2} step={.05} suffix="×" /></label>
+    <label><b>TRIM</b><SourceTrim sample={sample} /></label>
   </div>
 }
 
-function EffectActivityDisplay({ amount }: { amount: number }) {
-  const visualisation = useVisualisationState()
-  return <PixelDisplay className="effect-display"><EffectCanvas type="smear" amount={amount} visualisation={visualisation} /></PixelDisplay>
-}
-
-function BleedModule() {
-  const id = 'smearAmount'
-  const parameter = usePluginParameter(id)
-  return <RecompilerPanel title="BLEED" className="effect-module bleed-module"><PixelKnob id={id} label="Bleed" />
-    <EffectActivityDisplay amount={parameter.value} />
+function BleedModule({ enabled }: { enabled: boolean }) {
+  const parameter = usePluginParameter('smearAmount'); const visualisation = useVisualisationState()
+  return <RecompilerPanel title="BLEED" className="effect-module bleed-module" headerAction={<EffectPower effect={1} enabled={enabled} />}>
+    <div className="creative-controls"><PressureControl id="smearAmount" accessibleLabel="Bleed pressure" /></div>
+    <PixelDisplay className="effect-display"><EffectCanvas type="smear" amount={parameter.value} visualisation={visualisation} /></PixelDisplay>
   </RecompilerPanel>
 }
 
-function FaultModule({ mutations }: { mutations: number }) {
-  const pressure = usePluginParameter('faultPressure')
-  const visualisation = useVisualisationState()
-  const choices = [{ label: 'PITCH', bit: 1 }, { label: 'BITCRUSH', bit: 2 }, { label: 'REVERSE', bit: 4 }]
-  const toggle = (bit: number) => sendPluginCommand('setFaultMutations', { mutations: mutations ^ bit })
-  return <RecompilerPanel title="FAULT" className="fault-module">
-    <div className="fault-controls">
-      <div><b className="control-label">PRESSURE</b><PixelKnob id="faultPressure" label="Fault pressure" /></div>
+function FaultModule({ mutations, enabled }: { mutations: number, enabled: boolean }) {
+  const pressure = usePluginParameter('faultPressure'); const visualisation = useVisualisationState()
+  const choices = [{ label: 'FLIP', bit: 4 }, { label: 'DUST', bit: 2 }, { label: 'WARP', bit: 1 }]
+  return <RecompilerPanel title="FAULT" className="effect-module fault-module" headerAction={<EffectPower effect={0} enabled={enabled} />}>
+    <div className="creative-controls fault-controls"><PressureControl id="faultPressure" accessibleLabel="Fault pressure" />
       <div className="mutation-select" role="group" aria-label="Enabled fault mutations">
-        <b>MUTATIONS</b>{choices.map(({ label, bit }) => <PixelButton key={label} active={(mutations & bit) !== 0}
-          onClick={() => toggle(bit)}>{label}</PixelButton>)}
-      </div>
-    </div>
+        {choices.map(({ label, bit }) => <PixelButton key={label} active={(mutations & bit) !== 0}
+          onClick={() => sendPluginCommand('setFaultMutations', { mutations: mutations ^ bit })}>{label}</PixelButton>)}
+      </div></div>
     <PixelDisplay className="fault-display"><FaultCanvas pressure={pressure.value} visualisation={visualisation} /></PixelDisplay>
   </RecompilerPanel>
 }
 
-function SpectralActivityDisplay({ values, width, height, resetSignal }: { values: number[], width: number, height: number, resetSignal: number }) {
-  const visualisation = useVisualisationState()
-  return <PixelDisplay className="effect-display"><SpectralDrawCanvas values={values} width={width} height={height}
-    scan={visualisation.spectralScan} spectrum={visualisation.spectrum} resetSignal={resetSignal} /></PixelDisplay>
-}
-
-function SpectralModule({ values, width, height }: {
-  values: number[], width: number, height: number
-}) {
-  const [resetSignal, setResetSignal] = useState(0)
+function SpectralModule({ values, width, height, enabled }: { values: number[], width: number, height: number, enabled: boolean }) {
+  const [resetSignal, setResetSignal] = useState(0); const visualisation = useVisualisationState()
   const reset = () => { setResetSignal((current) => current + 1); sendPluginCommand('resetSpectral') }
-  return <RecompilerPanel title="ETCH" className="effect-module spectral-module"
-    headerAction={<button className="spectral-reset" onClick={reset}>CLEAR</button>}>
-    <PixelKnob id="spectralDepth" label="Etch depth" />
-    <SpectralActivityDisplay values={values} width={width} height={height} resetSignal={resetSignal} />
+  return <RecompilerPanel title="ETCH" className="effect-module spectral-module" headerAction={<><ActionButton className="spectral-reset" onClick={reset}>CLEAR</ActionButton><EffectPower effect={2} enabled={enabled} /></>}>
+    <div className="creative-controls"><PressureControl id="spectralDepth" accessibleLabel="Etch pressure" /></div>
+    <PixelDisplay className="effect-display"><SpectralDrawCanvas values={values} width={width} height={height} scan={visualisation.spectralScan}
+      spectrum={visualisation.spectrum} resetSignal={resetSignal} /></PixelDisplay>
   </RecompilerPanel>
 }
 
-function StereoMeter() {
-  const visualisation = useVisualisationState()
-  return <PixelDisplay className="stereo-meter"><StereoMeterCanvas left={visualisation.outputPeakLeft ?? visualisation.outputPeak}
-    right={visualisation.outputPeakRight ?? visualisation.outputPeak} /></PixelDisplay>
-}
-
-function OutputFader({ id, label, format, top, bottom }: { id: string, label: string, format: (value: number) => string, top: string, bottom: string }) {
-  const parameter = usePluginParameter(id)
-  const min = parameter.descriptor?.min ?? 0
-  const max = parameter.descriptor?.max ?? 100
-  const shown = Math.max(min, Math.min(max, parameter.value))
-  const position = (shown - min) / Math.max(0.001, max - min)
-  const finish = () => parameter.endGesture()
-  return <div className={`output-fader ${id === 'globalPitch' ? 'pitch-fader' : ''}`}><b>{label}</b>
-    <div className="fader-track" style={{ '--fader-position': `${position * 100}%` } as CSSProperties}><span className="fader-endpoint top">{top}</span><span className="fader-endpoint bottom">{bottom}</span><i />
-      <input aria-label={parameter.descriptor?.name ?? label} type="range" min={min} max={max} step={parameter.descriptor?.interval || 1}
-        value={shown} onPointerDown={parameter.beginGesture} onPointerUp={finish} onPointerCancel={finish}
-        onKeyDown={parameter.beginGesture} onKeyUp={finish} onChange={(event) => parameter.setValue(Number(event.target.value))} />
-    </div><output className="fader-readout">{format(shown)}</output>
+function OutputFader({ id, label, format, reference }: { id: string, label: string, format: (value: number) => string, reference: number }) {
+  const parameter = usePluginParameter(id); const min = parameter.descriptor?.min ?? 0; const max = parameter.descriptor?.max ?? 100
+  const shown = Math.max(min, Math.min(max, parameter.value)); const position = (shown - min) / Math.max(.001, max - min)
+  const referencePosition = (reference - min) / Math.max(.001, max - min)
+  const commit = (value: number) => { parameter.beginGesture(); parameter.setValue(value); parameter.endGesture() }
+  return <div className="output-fader"><b>{label}</b>
+    <div className="fader-track" style={{ '--fader-position': `${position * 100}%`, '--reference-position': `${referencePosition * 100}%` } as CSSProperties}><i />
+      <input aria-label={parameter.descriptor?.name ?? label} type="range" min={min} max={max} step={parameter.descriptor?.interval || 1} value={shown}
+        onPointerDown={parameter.beginGesture} onPointerUp={parameter.endGesture} onPointerCancel={parameter.endGesture}
+        onKeyDown={parameter.beginGesture} onKeyUp={parameter.endGesture} onChange={(event) => parameter.setValue(Number(event.target.value))} />
+    </div><EditableValue label={`${label} exact value`} value={shown} min={min} max={max}
+      step={parameter.descriptor?.interval || 1} digits={id === 'output' ? 1 : 0} format={format}
+      suffix={id === 'output' && shown > 0 ? '%' : ''} onCommit={commit} />
   </div>
 }
 
 function OutputModule() {
+  const visualisation = useVisualisationState()
   return <RecompilerPanel title="MASTER" className="output-module"><div className="output-body">
-    <div className="meter-column"><StereoMeter /></div>
-    <div className="meter-ticks"><span>+6</span><span>0</span><span>-6</span><span>-12</span><span>-24</span><span>-36</span><span>dB</span></div>
-    <OutputFader id="output" label="VOL" top="125" bottom="−∞" format={(value) => value <= 0 ? '−∞' : `${Math.round(value)}%`} />
-    <OutputFader id="globalPitch" label="PITCH" top="+12" bottom="−12" format={(value) => `${value > 0 ? '+' : ''}${Math.round(value)}`} />
+    <div className="pixel-display stereo-meter"><StereoMeterCanvas left={visualisation.outputPeakLeft ?? visualisation.outputPeak} right={visualisation.outputPeakRight ?? visualisation.outputPeak} /></div>
+    <div className="meter-ticks"><span>+6</span><span>0</span><span>−6</span><span>−12</span><span>−24</span><span>−36</span><span>dB</span></div>
+    <OutputFader id="output" label="VOL" reference={100} format={(value) => value <= 0 ? '−∞' : `${Math.round(value)}`} />
+    <OutputFader id="globalPitch" label="PITCH" reference={0} format={(value) => `${value > 0 ? '+' : ''}${Math.round(value)}`} />
   </div></RecompilerPanel>
 }
 
-function VoiceCounter({ maximum }: { maximum: number }) {
+function Header({ page, setPage }: { page: 'main' | 'about', setPage: (page: 'main' | 'about') => void }) {
   const visualisation = useVisualisationState()
-  return <div className="voice-counter">{String(visualisation.voiceCount).padStart(2, '0')} / {maximum} VOICES</div>
-}
-
-function Header({ page, setPage }: { page: string, setPage: (page: string) => void }) {
-  return <header className="app-header">
-    <div className="brand-reserve" aria-label="Reserved branding area"><i /><i /><i /></div>
-    <div className="header-actions"><VoiceCounter maximum={16} />
-      <nav><PixelButton active={page === 'main'} onClick={() => setPage('main')}>MAIN</PixelButton><PixelButton active={page === 'settings'} onClick={() => setPage('settings')}>SETTINGS</PixelButton></nav>
-    </div>
+  return <header className="app-header"><div className="header-brand"><img src={productLogo} alt="RECOMPILER" /></div>
+    <div className="header-actions"><div className="voice-counter"><b>{String(visualisation.voiceCount).padStart(2, '0')} / 16 VOICES</b></div>
+      <nav aria-label="Editor mode"><PixelButton active={page === 'main'} onClick={() => setPage('main')}>MAIN</PixelButton><PixelButton active={page === 'about'} onClick={() => setPage('about')}>ABOUT</PixelButton></nav></div>
   </header>
 }
 
-function SettingsPage({ sampleCount, maximumSampleCount, effectEnabled, uiScale }: {
-  sampleCount: number, maximumSampleCount: number, effectEnabled: boolean[], uiScale: number
-}) {
-  const effects = ['FAULT', 'BLEED', 'ETCH']
-  return <div className="settings-page">
-    <RecompilerPanel title="ENGINE" className="settings-block"><dl><dt>AUDIO</dt><dd>NATIVE C++</dd><dt>EDITOR</dt><dd>EMBEDDED / OFFLINE</dd><dt>PROJECT STATE</dt><dd>AUTOMATIC</dd></dl></RecompilerPanel>
-    <RecompilerPanel title="INTERFACE SCALE" className="settings-block scale-settings"><p>FIXED LOGICAL CANVAS / UNIFORM SCALE</p><div>{['75%', '100%', '125%', '150%'].map((label, index) => <PixelButton key={label} active={uiScale === index} onClick={() => sendPluginCommand('setUiScale', { index })}>{label}</PixelButton>)}</div></RecompilerPanel>
-    <RecompilerPanel title="POOL" className="settings-block"><dl><dt>LOADED</dt><dd>{sampleCount} / {maximumSampleCount}</dd><dt>FORMATS</dt><dd>WAV / AIFF / MP3 / FLAC</dd></dl><PixelButton onClick={() => sendPluginCommand('importSamples')}>ADD SAMPLES…</PixelButton></RecompilerPanel>
-    <RecompilerPanel title="EFFECT ENGINES" className="settings-block effect-settings">
-      {effects.map((name, effect) => <PixelButton key={name} active={effectEnabled[effect] !== false}
-        onClick={() => sendPluginCommand('setEffectEnabled', { effect, enabled: effectEnabled[effect] === false })}>{name}</PixelButton>)}
-      <PixelButton onClick={() => sendPluginCommand('regenerateSeed')}>NEW RANDOM SEED</PixelButton>
-      <PixelButton onClick={() => sendPluginCommand('resetSpectral')}>CLEAR ETCH MASK</PixelButton>
-    </RecompilerPanel>
+const aboutCopy = `ABOUT
+
+RECOMPILER is a creative sampler instrument built around a pool of audio sources, playable randomness, source shaping and destructive-but-controlled processing.
+
+Load multiple sounds into POOL. Trigger them through MIDI. Shape each source. Then push the result through FAULT, BLEED and ETCH.
+
+You choose the material and the boundaries. RECOMPILER turns that material into something playable, unpredictable and repeatable enough to perform with.
+
+GET STARTED
+
+01 / LOAD AUDIO
+Drop supported WAV, AIF, AIFF, MP3 or FLAC files into POOL. Use drag-and-drop or click the import area to browse. Each enabled source becomes part of the playable pool.
+
+02 / PLAY
+Send MIDI into RECOMPILER. Each trigger selects from the enabled sources. Use VOICES to choose between POLY and MONO operation.
+
+03 / SHAPE THE SOURCE
+Select a source in POOL. START / END set its playable region. TUNE transposes in semitones. DRIFT fine-tunes in cents. STRETCH changes timing while preserving pitch. TRIM adjusts source level.
+
+04 / STACK
+STACK controls whether incoming MIDI note pitch affects playback. OFF triggers without following note pitch. ON transposes playback relative to MIDI note 72.
+
+05 / FAULT
+FAULT introduces tempo-synced mutations into the combined sampler output. PRESSURE controls how often mutations occur and how small the possible slices become. LOW means fewer mutations, larger slices and more untouched signal. HIGH means more mutations, smaller slices and more rhythmic disruption.
+
+FAULT uses 1/2, 1/4, 1/8 and 1/16 divisions. FLIP plays a slice backward. DUST reduces digital resolution and sample rate. WARP replays a slice one octave up or down using varispeed, changing speed and pitch together. Enable any combination; FAULT chooses once per event.
+
+06 / BLEED
+BLEED PRESSURE controls how intensely recent audio is broken into overlapping fragments and spread into a moving stereo texture. Lower settings add subtle movement. Higher settings create denser, less stable textures.
+
+07 / ETCH
+ETCH lets you draw directly into the spectral content. ETCH PRESSURE controls the depth of spectral removal. Frequency runs vertically and time horizontally. Draw to remove spectral energy as the scanner passes through the mask. CLEAR removes the drawing.
+
+08 / MASTER
+VOL controls final output: 0% is silence, 100% is unity and 125% is approximately +5.6 dB. PITCH globally transposes the instrument from −12 to +12 semitones. The L / R meter displays final stereo output activity.
+
+CONTROLS
+DRAG UP ........ INCREASE
+DRAG DOWN ...... DECREASE
+SHIFT + DRAG ... FINE ADJUST
+DOUBLE CLICK ... RESET
+MOUSE WHEEL .... ADJUST
+
+PROJECTS
+RECOMPILER stores current parameter values, source configuration, FAULT setup, ETCH drawing and other instrument settings with the host project. Imported audio remains external to plugin state. Keep project samples in a stable location so RECOMPILER can find them when reopened.
+
+QUICK TIPS
+Use a wide START / END region for more variation and a narrow region for predictable fragments. Balance sources with TRIM before pushing MASTER VOL. Low FAULT PRESSURE adds occasional variation; high pressure creates dense rhythmic corruption. BLEED PRESSURE and ETCH PRESSURE can be combined for more extreme textures.
+
+VERSION
+RECOMPILER
+VERSION: ${__RECOMPILER_VERSION__}
+FORMAT: VST3 / STANDALONE
+PLATFORM: WINDOWS x64
+BUILD: ${__RECOMPILER_BUILD_ID__}
+
+THIRD-PARTY SOFTWARE
+JUCE 8.0.13 — AGPLv3 or commercial JUCE license
+Signalsmith Stretch — MIT
+Signalsmith Linear — MIT
+React 18.3.1 / React DOM 18.3.1 — MIT
+Microsoft WebView2 — Microsoft software license terms
+Spleen 2.2.0 — BSD 2-Clause
+Cozette 1.30.0 — MIT
+Complete notices ship in the release resources.
+
+BUILT BY
+
+INTERFACE SCALE`
+
+const builtByRevealIndex = aboutCopy.indexOf('BUILT BY') + 'BUILT BY'.length
+
+function AboutPage({ uiScale }: { uiScale: number }) {
+  const pageRef = useRef<HTMLDivElement>(null)
+  const frameRef = useRef<number | null>(null)
+  const skippedRef = useRef(false)
+  const [visible, setVisible] = useState(0)
+  const [skipped, setSkipped] = useState(false)
+  const complete = skipped || visible >= aboutCopy.length
+  const revealAll = () => {
+    skippedRef.current = true
+    setSkipped(true)
+    if (frameRef.current !== null) cancelAnimationFrame(frameRef.current)
+    frameRef.current = null
+    setVisible(aboutCopy.length)
+  }
+  useEffect(() => { pageRef.current?.focus() }, [])
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setVisible(aboutCopy.length); return }
+    const started = performance.now(); const draw = (time: number) => {
+      if (skippedRef.current) return
+      const next = Math.min(aboutCopy.length, Math.floor((time - started) * .46)); setVisible(next)
+      frameRef.current = next < aboutCopy.length ? requestAnimationFrame(draw) : null
+    }; frameRef.current = requestAnimationFrame(draw); return () => {
+      if (frameRef.current !== null) cancelAnimationFrame(frameRef.current)
+      frameRef.current = null
+    }
+  }, [])
+  useEffect(() => {
+    const skip = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      if ((event.code !== 'Space' && event.key !== ' ' && event.key !== 'Space') || target?.matches('input, select, textarea, [contenteditable="true"]')) return
+      event.preventDefault(); revealAll()
+    }; document.addEventListener('keydown', skip, { capture: true }); return () => document.removeEventListener('keydown', skip, { capture: true })
+  }, [])
+  const beforeCredits = aboutCopy.slice(0, Math.min(visible, builtByRevealIndex))
+  const afterCredits = visible > builtByRevealIndex ? aboutCopy.slice(builtByRevealIndex, visible) : ''
+  return <div ref={pageRef} className="about-page" style={{ position: 'relative' }} tabIndex={-1}>
+    <section className="about-terminal" aria-label="About and getting started manual"><div className="terminal-document">
+      <pre>{beforeCredits}</pre>
+      {visible >= builtByRevealIndex && <div className="terminal-credit-marks">
+        <div className="creator-mark creator-mark-damnnprodigy"><img src={damnnprodigyLogo} alt="damnnprodigy" /></div>
+        <div className="creator-mark creator-mark-shadx2"><img src={shadx2Logo} alt="shadx2" /></div>
+      </div>}
+      <pre>{afterCredits}{!complete && <span className="terminal-cursor" aria-hidden="true">█</span>}</pre>
+      {complete && <div className="terminal-scale">{['75%', '100%', '125%', '150%'].map((label, index) => <PixelButton key={label} active={uiScale === index} onClick={() => sendPluginCommand('setUiScale', { index })}>{label}</PixelButton>)}</div>}
+    </div>
+    </section>
+    {!complete && <div className="skip-typing" role="status" aria-live="polite">PRESS SPACE TO SKIP</div>}
   </div>
 }
 
 export default function App() {
-  const backendState = useBackendState()
-  const [page, setPage] = useState('main')
-  const [draggingFiles, setDraggingFiles] = useState(false)
+  const backendState = useBackendState(); const [page, setPage] = useState<'main' | 'about'>('main'); const [draggingFiles, setDraggingFiles] = useState(false)
   const samples = backendState?.samples ?? []
   const selectedSample = useMemo(() => samples.find((sample) => sample.id === backendState?.selectedSampleId), [samples, backendState?.selectedSampleId])
   useEffect(() => {
-    const preventFileNavigation = (event: DragEvent) => {
-      if (event.dataTransfer?.types.includes('Files')) event.preventDefault()
-    }
-    document.addEventListener('dragover', preventFileNavigation)
-    document.addEventListener('drop', preventFileNavigation)
-    return () => {
-      document.removeEventListener('dragover', preventFileNavigation)
-      document.removeEventListener('drop', preventFileNavigation)
-    }
+    const prevent = (event: DragEvent) => { if (event.dataTransfer?.types.includes('Files')) event.preventDefault() }
+    document.addEventListener('dragover', prevent); document.addEventListener('drop', prevent)
+    return () => { document.removeEventListener('dragover', prevent); document.removeEventListener('drop', prevent) }
   }, [])
-  return <main className="recompiler-shell">
-    <Header page={page} setPage={setPage} />
-    {page === 'settings' ? <SettingsPage sampleCount={backendState?.sampleCount ?? 0} maximumSampleCount={backendState?.maximumSampleCount ?? 20} effectEnabled={backendState?.effectEnabled ?? [true, true, true]} uiScale={backendState?.uiScale ?? 1} /> : <>
+  const enabled = backendState?.effectEnabled ?? [true, true, true]
+  return <main className="recompiler-shell"><Header page={page} setPage={setPage} />
+    {page === 'about' ? <AboutPage uiScale={backendState?.uiScale ?? 1} /> : <>
       <div className="source-zone">
         <div className={`pool-drop-target ${draggingFiles ? 'drag-active' : ''}`}
           onDragEnter={(event) => { event.preventDefault(); event.stopPropagation(); setDraggingFiles(true) }}
           onDragOver={(event) => { event.preventDefault(); event.stopPropagation(); setDraggingFiles(true) }}
           onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDraggingFiles(false) }}
           onDrop={(event) => { event.preventDefault(); event.stopPropagation(); setDraggingFiles(false); postDroppedFiles(event.dataTransfer.files) }}>
-        <RecompilerPanel title="POOL" className="samples-panel">
-          <div className="sample-list">{samples.length ? samples.map((sample) => <SampleRow key={sample.id} sample={sample} selected={sample.id === selectedSample?.id} />) : <p className="empty-samples">NO SAMPLES LOADED</p>}</div>
-          <button className={`drop-zone ${draggingFiles ? 'drag-active' : ''}`} onClick={() => sendPluginCommand('importSamples')}
-            >
-            {draggingFiles ? 'RELEASE TO IMPORT' : (backendState?.importMessage || 'DROP WAV, AIFF, MP3 OR FLAC')}</button>
-        </RecompilerPanel></div>
-        <RecompilerPanel title="SOURCE" className="selected-source">
-          <div className="source-title"><strong>{selectedSample?.name ?? 'NO SAMPLE SELECTED'}</strong><span>{selectedSample ? `${(selectedSample.sampleRate / 1000).toFixed(1)} kHz   ${selectedSample.bitDepth || '--'} bit   ${selectedSample.durationSeconds.toFixed(1)} s` : '--.- kHz   -- bit   --.- s'}</span></div>
-          <Waveform sample={selectedSample} /><SourceControls sample={selectedSample} />
-        </RecompilerPanel>
+          <RecompilerPanel title="POOL" className="samples-panel"><div className="sample-list">{samples.map((sample) => <SampleRow key={sample.id} sample={sample} selected={sample.id === selectedSample?.id} />)}</div>
+            <button className={`action-button drop-zone ${draggingFiles ? 'drag-active' : ''}`} onClick={() => sendPluginCommand('importSamples')}>{draggingFiles ? 'RELEASE TO IMPORT' : (backendState?.importMessage || 'DROP / CLICK TO IMPORT AUDIO')}</button>
+          </RecompilerPanel>
+        </div>
+        <RecompilerPanel title="SOURCE" className="selected-source"><div className="source-title"><strong>{selectedSample?.name ?? 'NO SOURCE SELECTED'}</strong><span>{selectedSample ? `${(selectedSample.sampleRate / 1000).toFixed(1)} kHz  ${selectedSample.bitDepth || '--'} bit  ${selectedSample.durationSeconds.toFixed(1)} s` : ''}</span></div><Waveform sample={selectedSample} /><SourceControls sample={selectedSample} /></RecompilerPanel>
       </div>
-      <div className="global-strip"><label>STACK <PixelToggle id="midiPitch" left="OFF" right="ON" /></label><Divider /><label>VOICES <PixelToggle id="voiceMode" left="POLY" right="MONO" /></label></div>
-      <div className="effects-zone">
-        <FaultModule mutations={backendState?.faultMutations ?? 7} />
-        <BleedModule />
-        <SpectralModule values={backendState?.spectralCanvas ?? []} width={backendState?.spectralWidth ?? 128} height={backendState?.spectralHeight ?? 64} />
-        <OutputModule />
-      </div>
+      <div className="lower-zone"><div className="global-strip"><label>STACK <PixelToggle id="midiPitch" left="OFF" right="ON" /></label><Divider /><label>VOICES <PixelToggle id="voiceMode" left="POLY" right="MONO" /></label></div>
+        <FaultModule mutations={backendState?.faultMutations ?? 7} enabled={enabled[0] !== false} /><BleedModule enabled={enabled[1] !== false} />
+        <SpectralModule values={backendState?.spectralCanvas ?? []} width={backendState?.spectralWidth ?? 128} height={backendState?.spectralHeight ?? 64} enabled={enabled[2] !== false} /><OutputModule /></div>
     </>}
   </main>
 }

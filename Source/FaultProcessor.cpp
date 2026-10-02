@@ -50,7 +50,7 @@ void FaultProcessor::invalidateHistory() noexcept
     mutation = FaultMutation::none;
     dustCountdown = 0;
     dustHeld.fill(0.0f);
-    pitchSemitones = 0;
+    resampleSemitones = 0;
     lastMutationSourceFrames = 0;
     lastMutationPlaybackFrames = 0;
 }
@@ -89,7 +89,7 @@ FaultMutation FaultProcessor::chooseMutation(uint32_t enabledMask) noexcept
 {
     std::array<FaultMutation, 3> choices {};
     int count = 0;
-    if ((enabledMask & FaultMutations::pitch) != 0) choices[count++] = FaultMutation::pitch;
+    if ((enabledMask & FaultMutations::resample) != 0) choices[count++] = FaultMutation::resample;
     if ((enabledMask & FaultMutations::bitcrush) != 0) choices[count++] = FaultMutation::bitcrush;
     if ((enabledMask & FaultMutations::reverse) != 0) choices[count++] = FaultMutation::reverse;
     return count == 0 ? FaultMutation::none
@@ -118,19 +118,17 @@ void FaultProcessor::beginSegment(double bpm, float pressure, uint32_t enabledMa
         ? chooseMutation(enabledMask) : FaultMutation::none;
 
     playbackFrames = segmentFrames;
-    if ((mutation == FaultMutation::pitch || mutation == FaultMutation::reverse)
+    if ((mutation == FaultMutation::resample || mutation == FaultMutation::reverse)
         && captureFrames < 2)
         mutation = FaultMutation::none;
 
-    if (mutation == FaultMutation::pitch)
+    if (mutation == FaultMutation::resample)
     {
-        // Choose every non-zero integer interval in the requested -12..+12
-        // range. This is direct sampler repitching: rate, pitch, and duration
-        // remain coupled with no OLA, formant preservation, or compensation.
-        const auto choice = static_cast<int>(random.bounded(24));
-        pitchSemitones = choice < 12 ? choice - 12 : choice - 11;
-        pitchRatio = faultPitchPlaybackRate(pitchSemitones);
-        playbackFrames = faultPitchPlaybackFrames(captureFrames, pitchSemitones);
+        // Classic one-octave varispeed: pitch, speed, and duration stay coupled.
+        // One seeded roll per event yields an approximately 50/50 direction.
+        resampleSemitones = random.bounded(2) == 0 ? -12 : 12;
+        resampleRatio = faultResamplePlaybackRate(resampleSemitones);
+        playbackFrames = faultResamplePlaybackFrames(captureFrames, resampleSemitones);
     }
     else if (mutation == FaultMutation::bitcrush)
     {
@@ -207,10 +205,10 @@ void FaultProcessor::process(juce::AudioBuffer<float>& buffer,
         };
         std::array<float, 2> wet = dry;
 
-        if (mutation == FaultMutation::pitch)
+        if (mutation == FaultMutation::resample)
             for (int channel = 0; channel < channels; ++channel)
                 wet[static_cast<size_t>(channel)] = readCapturedSlice(
-                    channel, static_cast<double>(segmentFrame) * pitchRatio);
+                    channel, static_cast<double>(segmentFrame) * resampleRatio);
         else if (mutation == FaultMutation::reverse)
             for (int channel = 0; channel < channels; ++channel)
                 wet[static_cast<size_t>(channel)] = readCapturedSlice(
