@@ -334,7 +334,8 @@ function FaultModule({ mutations, enabled }: { mutations: number, enabled: boole
         {choices.map(({ label, bit }) => <PixelButton key={label} active={(mutations & bit) !== 0}
           onClick={() => sendPluginCommand('setFaultMutations', { mutations: mutations ^ bit })}>{label}</PixelButton>)}
       </div></div>
-    <PixelDisplay className="fault-display"><FaultWaves eventSerial={visualisation.faultEventSerial} active={enabled} /></PixelDisplay>
+    <PixelDisplay className="fault-display"><FaultWaves eventSerial={visualisation.faultEventSerial}
+      audioLevel={visualisation.audioLevel} active={enabled} /></PixelDisplay>
     <BypassOverlay enabled={enabled} />
   </RecompilerPanel>
 }

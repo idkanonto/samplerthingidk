@@ -24,6 +24,8 @@ const setup = (canvas: HTMLCanvasElement, width: number, height: number, clear =
   return context
 }
 
+const EFFECT_RENDER_SCALE = 0.75
+
 export function WaveformCanvas({ waveform }: { waveform?: [number, number][] }) {
   const ref = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
@@ -33,13 +35,21 @@ export function WaveformCanvas({ waveform }: { waveform?: [number, number][] }) 
     if (!context) return
     if (!waveform?.length) return
     context.fillStyle = '#eeeeee'
+    context.beginPath()
     waveform.forEach((pair, index) => {
-      const x0 = Math.floor(index * 256 / waveform.length)
-      const x1 = Math.max(x0 + 1, Math.ceil((index + 1) * 256 / waveform.length))
-      const top = Math.floor(48 - Math.max(-1, Math.min(1, pair[1])) * 43)
-      const bottom = Math.ceil(48 - Math.max(-1, Math.min(1, pair[0])) * 43)
-      context.fillRect(x0, top, Math.max(1, x1 - x0), Math.max(1, bottom - top))
+      const x = index * 256 / Math.max(1, waveform.length - 1)
+      const y = 48 - Math.max(-1, Math.min(1, pair[1])) * 43
+      if (index === 0) context.moveTo(x, y)
+      else context.lineTo(x, y)
     })
+    for (let index = waveform.length - 1; index >= 0; index -= 1) {
+      const pair = waveform[index]
+      const x = index * 256 / Math.max(1, waveform.length - 1)
+      const y = 48 - Math.max(-1, Math.min(1, pair[0])) * 43
+      context.lineTo(x, y)
+    }
+    context.closePath()
+    context.fill()
   }, [waveform])
   return <canvas ref={ref} className="pixel-canvas waveform-canvas" aria-label="Selected sample waveform" />
 }
@@ -92,7 +102,7 @@ export function NeuralBackground({ className = '', color = '#ffffff', trailOpaci
         || particleCount !== dimensionsRef.current.particleCount
       if (!sizeChanged && particlesRef.current.length > 0) return
       dimensionsRef.current = { width, height, particleCount }
-      const dpr = window.devicePixelRatio || 1
+      const dpr = (window.devicePixelRatio || 1) * EFFECT_RENDER_SCALE
       canvas.width = Math.round(width * dpr)
       canvas.height = Math.round(height * dpr)
       canvas.style.width = `${width}px`
@@ -130,7 +140,7 @@ export function NeuralBackground({ className = '', color = '#ffffff', trailOpaci
       const mixCurve = Math.pow(clamped(current.mix), .75)
       const visualEnergy = energy * pressureCurve * mixCurve
       const shapeBias = clamped((current.shape + 100) / 200)
-      const flowSpeed = speed * visualEnergy * 2.2
+      const flowSpeed = speed * visualEnergy * 2
       const friction = 0.966 - 0.018 * shapeBias
       const currentTrailOpacity = Math.max(.035, Math.min(.34,
         trailOpacity + (shapeBias - .5) * .22))
@@ -147,7 +157,7 @@ export function NeuralBackground({ className = '', color = '#ffffff', trailOpaci
 
       context.fillStyle = `rgba(0, 0, 0, ${currentTrailOpacity})`
       context.fillRect(0, 0, width, height)
-      const visibleParticles = Math.round(particlesRef.current.length * (.18 + .82 * pressureCurve))
+      const visibleParticles = Math.round(particlesRef.current.length * (.18 + .70 * pressureCurve))
       for (let index = 0; index < visibleParticles; index += 1) {
         const particle = particlesRef.current[index]
         const angle = (Math.cos(particle.x * 0.005) + Math.sin(particle.y * 0.005)) * Math.PI
@@ -157,7 +167,7 @@ export function NeuralBackground({ className = '', color = '#ffffff', trailOpaci
         // A deliberately tiny restoring force counters long-term edge and
         // corner accumulation without introducing a boundary or safe margin.
         // Particles still wrap through, and can occupy, the complete display.
-        const gravity = 0.00009 * visualEnergy
+        const gravity = 0.00012 * visualEnergy
         particle.vx += (width * .5 - particle.x) * gravity
         particle.vy += (height * .5 - particle.y) * gravity
 
@@ -212,17 +222,19 @@ type WavePoint = {
 type FaultCanvasSize = { width: number, height: number, pixelRatio: number }
 
 /** User-supplied Waves field, retaining its line geometry and pointer response. */
-export function FaultWaves({ eventSerial, active, className = '', strokeColor = '#ffffff',
+export function FaultWaves({ eventSerial, audioLevel, active, className = '', strokeColor = '#ffffff',
   backgroundColor = '#000000' }: {
-  eventSerial: number, active: boolean, className?: string, strokeColor?: string,
+  eventSerial: number, audioLevel: number, active: boolean, className?: string, strokeColor?: string,
   backgroundColor?: string
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const activeRef = useRef(active)
   const eventSerialRef = useRef(eventSerial)
+  const audioLevelRef = useRef(audioLevel)
   activeRef.current = active
   eventSerialRef.current = eventSerial
+  audioLevelRef.current = audioLevel
   const mouseRef = useRef({ x: -10, y: 0, lx: 0, ly: 0, sx: 0, sy: 0, v: 0, vs: 0, a: 0, set: false })
   const linesRef = useRef<WavePoint[][]>([])
   const noiseRef = useRef<((x: number, y: number) => number) | null>(null)
@@ -245,7 +257,8 @@ export function FaultWaves({ eventSerial, active, className = '', strokeColor = 
       // scale and would apply 75/125/150% a second time to this canvas.
       const width = Math.round(containerRef.current.clientWidth)
       const height = Math.round(containerRef.current.clientHeight)
-      const pixelRatio = Math.max(1, window.devicePixelRatio || 1)
+      const pixelRatio = Math.max(EFFECT_RENDER_SCALE,
+        (window.devicePixelRatio || 1) * EFFECT_RENDER_SCALE)
       // JUCE's WebView can mount before the editor receives its final bounds.
       // Ignore that transient box and let ResizeObserver perform the real pass.
       if (width < 2 || height < 2) return false
@@ -377,7 +390,7 @@ export function FaultWaves({ eventSerial, active, className = '', strokeColor = 
       [.10, .14], [.90, .14], [.10, .86], [.90, .86],
       [.10, .14], [.10, .86], [.90, .14], [.90, .86]
     ]
-    const eventMotionDuration = .65
+    const eventMotionDuration = .72
     const tick = (time: number) => {
       rafRef.current = null
       if (!activeRef.current) return
@@ -386,14 +399,19 @@ export function FaultWaves({ eventSerial, active, className = '', strokeColor = 
       previousFrame = time
       const currentEventSerial = eventSerialRef.current
       const eventDelta = Math.max(0, Math.min(8, currentEventSerial - lastEventSerial))
-      if (eventDelta > 0) {
+      const hasAudio = audioLevelRef.current > .001
+      if (eventDelta > 0 && hasAudio) {
         phaseAtEvent = displayedPhase
         targetPhase += eventDelta / eventRoute.length
         eventMotionElapsed = 0
         elapsed += 92 * eventDelta
       }
       lastEventSerial = currentEventSerial
-      eventMotionElapsed = Math.min(eventMotionDuration, eventMotionElapsed + delta)
+      if (!hasAudio) {
+        phaseAtEvent = displayedPhase
+        targetPhase = displayedPhase
+        eventMotionElapsed = eventMotionDuration
+      } else eventMotionElapsed = Math.min(eventMotionDuration, eventMotionElapsed + delta)
       const eventProgress = eventMotionElapsed / eventMotionDuration
       const easedEventProgress = eventProgress * eventProgress * (3 - 2 * eventProgress)
       displayedPhase = phaseAtEvent + (targetPhase - phaseAtEvent) * easedEventProgress
