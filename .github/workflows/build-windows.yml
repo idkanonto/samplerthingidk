@@ -38,8 +38,8 @@ jobs:
           -DJUCE_BUILD_EXTRAS=OFF
           -DJUCE_WEBVIEW2_PACKAGE_LOCATION="${{ runner.temp }}\webview2"
 
-      - name: Build VST3, standalone, and tests
-        run: cmake --build build --config Release --target RandomChopSampler_VST3 RandomChopSampler_Standalone RandomChopSamplerTests --parallel
+      - name: Build VST3 and tests
+        run: cmake --build build --config Release --target RandomChopSampler_VST3 RandomChopSamplerTests --parallel
 
       - name: Install MP3 fixture encoder
         run: choco install ffmpeg --yes --no-progress
@@ -87,11 +87,6 @@ jobs:
           if ($module.Count -lt 1) {
             throw "The VST3 bundle does not contain a module binary."
           }
-          $standalone = Join-Path $env:GITHUB_WORKSPACE 'build\RandomChopSampler_artefacts\Release\Standalone\recompiler.dll.exe'
-          if (-not (Test-Path -LiteralPath $standalone -PathType Leaf) -or
-              (Get-Item -LiteralPath $standalone).Length -eq 0) {
-            throw "Expected standalone executable was not produced: $standalone"
-          }
           $requiredNotices = @(
             'THIRD_PARTY_NOTICES.md',
             'JUCE_LICENSE.md',
@@ -112,7 +107,6 @@ jobs:
           }
           Write-Host "Verified $plugin"
           $module | ForEach-Object { Write-Host "Module: $($_.FullName) ($($_.Length) bytes)" }
-          Write-Host "Standalone: $standalone ($((Get-Item -LiteralPath $standalone).Length) bytes)"
 
       - name: Upload VST3
         uses: actions/upload-artifact@v7
@@ -123,14 +117,6 @@ jobs:
           path: build/RandomChopSampler_artefacts/Release/VST3
           if-no-files-found: error
           retention-days: 30
-
-      - name: Upload standalone verification build
-        uses: actions/upload-artifact@v7
-        with:
-          name: recompiler-dll-Windows-Standalone
-          path: build/RandomChopSampler_artefacts/Release/Standalone/recompiler.dll.exe
-          if-no-files-found: error
-          retention-days: 14
 
       - name: Upload listening renders
         uses: actions/upload-artifact@v7
