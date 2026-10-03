@@ -501,9 +501,16 @@ void SmearProcessor::startGrain(float shape, uint32_t features, float pressure) 
     const auto nominalLengthMs = shape < 0.0f
         ? 40.0f + 50.0f * -shape
         : 40.0f - 22.0f * shape;
+    const auto increment = playbackRateForPressure(pressure * 100.0f);
     const auto maximumPossibleLength = static_cast<int>(std::ceil(
         sampleRate * static_cast<double>(nominalLengthMs) * 0.001 * 1.10));
-    if (validFrames <= maximumPossibleLength + 4)
+    const auto maximumRequiredDelay = static_cast<int>(std::ceil(
+        static_cast<double>(maximumPossibleLength)
+            * std::max(1.0, increment * 1.02))) + 4;
+    // Do not consume the grain RNG until every possible duration is safe at
+    // the requested rate. Pressure can delay a grain, but cannot alter Shape's
+    // deterministic duration sequence through repeated failed start attempts.
+    if (validFrames <= maximumRequiredDelay)
         return;
     const auto variedLengthMs = nominalLengthMs
         * static_cast<float>(0.90 + 0.20 * random.unit());
@@ -513,7 +520,6 @@ void SmearProcessor::startGrain(float shape, uint32_t features, float pressure) 
     const auto length = std::clamp(static_cast<int>(std::llround(
         sampleRate * static_cast<double>(variedLengthMs) * 0.001)),
         minimumLength, std::max(minimumLength, delayBuffer.getNumSamples() / 4));
-    const auto increment = playbackRateForPressure(pressure * 100.0f);
     const auto minimumDelay = static_cast<int>(std::ceil(
         static_cast<double>(length) * std::max(1.0, increment * 1.02))) + 4;
     if (validFrames <= minimumDelay)
