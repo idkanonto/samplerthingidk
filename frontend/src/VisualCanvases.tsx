@@ -44,10 +44,7 @@ export function WaveformCanvas({ waveform }: { waveform?: [number, number][] }) 
   return <canvas ref={ref} className="pixel-canvas waveform-canvas" aria-label="Selected sample waveform" />
 }
 
-type NeuralParticle = {
-  x: number, y: number, homeX: number, homeY: number,
-  vx: number, vy: number, age: number, life: number
-}
+type NeuralParticle = { x: number, y: number, vx: number, vy: number, age: number, life: number }
 
 function clamped(value: number, min = 0, max = 1) {
   return Math.max(min, Math.min(max, Number.isFinite(value) ? value : 0))
@@ -101,24 +98,20 @@ export function NeuralBackground({ className = '', color = '#ffffff', trailOpaci
       canvas.style.width = `${width}px`
       canvas.style.height = `${height}px`
       context.setTransform(dpr, 0, 0, dpr, 0, 0)
-      const safeX = Math.min(20, width * .1)
-      const safeY = Math.min(20, height * .1)
-      particlesRef.current = Array.from({ length: particleCount }, () => {
-        const x = safeX + Math.random() * Math.max(1, width - safeX * 2)
-        const y = safeY + Math.random() * Math.max(1, height - safeY * 2)
-        return { x, y, homeX: x, homeY: y, vx: 0, vy: 0, age: 0,
-          life: Math.random() * 200 + 100 }
-      })
+      particlesRef.current = Array.from({ length: particleCount }, () => ({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        vx: 0,
+        vy: 0,
+        age: 0,
+        life: Math.random() * 200 + 100
+      }))
     }
 
     const handleResize = () => initialize()
     const resetParticle = (particle: NeuralParticle) => {
-      const safeX = Math.min(20, width * .1)
-      const safeY = Math.min(20, height * .1)
-      particle.x = safeX + Math.random() * Math.max(1, width - safeX * 2)
-      particle.y = safeY + Math.random() * Math.max(1, height - safeY * 2)
-      particle.homeX = particle.x
-      particle.homeY = particle.y
+      particle.x = Math.random() * width
+      particle.y = Math.random() * height
       particle.vx = 0
       particle.vy = 0
       particle.age = 0
@@ -146,8 +139,8 @@ export function NeuralBackground({ className = '', color = '#ffffff', trailOpaci
       const vertical = Math.sin(virtualPhase)
       const superellipseX = Math.sign(horizontal) * Math.sqrt(Math.abs(horizontal))
       const superellipseY = Math.sign(vertical) * Math.sqrt(Math.abs(vertical))
-      const targetX = width * (.5 + .32 * superellipseX)
-      const targetY = height * (.5 + .30 * superellipseY)
+      const targetX = width * (.5 + .43 * superellipseX)
+      const targetY = height * (.5 + .39 * superellipseY)
       const cursorBlend = 1 - Math.exp(-deltaSeconds * (4 + 14 * visualEnergy))
       mouse.x += (targetX - mouse.x) * cursorBlend
       mouse.y += (targetY - mouse.y) * cursorBlend
@@ -164,31 +157,11 @@ export function NeuralBackground({ className = '', color = '#ffffff', trailOpaci
         const dx = mouse.x - particle.x
         const dy = mouse.y - particle.y
         const distance = Math.hypot(dx, dy)
-        const interactionRadius = Math.max(36, Math.min(90, Math.min(width, height) * .42))
+        const interactionRadius = 150
         if (visualEnergy > .001 && distance < interactionRadius) {
           const force = (interactionRadius - distance) / interactionRadius
-          particle.vx -= dx * force * 0.012 * visualEnergy
-          particle.vy -= dy * force * 0.012 * visualEnergy
-        }
-
-        const safeX = Math.min(20, width * .1)
-        const safeY = Math.min(20, height * .1)
-        const boundaryForce = .014 * visualEnergy
-        if (particle.x < safeX) particle.vx += (safeX - particle.x) * boundaryForce
-        if (particle.x > width - safeX) particle.vx -= (particle.x - (width - safeX)) * boundaryForce
-        if (particle.y < safeY) particle.vy += (safeY - particle.y) * boundaryForce
-        if (particle.y > height - safeY) particle.vy -= (particle.y - (height - safeY)) * boundaryForce
-
-        const homeForce = .022 + .006 * visualEnergy
-        particle.vx += (particle.homeX - particle.x) * homeForce
-        particle.vy += (particle.homeY - particle.y) * homeForce
-
-        const particleSpeed = Math.hypot(particle.vx, particle.vy)
-        const maximumSpeed = .9 + visualEnergy * 2.4
-        if (particleSpeed > maximumSpeed) {
-          const speedScale = maximumSpeed / particleSpeed
-          particle.vx *= speedScale
-          particle.vy *= speedScale
+          particle.vx -= dx * force * 0.05 * visualEnergy
+          particle.vy -= dy * force * 0.05 * visualEnergy
         }
 
         particle.x += particle.vx * Math.min(1, visualEnergy * 7)
@@ -197,10 +170,10 @@ export function NeuralBackground({ className = '', color = '#ffffff', trailOpaci
         particle.vy *= friction
         particle.age += Math.min(1, visualEnergy * 5)
         if (particle.age > particle.life) resetParticle(particle)
-        if (particle.x < safeX) { particle.x = safeX; particle.vx = Math.abs(particle.vx) * .45 }
-        if (particle.x > width - safeX) { particle.x = width - safeX; particle.vx = -Math.abs(particle.vx) * .45 }
-        if (particle.y < safeY) { particle.y = safeY; particle.vy = Math.abs(particle.vy) * .45 }
-        if (particle.y > height - safeY) { particle.y = height - safeY; particle.vy = -Math.abs(particle.vy) * .45 }
+        if (particle.x < 0) particle.x = width
+        if (particle.x > width) particle.x = 0
+        if (particle.y < 0) particle.y = height
+        if (particle.y > height) particle.y = 0
 
         const opacity = 1 - Math.abs(particle.age / particle.life - 0.5) * 2
         context.globalAlpha = opacity
@@ -256,11 +229,23 @@ export function FaultWaves({ eventSerial, active, className = '', strokeColor = 
     noiseRef.current = createNoise2D()
 
     const setSize = () => {
-      if (!containerRef.current || !svgRef.current) return
-      boundingRef.current = containerRef.current.getBoundingClientRect()
-      const { width, height } = boundingRef.current
+      if (!containerRef.current || !svgRef.current) return false
+      const bounds = containerRef.current.getBoundingClientRect()
+      const width = Math.round(bounds.width)
+      const height = Math.round(bounds.height)
+      // JUCE's WebView can mount the document before the editor receives its
+      // final bounds. Do not build an empty SVG from that transient 0 x 0 box.
+      if (width < 2 || height < 2) return false
+      if (Math.round(boundingRef.current?.width ?? -1) === width
+        && Math.round(boundingRef.current?.height ?? -1) === height
+        && pathsRef.current.length > 0) return false
+      boundingRef.current = bounds
       svgRef.current.style.width = `${width}px`
       svgRef.current.style.height = `${height}px`
+      svgRef.current.setAttribute('width', `${width}`)
+      svgRef.current.setAttribute('height', `${height}`)
+      svgRef.current.setAttribute('viewBox', `0 0 ${width} ${height}`)
+      return true
     }
     const setLines = () => {
       if (!svgRef.current || !boundingRef.current) return
@@ -314,7 +299,7 @@ export function FaultWaves({ eventSerial, active, className = '', strokeColor = 
       containerRef.current?.style.setProperty('--x', `${mouse.sx}px`)
       containerRef.current?.style.setProperty('--y', `${mouse.sy}px`)
     }
-    const onResize = () => { setSize(); setLines() }
+    const onResize = () => { if (setSize()) setLines() }
     const moved = (point: WavePoint, withCursorForce = true) => ({
       x: point.x + point.wave.x + (withCursorForce ? point.cursor.x : 0),
       y: point.y + point.wave.y + (withCursorForce ? point.cursor.y : 0)
@@ -362,8 +347,7 @@ export function FaultWaves({ eventSerial, active, className = '', strokeColor = 
       })
     }
 
-    setSize()
-    setLines()
+    onResize()
     let previousFrame = 0
     let elapsed = 0
     let displayedPhase = 0
@@ -423,11 +407,17 @@ export function FaultWaves({ eventSerial, active, className = '', strokeColor = 
     }
     tickRef.current = tick
     const onContainerResize = () => onResize()
+    const resizeObserver = new ResizeObserver(onContainerResize)
+    resizeObserver.observe(container)
     window.addEventListener('resize', onContainerResize)
+    // A second layout pass is required by some native WebView2 hosts even
+    // when ResizeObserver is available.
+    requestAnimationFrame(onContainerResize)
     return () => {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
       rafRef.current = null
       tickRef.current = null
+      resizeObserver.disconnect()
       window.removeEventListener('resize', onContainerResize)
       pathsRef.current.forEach((path) => path.remove())
       pathsRef.current = []
