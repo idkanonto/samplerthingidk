@@ -191,6 +191,7 @@ private:
     std::atomic<uint64_t> internalSeed { 1 };
     std::atomic<int> faultMutation { 0 };
     std::atomic<uint64_t> faultEventSerial { 0 };
+    std::atomic<uint64_t> faultLoopEvents { 0 };
     std::atomic<int> faultDivision { 16 };
     std::atomic<float> faultProgress { 0.0f };
     std::atomic<int> faultResampleSemitones { 0 };
@@ -205,7 +206,7 @@ private:
     std::atomic<float> outputPeakRight { 0.0f };
     std::atomic<int> activeVoiceCount { 0 };
     std::atomic<int> uiScaleIndex { 1 };
-    std::atomic<uint32_t> faultMutations { randomchop::FaultMutations::all };
+    std::atomic<uint32_t> faultMutations { randomchop::FaultMutations::randomised };
     std::atomic<uint32_t> scrambleFeatures { randomchop::ScrambleFeatures::all };
     std::atomic<uint32_t> meltFeatures { randomchop::MeltFeatures::all };
     std::atomic<uint32_t> smearFeatures { randomchop::SmearFeatures::all };

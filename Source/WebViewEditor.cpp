@@ -189,6 +189,7 @@ juce::var RandomChopSamplerWebViewEditor::createBackendState()
         item->setProperty("fineTune", settings.fineTuneCents);
         item->setProperty("gainDb", settings.gainDb);
         item->setProperty("stretch", settings.stretchSpeed);
+        item->setProperty("chance", settings.selectionChance);
         item->setProperty("stretchPending", sample->stretchPending);
         item->setProperty("sampleRate", sample->sampleRate);
         item->setProperty("bitDepth", sample->bitDepth);
@@ -321,6 +322,7 @@ void RandomChopSamplerWebViewEditor::handleCommand(const juce::var& payload)
             else if (property == "fineTune") settings.fineTuneCents = static_cast<float>(value);
             else if (property == "gainDb") settings.gainDb = static_cast<float>(value);
             else if (property == "stretch") settings.stretchSpeed = static_cast<float>(value);
+            else if (property == "chance") settings.selectionChance = static_cast<float>(value);
         });
         backendStateDirty = true;
     }

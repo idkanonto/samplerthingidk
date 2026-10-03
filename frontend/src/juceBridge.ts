@@ -26,6 +26,7 @@ export type SampleSummary = {
   fineTune: number
   gainDb: number
   stretch: number
+  chance: number
   stretchPending: boolean
   sampleRate: number
   bitDepth: number
@@ -110,7 +111,7 @@ const previewWaveform = Array.from({ length: 128 }, (_, index): [number, number]
 })
 const previewSample = (): SampleSummary => ({
   id: 'preview-sample', name: 'approved_loop.wav', enabled: true, missing: false,
-  start: 0, end: 1, transpose: 0, fineTune: 0, gainDb: 0, stretch: 1,
+  start: 0, end: 1, transpose: 0, fineTune: 0, gainDb: 0, stretch: 1, chance: 100,
   stretchPending: false, sampleRate: 48000, bitDepth: 24, durationSeconds: 3.2,
   waveform: previewWaveform
 })

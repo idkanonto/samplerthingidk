@@ -28,7 +28,9 @@ namespace FaultMutations
 constexpr uint32_t resample = 1u << 0;
 constexpr uint32_t bitcrush = 1u << 1;
 constexpr uint32_t reverse = 1u << 2;
-constexpr uint32_t all = resample | bitcrush | reverse;
+constexpr uint32_t loop = 1u << 3;
+constexpr uint32_t randomised = resample | bitcrush | reverse;
+constexpr uint32_t all = randomised | loop;
 }
 
 enum class FaultMutation : uint8_t
@@ -42,7 +44,7 @@ enum class FaultMutation : uint8_t
 struct FaultSettings final
 {
     float pressurePercent = 0.0f;
-    uint32_t enabledMutations = FaultMutations::all;
+    uint32_t enabledMutations = FaultMutations::randomised;
 };
 
 // Tempo-aligned mutation engine. The caller supplies a 1/16-note boundary

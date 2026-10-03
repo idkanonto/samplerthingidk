@@ -13,16 +13,25 @@ public:
     bool isActive() const noexcept { return sample != nullptr; }
     int getNote() const noexcept { return midiNote; }
     uint64_t getAge() const noexcept { return age; }
+    uint32_t consumeLoopEvents() noexcept
+    {
+        const auto events = pendingLoopEvents;
+        pendingLoopEvents = 0;
+        return events;
+    }
     void start(PreparedSamplePtr newSample, int note, float velocity, double startFrame,
                randomchop::FrameRegion sourceRegion, double playbackPitchRatio,
                float voiceGain, float attackSeconds, float releaseSeconds,
-               uint64_t newAge, float finalLengthMilliseconds = 0.0f) noexcept;
+               uint64_t newAge, float finalLengthMilliseconds = 0.0f,
+               bool loopFirstQuarter = false) noexcept;
     void release(float releaseSeconds) noexcept;
     void forceStop() noexcept
     {
         sample.reset();
         stealTailRemaining = 0;
         renderedFrames = finalLengthFrames = 0;
+        loopQuarter = false;
+        pendingLoopEvents = 0;
         lastOutput[0] = lastOutput[1] = 0.0f;
     }
     void render(juce::AudioBuffer<float>& output, int startSample, int numSamples) noexcept;
@@ -40,5 +49,8 @@ private:
     int stealTailRemaining = 0, stealTailLength = 1;
     std::int64_t renderedFrames = 0, finalLengthFrames = 0;
     int finalBoundaryReleaseFrames = 1;
+    bool loopQuarter = false;
+    double loopStart = 0.0, loopEnd = 0.0;
+    uint32_t pendingLoopEvents = 0;
     enum class Stage { attack, sustain, release } stage = Stage::attack;
 };

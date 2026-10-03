@@ -290,12 +290,24 @@ function SourceTrim({ sample }: { sample?: SampleSummary }) {
   </div>
 }
 
+function SourceChance({ sample }: { sample?: SampleSummary }) {
+  const set = (value: number) => sample && sendPluginCommand('setSampleProperty', { id: sample.id, property: 'chance', value })
+  const value = sample?.chance ?? 100
+  return <div className={`source-trim source-chance ${sample ? '' : 'disabled'}`}><input type="range" aria-label="Sample selection chance" min={0} max={100} step={1}
+    value={value} disabled={!sample} onChange={(event) => set(Number(event.target.value))}
+    onDoubleClick={() => set(100)} />
+    <EditableValue label="Sample selection chance exact value" value={value} min={0} max={100} step={1} digits={0}
+      suffix="%" disabled={!sample} onCommit={set} />
+  </div>
+}
+
 function SourceControls({ sample }: { sample?: SampleSummary }) {
   const stretchValues = [.25, .5, .75, 1, 1.25, 1.5, 1.75, 2] as const
   return <div className="source-controls">
     <label><b>TUNE</b><SampleNumber sample={sample} property="transpose" value={sample?.transpose ?? 0} min={-24} max={24} step={1} suffix="st" dragPixelsPerStep={4} /></label>
     <label><b>DRIFT</b><SampleNumber sample={sample} property="fineTune" value={sample?.fineTune ?? 0} min={-100} max={100} step={1} suffix="ct" dragPixelsPerStep={2} /></label>
     <label><b>STRETCH{sample?.stretchPending ? '…' : ''}</b><SampleNumber sample={sample} property="stretch" value={sample?.stretch ?? 1} min={.25} max={2} step={.25} suffix="×" values={stretchValues} dragPixelsPerStep={14} /></label>
+    <label><b>CHANCE</b><SourceChance sample={sample} /></label>
     <label><b>TRIM</b><SourceTrim sample={sample} /></label>
   </div>
 }
@@ -327,7 +339,7 @@ function BleedModule({ enabled }: { enabled: boolean }) {
 
 function FaultModule({ mutations, enabled }: { mutations: number, enabled: boolean }) {
   const visualisation = useVisualisationState()
-  const choices = [{ label: 'FLIP', bit: 4 }, { label: 'DUST', bit: 2 }, { label: 'WARP', bit: 1 }]
+  const choices = [{ label: 'FLIP', bit: 4 }, { label: 'DUST', bit: 2 }, { label: 'WARP', bit: 1 }, { label: 'LOOP', bit: 8 }]
   return <RecompilerPanel title="FAULT" className={`effect-module fault-module ${enabled ? '' : 'bypassed'}`} headerAction={<EffectPower effect={0} enabled={enabled} />}>
     <div className="creative-controls fault-controls"><PressureControl id="faultPressure" accessibleLabel="Fault pressure" />
       <div className="mutation-select" role="group" aria-label="Enabled fault mutations">

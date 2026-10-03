@@ -16,6 +16,11 @@ float clampGainDb(float value) noexcept
     return std::isfinite(value) ? std::clamp(value, -60.0f, 12.0f) : 0.0f;
 }
 
+float clampSelectionChance(float value) noexcept
+{
+    return std::isfinite(value) ? std::clamp(value, 0.0f, 100.0f) : 100.0f;
+}
+
 std::shared_ptr<const SampleData::WaveformPeaks>
 buildWaveformPeaks(const juce::AudioBuffer<float>& audio)
 {
@@ -67,6 +72,8 @@ SampleSettings readSettings(const juce::ValueTree& node)
         static_cast<float>(node.getProperty("fineTune", 0.0f)));
     s.stretchSpeed = randomchop::clampStretchSpeed(
         static_cast<float>(node.getProperty("stretch", 1.0f)));
+    s.selectionChance = clampSelectionChance(
+        static_cast<float>(node.getProperty("chance", 100.0f)));
     return s;
 }
 }
@@ -385,6 +392,8 @@ void SampleManager::updateSettings(const juce::String& id,
         copy->settings.gainDb = clampGainDb(copy->settings.gainDb);
         copy->settings.stretchSpeed = randomchop::clampStretchSpeed(
             copy->settings.stretchSpeed);
+        copy->settings.selectionChance = clampSelectionChance(
+            copy->settings.selectionChance);
 
         const auto stretchChanged = std::abs(copy->settings.stretchSpeed
                                                - previousStretchSpeed) >= 0.000001f;
@@ -447,6 +456,7 @@ juce::ValueTree SampleManager::createState() const
         node.setProperty("transpose", s.transposeSemitones, nullptr);
         node.setProperty("fineTune", s.fineTuneCents, nullptr);
         node.setProperty("stretch", s.stretchSpeed, nullptr);
+        node.setProperty("chance", s.selectionChance, nullptr);
         root.appendChild(node, nullptr);
     }
     return root;

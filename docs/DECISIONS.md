@@ -10,6 +10,13 @@ status: active
 
 These decisions govern implementation together with [[PRODUCT_SPEC_V2]].
 
+## Per-source Chance and held-note FAULT Loop (2026-10-03)
+
+- Restore a per-source CHANCE control as a persisted `0–100%` relative selection weight. Every note-on performs its own weighted draw from enabled, playable sources; `0%` excludes that source, all-zero pools stay silent, and equal nonzero values preserve equal selection. POLY chord notes draw independently and may choose the same source; MONO retains its established final-note-wins voice policy.
+- Place CHANCE between STRETCH and TRIM as the same compact horizontal control language used by TRIM. It supports exact numeric editing and resets to `100%` on double-click. New and legacy projects default missing Chance state to `100%`.
+- Add LOOP as FAULT mask bit `8`, below WARP. LOOP is deterministic rather than pressure-randomized: while its module is enabled and a MIDI note remains held, that voice repeats the first quarter of its selected START–END region. Note release exits repetition through the existing release envelope. POLY voices loop independently, and each real wrap advances FAULT visual-event telemetry.
+- Existing projects restore the historical FLIP/DUST/WARP mask without implicitly enabling LOOP.
+
 ## Drawing-only ETCH and final Shape-based BLEED (2026-10-02)
 
 - ETCH preserves the user's drawing and the read-only playback scan line from real spectral playback-position telemetry. Do not add a spectrum overlay, idle animation, or pointer/crosshair decoration.

@@ -27,6 +27,7 @@ struct SampleSettings final
     int transposeSemitones = 0;
     float fineTuneCents = 0.0f;
     float stretchSpeed = 1.0f;
+    float selectionChance = 100.0f;
 };
 
 struct SampleData final

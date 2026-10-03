@@ -134,10 +134,14 @@ void RandomChopSamplerAudioProcessor::noteOn(int note, float velocity) noexcept
     const auto pitchRatio = randomchop::pitchRatioForSemitones(pitchSemitones);
     const auto mode = parameters.getRawParameterValue(IDs::voiceMode)->load() >= 0.5f
         ? randomchop::VoiceMode::mono : randomchop::VoiceMode::poly;
+    const auto loopQuarter = isEffectEnabled(0)
+        && (faultMutations.load(std::memory_order_relaxed)
+            & randomchop::FaultMutations::loop) != 0;
     auto& voice = voices.acquire(mode);
     voice.start(prepared, note, velocity, start, region, pitchRatio,
                 juce::Decibels::decibelsToGain(source->settings.gainDb),
-                internalAttackSeconds, internalReleaseSeconds, ++voiceCounter, 0.0f);
+                internalAttackSeconds, internalReleaseSeconds, ++voiceCounter, 0.0f,
+                loopQuarter);
     lastTriggeredRuntimeId.store(source->runtimeId, std::memory_order_relaxed);
     triggeredWhileEmpty.store(false, std::memory_order_relaxed);
 }
@@ -240,6 +244,7 @@ void RandomChopSamplerAudioProcessor::processBlock(
     if (rendered < buffer.getNumSamples())
         voices.render(buffer, rendered, buffer.getNumSamples() - rendered);
     previewVoice.render(buffer, 0, buffer.getNumSamples());
+    faultLoopEvents.fetch_add(voices.consumeLoopEvents(), std::memory_order_relaxed);
     if (!previewVoice.isActive())
         previewingRuntimeId.store(0, std::memory_order_relaxed);
 
@@ -251,7 +256,8 @@ void RandomChopSamplerAudioProcessor::processBlock(
     faultEventSerial.store(
         faultProcessor.getMutationCount(randomchop::FaultMutation::resample)
             + faultProcessor.getMutationCount(randomchop::FaultMutation::bitcrush)
-            + faultProcessor.getMutationCount(randomchop::FaultMutation::reverse),
+            + faultProcessor.getMutationCount(randomchop::FaultMutation::reverse)
+            + faultLoopEvents.load(std::memory_order_relaxed),
         std::memory_order_relaxed);
     faultDivision.store(faultProcessor.getCurrentDivisionDenominator(),
                         std::memory_order_relaxed);
@@ -352,7 +358,7 @@ void RandomChopSamplerAudioProcessor::setStateInformation(const void* data, int 
         setUiScaleIndex(static_cast<int>(state.getProperty("uiScale", 1)));
         setSelectedSampleId(state.getProperty("selectedSampleId").toString());
         setFaultMutations(static_cast<uint32_t>(static_cast<int>(
-            state.getProperty("faultMutations", static_cast<int>(randomchop::FaultMutations::all)))));
+            state.getProperty("faultMutations", static_cast<int>(randomchop::FaultMutations::randomised)))));
         setSmearFeatures(static_cast<uint32_t>(static_cast<int>(
             state.getProperty("smearFeatures", static_cast<int>(randomchop::SmearFeatures::all)))));
         if (restoredVersion < 13)

@@ -19,7 +19,8 @@ void RandomSamplerVoice::start(PreparedSamplePtr newSample, int note, float velo
                                double startFrame, randomchop::FrameRegion sourceRegion,
                                double playbackPitchRatio, float voiceGain, float attackSeconds,
                                float releaseSeconds, uint64_t newAge,
-                               float finalLengthMilliseconds) noexcept
+                               float finalLengthMilliseconds,
+                               bool loopFirstQuarter) noexcept
 {
     if (newSample == nullptr || newSample->audio == nullptr)
     {
@@ -41,7 +42,15 @@ void RandomSamplerVoice::start(PreparedSamplePtr newSample, int note, float velo
     midiNote = note;
     age = newAge;
     region = sourceRegion;
-    sourcePosition = std::clamp(randomchop::finiteOr(
+    loopQuarter = loopFirstQuarter && region.canInterpolate();
+    pendingLoopEvents = 0;
+    loopStart = static_cast<double>(region.firstFrame);
+    const auto regionFrames = juce::jmax(2, region.lastFrame - region.firstFrame);
+    const auto quarterFrames = juce::jmax(2, regionFrames / 4);
+    loopEnd = juce::jmin(static_cast<double>(region.lastFrame),
+                        loopStart + static_cast<double>(quarterFrames));
+    loopQuarter = loopQuarter && loopEnd - loopStart >= 2.0;
+    sourcePosition = std::clamp(loopQuarter ? loopStart : randomchop::finiteOr(
         startFrame, static_cast<double>(region.firstFrame)),
         static_cast<double>(region.firstFrame),
         randomchop::lastInterpolationPosition(region));
@@ -93,6 +102,12 @@ void RandomSamplerVoice::render(juce::AudioBuffer<float>& output, int startSampl
         {
             sample.reset();
             break;
+        }
+        if (loopQuarter && stage != Stage::release && sourcePosition >= loopEnd)
+        {
+            const auto loopLength = loopEnd - loopStart;
+            sourcePosition = loopStart + std::fmod(sourcePosition - loopStart, loopLength);
+            ++pendingLoopEvents;
         }
         if (!randomchop::isInterpolationPositionLegal(region, sourcePosition))
         {

@@ -68,6 +68,14 @@ public:
         return count;
     }
 
+    uint32_t consumeLoopEvents() noexcept
+    {
+        uint32_t events = 0;
+        for (auto& voice : voices)
+            events += voice.consumeLoopEvents();
+        return events;
+    }
+
     const RandomSamplerVoice& operator[](size_t index) const noexcept { return voices[index]; }
 
 private:

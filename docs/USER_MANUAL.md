@@ -79,9 +79,9 @@ Missing and disabled sources are excluded from random playback.
 
 ### Random selection
 
-Each MIDI note-on chooses one enabled, playable source with equal probability. There is no weighting control. If five sources are enabled, each has the same chance of being chosen, regardless of file length.
+Each MIDI note-on makes an independent weighted choice among enabled, playable sources. The selected source's **Chance** value is its relative weight: equal values produce equal probability, `0%` excludes a source, and an all-zero pool stays silent. In Poly mode, chord notes make independent draws and may choose the same source.
 
-After choosing a source, the plug-in also chooses a random legal starting position between that source's Start and End markers. Playback continues toward the End marker unless the MIDI note is released first. The region does not loop.
+After choosing a source, the plug-in also chooses a random legal starting position between that source's Start and End markers. Playback continues toward the End marker unless the MIDI note is released first. The region normally does not loop; enabling FAULT **Loop** repeats the first quarter of the selected Start–End region while that MIDI note remains held.
 
 ## 4 Source controls
 
@@ -116,6 +116,10 @@ Transpose is applied in addition to Fine Tune, global PITCH, and, when Chords is
 ### Gain
 
 **Gain** sets the selected source's level from -60 dB to +12 dB before the global effects. Use it to balance quiet and loud files so that random source changes do not create large volume jumps.
+
+### Chance
+
+**Chance** sets the selected source's relative probability from `0%` to `100%`. Drag the horizontal control, type an exact value, or double-click to reset it to `100%`. The value is saved per source with the project.
 
 ## 5 Chords
 

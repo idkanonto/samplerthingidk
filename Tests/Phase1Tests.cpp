@@ -63,7 +63,8 @@ PreparedSamplePtr makePrepared(
     return prepared;
 }
 
-SampleManager::SamplePtr makeSource(bool enabled = true, bool missing = false)
+SampleManager::SamplePtr makeSource(bool enabled = true, bool missing = false,
+                                    float chance = 100.0f)
 {
     auto audio = std::make_shared<juce::AudioBuffer<float>>(1, 64);
     audio->clear();
@@ -71,6 +72,7 @@ SampleManager::SamplePtr makeSource(bool enabled = true, bool missing = false)
     source->settings.id = juce::Uuid().toString();
     source->settings.enabled = enabled;
     source->settings.missing = missing;
+    source->settings.selectionChance = chance;
     source->audio = audio;
     source->prepared = makePrepared(audio, 44100.0);
     return source;
@@ -161,6 +163,7 @@ void testSupportedFormatsAndPoolState()
             settings.transposeSemitones = -12;
             settings.fineTuneCents = 37.0f;
             settings.stretchSpeed = 0.25f;
+            settings.selectionChance = 35.0f;
         });
         const auto changed = manager.getSnapshot()->front();
         check(changed->settings.id == id && changed->runtimeId == runtimeId,
@@ -172,6 +175,7 @@ void testSupportedFormatsAndPoolState()
                    && changed->settings.transposeSemitones == -12
                    && changed->settings.fineTuneCents == 37.0f
                    && changed->settings.stretchSpeed == 0.25f
+                   && changed->settings.selectionChance == 35.0f
                    && (*manager.getSnapshot())[1]->settings.stretchSpeed == 1.0f,
               "source controls were not preserved in the snapshot");
 
@@ -191,26 +195,30 @@ void testSupportedFormatsAndPoolState()
         check(restored.getSnapshot()->front()->settings.id == id,
               "stable source ID was not persisted");
         check(restored.getSnapshot()->front()->settings.stretchSpeed == 0.25f
+                  && restored.getSnapshot()->front()->settings.selectionChance == 35.0f
                   && (*restored.getSnapshot())[1]->settings.stretchSpeed == 1.0f,
-              "independent per-source Stretch values were not persisted");
+              "independent per-source Stretch or Chance values were not persisted");
         juce::ValueTree hostileState("SAMPLES");
         juce::ValueTree hostileSource("SAMPLE");
         hostileSource.setProperty("id", "hostile-source", nullptr);
         hostileSource.setProperty("path", file.getFullPathName(), nullptr);
         hostileSource.setProperty("gain", std::numeric_limits<float>::quiet_NaN(), nullptr);
         hostileSource.setProperty("weight", std::numeric_limits<float>::infinity(), nullptr);
+        hostileSource.setProperty("chance", std::numeric_limits<float>::quiet_NaN(), nullptr);
         hostileSource.setProperty("stretch", 4.0f, nullptr);
         hostileState.appendChild(hostileSource, nullptr);
         SampleManager hostileRestore;
         const auto hostileErrors = hostileRestore.restoreState(hostileState);
         const auto hostileSnapshot = hostileRestore.getSnapshot();
         check(hostileErrors.empty() && !hostileSnapshot->empty()
-                   && hostileSnapshot->front()->settings.gainDb == 0.0f,
-              "hostile persisted Gain escaped finite restore bounds");
+                   && hostileSnapshot->front()->settings.gainDb == 0.0f
+                   && hostileSnapshot->front()->settings.selectionChance == 100.0f,
+              "hostile persisted Gain or Chance escaped finite restore bounds");
         const auto rewritten = hostileRestore.createState().getChild(0);
         check(!rewritten.hasProperty("weight")
+                  && static_cast<float>(rewritten.getProperty("chance")) == 100.0f
                   && static_cast<float>(rewritten.getProperty("stretch")) == 2.0f,
-              "active Stretch bounds or retired Weight state were written incorrectly");
+              "active Chance/Stretch bounds or retired Weight state were written incorrectly");
         const auto restoredId = restored.getSnapshot()->front()->settings.id;
         const auto heldPrepared = restored.getSnapshot()->front()->prepared;
         const auto heldFrames = heldPrepared != nullptr && heldPrepared->audio != nullptr
@@ -244,9 +252,29 @@ void testEqualSelectionAndPitch()
     }
     check(first > 4500 && first < 5500 && second > 4500 && second < 5500,
           "enabled sources no longer receive approximately equal selection probability");
+    SampleManager::Pool weighted { makeSource(true, false, 25.0f),
+                                   makeSource(true, false, 75.0f),
+                                   makeSource(true, false, 0.0f) };
+    random.setSeed(654321);
+    first = 0;
+    second = 0;
+    for (int iteration = 0; iteration < 10000; ++iteration)
+    {
+        const auto selected = randomchop::chooseSource(weighted, random);
+        first += selected == 0 ? 1 : 0;
+        second += selected == 1 ? 1 : 0;
+        check(selected == 0 || selected == 1,
+              "zero-Chance source participated in weighted selection");
+    }
+    check(first > 2200 && first < 2800 && second > 7200 && second < 7800,
+          "per-source Chance no longer acts as a relative selection weight");
     SampleManager::Pool empty { makeSource(false) };
     check(randomchop::chooseSource(empty, random) == -1,
           "empty playable pool did not return the silent sentinel");
+    SampleManager::Pool zeroChance { makeSource(true, false, 0.0f),
+                                     makeSource(true, false, 0.0f) };
+    check(randomchop::chooseSource(zeroChance, random) == -1,
+          "all-zero Chance pool did not return the silent sentinel");
 
     check(std::abs(randomchop::playbackPitchSemitones(
         12, 50.0f, -12, false, 20) - 0.5) < 0.000001,
@@ -385,6 +413,26 @@ void testRegionsAndVoices()
             maximum = std::max(maximum, std::abs(output.getSample(channel, frame)));
     check(maximum > 0.0f && maximum < 1.0f && !voice.isActive(),
           "forward voice crossed its source region or failed to finish");
+
+    auto loopAudio = std::make_shared<juce::AudioBuffer<float>>(1, 18);
+    for (int frame = 0; frame < loopAudio->getNumSamples(); ++frame)
+        loopAudio->setSample(0, frame, static_cast<float>(frame + 1) / 20.0f);
+    RandomSamplerVoice loopVoice;
+    loopVoice.prepare(1000.0);
+    loopVoice.start(makePrepared(loopAudio, 1000.0), 61, 1.0f, 9.0, { 0, 17 }, 1.0,
+                    1.0f, 0.0f, 0.004f, 2, 0.0f, true);
+    juce::AudioBuffer<float> looped(2, 12);
+    looped.clear();
+    loopVoice.render(looped, 0, looped.getNumSamples());
+    check(loopVoice.isActive()
+              && std::abs(looped.getSample(0, 0) - looped.getSample(0, 4)) < 0.000001f
+              && std::abs(looped.getSample(0, 1) - looped.getSample(0, 5)) < 0.000001f,
+          "held FAULT Loop did not repeat the first quarter of the selected region");
+    loopVoice.release(0.004f);
+    juce::AudioBuffer<float> loopRelease(2, 16);
+    loopRelease.clear();
+    loopVoice.render(loopRelease, 0, loopRelease.getNumSamples());
+    check(!loopVoice.isActive(), "FAULT Loop did not leave repetition after note release");
 
     const auto constant = makeVoiceSample(1.0f);
     RandomSamplerVoice limited;

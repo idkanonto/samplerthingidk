@@ -176,7 +176,7 @@ void FaultProcessor::process(juce::AudioBuffer<float>& buffer,
 
     const auto pressure = std::clamp(std::isfinite(settings.pressurePercent)
         ? settings.pressurePercent * 0.01f : 0.0f, 0.0f, 1.0f);
-    const auto enabledMask = settings.enabledMutations & FaultMutations::all;
+    const auto enabledMask = settings.enabledMutations & FaultMutations::randomised;
     int boundaryIndex = 0;
     const auto channels = std::min(2, buffer.getNumChannels());
     const auto capacity = history.getNumSamples();
