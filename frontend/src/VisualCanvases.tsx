@@ -154,6 +154,13 @@ export function NeuralBackground({ className = '', color = '#ffffff', trailOpaci
         particle.vx += Math.cos(angle) * 0.2 * flowSpeed
         particle.vy += Math.sin(angle) * 0.2 * flowSpeed
 
+        // A deliberately tiny restoring force counters long-term edge and
+        // corner accumulation without introducing a boundary or safe margin.
+        // Particles still wrap through, and can occupy, the complete display.
+        const gravity = 0.00009 * visualEnergy
+        particle.vx += (width * .5 - particle.x) * gravity
+        particle.vy += (height * .5 - particle.y) * gravity
+
         const dx = mouse.x - particle.x
         const dy = mouse.y - particle.y
         const distance = Math.hypot(dx, dy)
