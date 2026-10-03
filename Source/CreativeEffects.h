@@ -109,6 +109,7 @@ class SmearProcessor final
 {
 public:
     static constexpr int maximumGrains = 40;
+    static double playbackRateForPressure(float pressurePercent) noexcept;
 
     void prepare(double newSampleRate);
     void reset() noexcept;
@@ -127,6 +128,7 @@ private:
     struct Grain
     {
         double readPosition = 0.0;
+        double increment = 1.0;
         float pan = 0.0f;
         float panPhase = 0.0f;
         float panRate = 0.0f;
@@ -139,7 +141,7 @@ private:
     float readDelay(int channel, double position) const noexcept;
     float lookupSine(float phase) const noexcept;
     float lookupWindow(float phase, float shape) const noexcept;
-    void startGrain(float shape, uint32_t features) noexcept;
+    void startGrain(float shape, uint32_t features, float pressure) noexcept;
     void resetRealtimeState() noexcept;
 
     juce::AudioBuffer<float> delayBuffer;

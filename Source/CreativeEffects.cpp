@@ -476,7 +476,14 @@ float SmearProcessor::lookupWindow(float phase, float shape) const noexcept
     return lerp(lookup(hannTable), lookup(sharpWindowTable), shape);
 }
 
-void SmearProcessor::startGrain(float shape, uint32_t features) noexcept
+double SmearProcessor::playbackRateForPressure(float pressurePercent) noexcept
+{
+    // Pressure spans two octaves continuously: unison at 0, +12 st at 50,
+    // and +24 st at 100. Latching this per grain avoids pitch jumps.
+    return std::exp2(2.0 * static_cast<double>(normalisePercent(pressurePercent)));
+}
+
+void SmearProcessor::startGrain(float shape, uint32_t features, float pressure) noexcept
 {
     Grain* destination = nullptr;
     for (auto& grain : grains)
@@ -506,7 +513,9 @@ void SmearProcessor::startGrain(float shape, uint32_t features) noexcept
     const auto length = std::clamp(static_cast<int>(std::llround(
         sampleRate * static_cast<double>(variedLengthMs) * 0.001)),
         minimumLength, std::max(minimumLength, delayBuffer.getNumSamples() / 4));
-    const auto minimumDelay = length + 4;
+    const auto increment = playbackRateForPressure(pressure * 100.0f);
+    const auto minimumDelay = static_cast<int>(std::ceil(
+        static_cast<double>(length) * std::max(1.0, increment * 1.02))) + 4;
     if (validFrames <= minimumDelay)
         return;
     const auto scatterChoice = random.unit();
@@ -519,6 +528,7 @@ void SmearProcessor::startGrain(float shape, uint32_t features) noexcept
 
     destination->readPosition = wrap(static_cast<double>(writePosition - delay),
                                      static_cast<double>(delayBuffer.getNumSamples()));
+    destination->increment = increment;
     const auto panChoice = random.unit();
     destination->pan = (features & SmearFeatures::stereo) != 0
         ? static_cast<float>(panChoice * 2.0 - 1.0) : 0.0f;
@@ -582,7 +592,7 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
                 static_cast<double>(maximumEventsPerDensityWindow - 1) * densityCurve)),
                 1, maximumEventsPerDensityWindow);
             if (activeGrainCount < maximumGrains)
-                startGrain(shape, features);
+                startGrain(shape, features, pressure);
             peakActiveGrainCount = std::max(peakActiveGrainCount, activeGrainCount);
             const auto pulse = 0.90f + 0.10f * std::sin(
                 juce::MathConstants<float>::twoPi * motionPhase);
@@ -610,9 +620,7 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
             texture[0] += window * (left * leftPan + right * rightPan * 0.16f);
             texture[1] += window * (right * rightPan + left * leftPan * 0.16f);
             windowEnergy += window * window;
-            // BLEED is intentionally voiced one octave above the source. Shape
-            // changes the grain envelope and duration, never this fixed pitch.
-            grain.readPosition = wrap(grain.readPosition + 2.0,
+            grain.readPosition = wrap(grain.readPosition + grain.increment,
                                       static_cast<double>(delayBuffer.getNumSamples()));
             grain.panPhase = static_cast<float>(wrap(
                 grain.panPhase + grain.panRate, 1.0));
