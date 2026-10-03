@@ -1,4 +1,4 @@
-import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createNoise2D } from 'simplex-noise'
 import { sendPluginCommand, type VisualisationState } from './juceBridge'
 
@@ -209,13 +209,12 @@ export function FaultWaves({ eventSerial, active, className = '', strokeColor = 
   backgroundColor?: string
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
-  const svgRef = useRef<SVGSVGElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
   const activeRef = useRef(active)
   const eventSerialRef = useRef(eventSerial)
   activeRef.current = active
   eventSerialRef.current = eventSerial
   const mouseRef = useRef({ x: -10, y: 0, lx: 0, ly: 0, sx: 0, sy: 0, v: 0, vs: 0, a: 0, set: false })
-  const pathsRef = useRef<SVGPathElement[]>([])
   const linesRef = useRef<WavePoint[][]>([])
   const noiseRef = useRef<((x: number, y: number) => number) | null>(null)
   const rafRef = useRef<number | null>(null)
@@ -224,12 +223,14 @@ export function FaultWaves({ eventSerial, active, className = '', strokeColor = 
 
   useEffect(() => {
     const container = containerRef.current
-    const svg = svgRef.current
-    if (!container || !svg) return
+    const canvas = canvasRef.current
+    if (!container || !canvas) return
+    const context = canvas.getContext('2d')
+    if (!context) return
     noiseRef.current = createNoise2D()
 
     const setSize = () => {
-      if (!containerRef.current || !svgRef.current) return false
+      if (!containerRef.current || !canvasRef.current) return false
       const bounds = containerRef.current.getBoundingClientRect()
       const width = Math.round(bounds.width)
       const height = Math.round(bounds.height)
@@ -238,21 +239,21 @@ export function FaultWaves({ eventSerial, active, className = '', strokeColor = 
       if (width < 2 || height < 2) return false
       if (Math.round(boundingRef.current?.width ?? -1) === width
         && Math.round(boundingRef.current?.height ?? -1) === height
-        && pathsRef.current.length > 0) return false
+        && linesRef.current.length > 0) return false
       boundingRef.current = bounds
-      svgRef.current.style.width = `${width}px`
-      svgRef.current.style.height = `${height}px`
-      svgRef.current.setAttribute('width', `${width}`)
-      svgRef.current.setAttribute('height', `${height}`)
-      svgRef.current.setAttribute('viewBox', `0 0 ${width} ${height}`)
+      const dpr = Math.max(1, window.devicePixelRatio || 1)
+      canvasRef.current.width = Math.max(1, Math.round(width * dpr))
+      canvasRef.current.height = Math.max(1, Math.round(height * dpr))
+      canvasRef.current.style.width = `${width}px`
+      canvasRef.current.style.height = `${height}px`
+      context.setTransform(dpr, 0, 0, dpr, 0, 0)
+      context.imageSmoothingEnabled = false
       return true
     }
     const setLines = () => {
-      if (!svgRef.current || !boundingRef.current) return
+      if (!boundingRef.current) return
       const { width, height } = boundingRef.current
       linesRef.current = []
-      pathsRef.current.forEach((path) => path.remove())
-      pathsRef.current = []
       const xGap = 9
       const yGap = 9
       const oWidth = width + 240
@@ -274,13 +275,6 @@ export function FaultWaves({ eventSerial, active, className = '', strokeColor = 
             cursor: { x: 0, y: 0, vx: 0, vy: 0 }
           })
         }
-        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-        path.classList.add('a__line', 'js-line')
-        path.setAttribute('fill', 'none')
-        path.setAttribute('stroke', strokeColor)
-        path.setAttribute('stroke-width', '1')
-        svgRef.current.appendChild(path)
-        pathsRef.current.push(path)
         linesRef.current.push(points)
       }
     }
@@ -334,16 +328,24 @@ export function FaultWaves({ eventSerial, active, className = '', strokeColor = 
       }))
     }
     const drawLines = () => {
-      linesRef.current.forEach((points, lineIndex) => {
-        const path = pathsRef.current[lineIndex]
-        if (points.length < 2 || !path) return
+      const bounds = boundingRef.current
+      if (!bounds) return
+      context.fillStyle = backgroundColor
+      context.fillRect(0, 0, bounds.width, bounds.height)
+      context.strokeStyle = strokeColor
+      context.lineWidth = 1
+      context.lineCap = 'butt'
+      context.lineJoin = 'miter'
+      linesRef.current.forEach((points) => {
+        if (points.length < 2) return
         const first = moved(points[0], false)
-        let drawing = `M ${first.x} ${first.y}`
+        context.beginPath()
+        context.moveTo(first.x, first.y)
         for (let index = 1; index < points.length; index++) {
           const point = moved(points[index])
-          drawing += `L ${point.x} ${point.y}`
+          context.lineTo(point.x, point.y)
         }
-        path.setAttribute('d', drawing)
+        context.stroke()
       })
     }
 
@@ -419,8 +421,6 @@ export function FaultWaves({ eventSerial, active, className = '', strokeColor = 
       tickRef.current = null
       resizeObserver.disconnect()
       window.removeEventListener('resize', onContainerResize)
-      pathsRef.current.forEach((path) => path.remove())
-      pathsRef.current = []
       linesRef.current = []
     }
   }, [strokeColor])
@@ -435,9 +435,9 @@ export function FaultWaves({ eventSerial, active, className = '', strokeColor = 
   }, [active])
 
   return <div ref={containerRef} className={`waves-component relative overflow-hidden ${className}`}
-    style={{ backgroundColor, position: 'absolute', top: 0, left: 0, margin: 0, padding: 0,
-      width: '100%', height: '100%', overflow: 'hidden', '--x': '-0.5rem', '--y': '50%' } as CSSProperties}>
-    <svg ref={svgRef} className="block h-full w-full js-svg" xmlns="http://www.w3.org/2000/svg" />
+    style={{ backgroundColor, position: 'relative', display: 'block', margin: 0, padding: 0,
+      width: '100%', height: '100%', minWidth: 0, minHeight: 0, overflow: 'hidden' }}>
+    <canvas ref={canvasRef} className="pixel-canvas" aria-label="Fault event-driven wave field" />
   </div>
 }
 
@@ -590,14 +590,12 @@ export function StereoMeterCanvas({ left, right }: { left: number, right: number
       levels.current[1] = Math.max(Math.max(0, peaks.current[1]), levels.current[1] * .86)
       const context = setup(canvas, 56, 142)
       if (!context) return
-      context.font = 'bold 8px monospace'; context.textAlign = 'center'; context.fillStyle = '#eeeeee'
-      context.fillText('L', 17, 9); context.fillText('R', 41, 9)
       for (let channel = 0; channel < 2; channel += 1) {
         const db = 20 * Math.log10(Math.max(.004, levels.current[channel]))
-        const lit = Math.round(Math.max(0, Math.min(1, (db + 48) / 52)) * 20)
-        for (let segment = 0; segment < 20; segment += 1) {
+        const lit = Math.round(Math.max(0, Math.min(1, (db + 48) / 52)) * 27)
+        for (let segment = 0; segment < 27; segment += 1) {
           context.fillStyle = segment < lit ? '#eeeeee' : '#383838'
-          context.fillRect(8 + channel * 24, 130 - segment * 5, 17, 3)
+          context.fillRect(8 + channel * 24, 134 - segment * 5, 17, 3)
         }
       }
     }

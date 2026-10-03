@@ -427,6 +427,7 @@ void SmearProcessor::setSeed(uint64_t seed) noexcept
 {
     random.setSeed(seed ^ 0x736d6561722d6372ULL);
     schedulerRandom.setSeed(seed ^ 0x626c6565642d646eULL);
+    pitchRandom.setSeed(seed ^ 0x626c6565642d6f63ULL);
     // Logical invalidation makes old ring contents unreachable while avoiding a
     // one-second buffer clear if a host restores state during playback.
     resetRealtimeState();
@@ -476,11 +477,17 @@ float SmearProcessor::lookupWindow(float phase, float shape) const noexcept
     return lerp(lookup(hannTable), lookup(sharpWindowTable), shape);
 }
 
-double SmearProcessor::playbackRateForPressure(float pressurePercent) noexcept
+double SmearProcessor::playbackRateForPressure(float pressurePercent,
+                                                double octaveSelector) noexcept
 {
-    // Pressure spans two octaves continuously: unison at 0, +12 st at 50,
-    // and +24 st at 100. Latching this per grain avoids pitch jumps.
-    return std::exp2(2.0 * static_cast<double>(normalisePercent(pressurePercent)));
+    // Every grain is either unison or exactly one octave up. Pressure changes
+    // only the probability of choosing the octave grain; it never creates an
+    // intermediate pitch or a second-octave (+24 st) grain.
+    const auto octaveProbability = static_cast<double>(
+        normalisePercent(pressurePercent));
+    const auto selector = std::clamp(std::isfinite(octaveSelector)
+        ? octaveSelector : 1.0, 0.0, 1.0);
+    return selector < octaveProbability ? 2.0 : 1.0;
 }
 
 void SmearProcessor::startGrain(float shape, uint32_t features, float pressure) noexcept
@@ -501,17 +508,18 @@ void SmearProcessor::startGrain(float shape, uint32_t features, float pressure) 
     const auto nominalLengthMs = shape < 0.0f
         ? 40.0f + 50.0f * -shape
         : 40.0f - 22.0f * shape;
-    const auto increment = playbackRateForPressure(pressure * 100.0f);
     const auto maximumPossibleLength = static_cast<int>(std::ceil(
         sampleRate * static_cast<double>(nominalLengthMs) * 0.001 * 1.10));
     const auto maximumRequiredDelay = static_cast<int>(std::ceil(
         static_cast<double>(maximumPossibleLength)
-            * std::max(1.0, increment * 1.02))) + 4;
+            * 2.04)) + 4;
     // Do not consume the grain RNG until every possible duration is safe at
     // the requested rate. Pressure can delay a grain, but cannot alter Shape's
     // deterministic duration sequence through repeated failed start attempts.
     if (validFrames <= maximumRequiredDelay)
         return;
+    const auto increment = playbackRateForPressure(
+        pressure * 100.0f, pitchRandom.unit());
     const auto variedLengthMs = nominalLengthMs
         * static_cast<float>(0.90 + 0.20 * random.unit());
     constexpr float minimumGrainSeconds = 0.014f;

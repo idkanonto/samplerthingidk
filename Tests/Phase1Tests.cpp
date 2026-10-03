@@ -951,10 +951,11 @@ void testMeltProcessor()
 
 void testSmearProcessor()
 {
-    check(std::abs(randomchop::SmearProcessor::playbackRateForPressure(0.0f) - 1.0) < 0.000001
-              && std::abs(randomchop::SmearProcessor::playbackRateForPressure(50.0f) - 2.0) < 0.000001
-              && std::abs(randomchop::SmearProcessor::playbackRateForPressure(100.0f) - 4.0) < 0.000001,
-          "Bleed Pressure no longer maps continuously from unison through +12 to +24 semitones");
+    check(std::abs(randomchop::SmearProcessor::playbackRateForPressure(0.0f, 0.0) - 1.0) < 0.000001
+              && std::abs(randomchop::SmearProcessor::playbackRateForPressure(50.0f, 0.49) - 2.0) < 0.000001
+              && std::abs(randomchop::SmearProcessor::playbackRateForPressure(50.0f, 0.51) - 1.0) < 0.000001
+              && std::abs(randomchop::SmearProcessor::playbackRateForPressure(100.0f, 0.999) - 2.0) < 0.000001,
+          "Bleed Pressure no longer crossfades grain probability from unison to exactly +12 semitones");
 
     randomchop::SmearProcessor bypass;
     bypass.prepare(48000.0);

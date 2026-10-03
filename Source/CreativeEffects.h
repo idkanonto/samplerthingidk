@@ -109,7 +109,8 @@ class SmearProcessor final
 {
 public:
     static constexpr int maximumGrains = 40;
-    static double playbackRateForPressure(float pressurePercent) noexcept;
+    static double playbackRateForPressure(float pressurePercent,
+                                          double octaveSelector) noexcept;
 
     void prepare(double newSampleRate);
     void reset() noexcept;
@@ -153,6 +154,7 @@ private:
     std::array<float, 2> lowState { 0.0f, 0.0f };
     RandomizationEngine random;
     RandomizationEngine schedulerRandom;
+    RandomizationEngine pitchRandom;
     double sampleRate = 44100.0;
     float fastEnvelope = 0.0f;
     float slowEnvelope = 0.0f;
