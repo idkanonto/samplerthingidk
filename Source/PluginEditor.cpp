@@ -2090,15 +2090,16 @@ void RandomChopSamplerAudioProcessorEditor::showEffectModeMenu(int effect)
         { "Slice variation", randomchop::MeltFeatures::sliceVariation }
     };
     const Option smear[] {
-        { "Pitched intervals", randomchop::SmearFeatures::pitch },
         { "Time scatter", randomchop::SmearFeatures::scatter },
-        { "Pitch and pan motion", randomchop::SmearFeatures::orbit },
+        { "Pan motion", randomchop::SmearFeatures::orbit },
         { "Stereo spread", randomchop::SmearFeatures::stereo },
-        { "Bright particles", randomchop::SmearFeatures::brightness },
-        { "Feedback", randomchop::SmearFeatures::feedback }
+        { "Bright particles", randomchop::SmearFeatures::brightness }
     };
     const Option* options = effect == 0 ? scramble : effect == 1 ? melt : smear;
-    const auto optionCount = effect == 0 ? 5 : effect == 1 ? 3 : 6;
+    const auto optionCount = effect == 0 ? 5 : effect == 1 ? 3 : 4;
+    std::array<uint32_t, 6> optionFlags {};
+    for (int index = 0; index < optionCount; ++index)
+        optionFlags[static_cast<std::size_t>(index)] = options[index].flag;
     const auto all = effect == 0 ? randomchop::ScrambleFeatures::all
         : effect == 1 ? randomchop::MeltFeatures::all : randomchop::SmearFeatures::all;
     const auto current = effect == 0 ? processor.getScrambleFeatures()
@@ -2114,11 +2115,11 @@ void RandomChopSamplerAudioProcessorEditor::showEffectModeMenu(int effect)
                       : static_cast<juce::Component*>(&smearModeButton);
     juce::Component::SafePointer<RandomChopSamplerAudioProcessorEditor> safe(this);
     menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(target),
-        [safe, effect, current, all](int choice)
+        [safe, effect, current, all, optionFlags](int choice)
         {
             if (safe == nullptr || choice == 0) return;
             const uint32_t next = choice == 100 ? all
-                : current ^ (uint32_t { 1 } << static_cast<uint32_t>(choice - 1));
+                : current ^ optionFlags[static_cast<std::size_t>(choice - 1)];
             if (effect == 0) safe->processor.setScrambleFeatures(next);
             else if (effect == 1) safe->processor.setMeltFeatures(next);
             else safe->processor.setSmearFeatures(next);
