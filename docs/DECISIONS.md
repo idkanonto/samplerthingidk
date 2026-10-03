@@ -10,6 +10,11 @@ status: active
 
 These decisions govern implementation together with [[PRODUCT_SPEC_V2]].
 
+## Lower-resolution effect displays (2026-10-03)
+
+- FAULT and BLEED retain their approved algorithms, audio/telemetry mappings, geometry, and panel sizes, but present through a half-resolution nearest-neighbour canvas compared with the preceding pass. This makes each display pixel roughly twice as large without adding a grid, scanline overlay, or changing the visuals themselves.
+- Cap both effect-display simulation/paint loops at 30 Hz. The browser may still use `requestAnimationFrame` as its scheduler, but frames inside the 33.3 ms cadence are skipped and do not advance visual state.
+
 ## Per-source Chance and held-note FAULT Loop (2026-10-03)
 
 - Restore a per-source CHANCE control as a persisted `0–100%` relative selection weight. Every note-on performs its own weighted draw from enabled, playable sources; `0%` excludes that source, all-zero pools stay silent, and equal nonzero values preserve equal selection. POLY chord notes draw independently and may choose the same source; MONO retains its established final-note-wins voice policy.

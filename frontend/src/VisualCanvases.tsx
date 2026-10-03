@@ -24,7 +24,8 @@ const setup = (canvas: HTMLCanvasElement, width: number, height: number, clear =
   return context
 }
 
-const EFFECT_RENDER_SCALE = 0.75
+const EFFECT_RENDER_SCALE = 0.375
+const EFFECT_FRAME_INTERVAL_MS = 1000 / 30
 
 export function WaveformCanvas({ waveform }: { waveform?: [number, number][] }) {
   const ref = useRef<HTMLCanvasElement>(null)
@@ -130,7 +131,8 @@ export function NeuralBackground({ className = '', color = '#ffffff', trailOpaci
 
     const animate = (time: number) => {
       frame = requestAnimationFrame(animate)
-      const deltaSeconds = previousFrame === 0 ? 1 / 60
+      if (previousFrame !== 0 && time - previousFrame < EFFECT_FRAME_INTERVAL_MS) return
+      const deltaSeconds = previousFrame === 0 ? 1 / 30
         : Math.max(1 / 120, Math.min(1 / 20, (time - previousFrame) / 1000))
       previousFrame = time
       const current = dataRef.current
@@ -210,7 +212,7 @@ export function NeuralBackground({ className = '', color = '#ffffff', trailOpaci
   }, [active, color, particleCount, speed, trailOpacity])
 
   return <div ref={containerRef} className={`relative h-full w-full overflow-hidden ${className}`}>
-    <canvas ref={canvasRef} className="block h-full w-full" aria-label="Bleed crystalline particle flow" />
+    <canvas ref={canvasRef} className="pixel-canvas block h-full w-full" aria-label="Bleed crystalline particle flow" />
   </div>
 }
 
@@ -394,7 +396,11 @@ export function FaultWaves({ eventSerial, audioLevel, active, className = '', st
     const tick = (time: number) => {
       rafRef.current = null
       if (!activeRef.current) return
-      const delta = previousFrame === 0 ? 1 / 60
+      if (previousFrame !== 0 && time - previousFrame < EFFECT_FRAME_INTERVAL_MS) {
+        rafRef.current = requestAnimationFrame(tick)
+        return
+      }
+      const delta = previousFrame === 0 ? 1 / 30
         : Math.max(1 / 120, Math.min(1 / 20, (time - previousFrame) / 1000))
       previousFrame = time
       const currentEventSerial = eventSerialRef.current
