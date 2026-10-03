@@ -16,7 +16,7 @@ constexpr auto spectralDepth = "spectralDepth";
 constexpr auto smearAmount = "smearAmount";
 constexpr auto bleedMix = "bleedMix";
 constexpr auto bleedGrainSize = "bleedGrainSize";
-constexpr auto bleedGrainPitch = "bleedGrainPitch";
+constexpr auto bleedShape = "bleedShape";
 }
 
 namespace
@@ -50,13 +50,14 @@ RandomChopSamplerAudioProcessor::createParameterLayout()
         juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, "%"));
     layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::spectralDepth, "Etch Depth",
         juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, "%"));
-    layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::smearAmount, "Bleed",
+    layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::smearAmount, "Bleed Pressure",
         juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 0.0f, "%"));
     layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::bleedMix, "Bleed Mix",
         juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f), 50.0f, "%"));
-    layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::bleedGrainSize, "Bleed Grain Size",
+    layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::bleedGrainSize,
+        "Legacy Bleed Grain Size (ignored)",
         juce::NormalisableRange<float>(8.0f, 120.0f, 0.1f), 40.0f, "ms"));
-    layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::bleedGrainPitch, "Bleed Grain Pitch",
+    layout.add(std::make_unique<juce::AudioParameterFloat>(IDs::bleedShape, "Bleed Shape",
         juce::NormalisableRange<float>(-100.0f, 100.0f, 0.1f), 0.0f, "%"));
     return layout;
 }
@@ -263,32 +264,19 @@ void RandomChopSamplerAudioProcessor::processBlock(
         { isEffectEnabled(1) ? parameters.getRawParameterValue(IDs::smearAmount)->load() : 0.0f,
           smearFeatures.load(std::memory_order_relaxed),
           parameters.getRawParameterValue(IDs::bleedMix)->load(),
-          parameters.getRawParameterValue(IDs::bleedGrainSize)->load(),
-          parameters.getRawParameterValue(IDs::bleedGrainPitch)->load() });
+          parameters.getRawParameterValue(IDs::bleedShape)->load() });
     smearVisualActivity.store(static_cast<float>(smearProcessor.getActiveGrainCount())
                                   / static_cast<float>(
                                       randomchop::SmearProcessor::maximumGrains),
                               std::memory_order_relaxed);
     smearVisualGain.store(smearProcessor.getLastOverlapGain() / 1.10f,
                           std::memory_order_relaxed);
-    if (buffer.getNumSamples() > 0)
-    {
-        const auto rightChannel = buffer.getNumChannels() > 1 ? 1 : 0;
-        for (size_t point = 0; point < bleedScopeSampleCount; ++point)
-        {
-            const auto frame = juce::jlimit(0, buffer.getNumSamples() - 1,
-                static_cast<int>(point * static_cast<size_t>(buffer.getNumSamples())
-                    / bleedScopeSampleCount));
-            bleedScopeLeft[point].store(buffer.getSample(0, frame),
-                                        std::memory_order_relaxed);
-            bleedScopeRight[point].store(buffer.getSample(rightChannel, frame),
-                                         std::memory_order_relaxed);
-        }
-    }
     outputGain.setTargetValue(randomchop::outputPercentToGain(
         parameters.getRawParameterValue(IDs::output)->load()));
     float leftPeak = 0.0f;
     float rightPeak = 0.0f;
+    double outputSquaredSum = 0.0;
+    uint64_t outputSampleCount = 0;
     for (int frame = 0; frame < buffer.getNumSamples(); ++frame)
     {
         const auto gain = outputGain.getNextValue();
@@ -296,6 +284,8 @@ void RandomChopSamplerAudioProcessor::processBlock(
         {
             const auto sample = buffer.getSample(channel, frame) * gain;
             buffer.setSample(channel, frame, sample);
+            outputSquaredSum += static_cast<double>(sample) * static_cast<double>(sample);
+            ++outputSampleCount;
             if (channel == 0)
                 leftPeak = juce::jmax(leftPeak, std::abs(sample));
             else if (channel == 1)
@@ -309,6 +299,12 @@ void RandomChopSamplerAudioProcessor::processBlock(
     outputPeakLeft.store(limitedLeft, std::memory_order_relaxed);
     outputPeakRight.store(limitedRight, std::memory_order_relaxed);
     outputPeak.store(juce::jmax(limitedLeft, limitedRight), std::memory_order_relaxed);
+    const auto outputRms = outputSampleCount > 0
+        ? static_cast<float>(std::sqrt(outputSquaredSum
+            / static_cast<double>(outputSampleCount))) : 0.0f;
+    visualAudioLevel.store(std::clamp(std::isfinite(outputRms) ? outputRms * 5.0f : 0.0f,
+                                      0.0f, 1.0f),
+                           std::memory_order_relaxed);
     activeVoiceCount.store(static_cast<int>(voices.activeCount()),
                            std::memory_order_relaxed);
 }
@@ -403,7 +399,7 @@ void RandomChopSamplerAudioProcessor::setStateInformation(const void* data, int 
         ensureParameter(IDs::smearAmount, 0.0f);
         ensureParameter(IDs::bleedMix, 50.0f);
         ensureParameter(IDs::bleedGrainSize, 40.0f);
-        ensureParameter(IDs::bleedGrainPitch, 0.0f);
+        ensureParameter(IDs::bleedShape, 0.0f);
         ensureParameter(IDs::globalPitch, 0.0f);
         parameters.replaceState(state);
         samples.restoreState(files);

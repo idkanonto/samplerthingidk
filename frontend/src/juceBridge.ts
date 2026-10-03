@@ -53,14 +53,7 @@ export type VisualisationState = {
   outputPeakLeft: number
   outputPeakRight: number
   voiceCount: number
-  faultMutation: number
-  faultDivision: number
-  faultProgress: number
-  faultResampleSemitones: number
-  smearActivity: number
-  smearGain: number
-  bleedScopeLeft?: number[]
-  bleedScopeRight?: number[]
+  audioLevel: number
   spectralScan: number
   spectrum?: number[]
 }
@@ -89,9 +82,7 @@ const fallbackParameters: ParameterDescriptor[] = [
     min: 0, max: 100, interval: 1, numSteps: 101, isDiscrete: false, isBoolean: false },
   { id: 'bleedMix', name: 'Bleed Mix', label: '%', value: 50, defaultValue: 50,
     min: 0, max: 100, interval: 0.1, numSteps: 1001, isDiscrete: false, isBoolean: false },
-  { id: 'bleedGrainSize', name: 'Bleed Grain Size', label: 'ms', value: 40, defaultValue: 40,
-    min: 8, max: 120, interval: 0.1, numSteps: 1121, isDiscrete: false, isBoolean: false },
-  { id: 'bleedGrainPitch', name: 'Bleed Grain Pitch', label: '%', value: 0, defaultValue: 0,
+  { id: 'bleedShape', name: 'Bleed Shape', label: '%', value: 0, defaultValue: 0,
     min: -100, max: 100, interval: 0.1, numSteps: 2001, isDiscrete: false, isBoolean: false },
   { id: 'spectralDepth', name: 'Etch Pressure', label: '%', value: 0, defaultValue: 0,
     min: 0, max: 100, interval: 1, numSteps: 101, isDiscrete: false, isBoolean: false },
@@ -130,8 +121,7 @@ const previewBackendState = (): BackendState => ({
 let backendState: BackendState | null = window.__JUCE__?.backend ? null : previewBackendState()
 let visualisationState: VisualisationState = {
   outputPeak: 0, outputPeakLeft: 0, outputPeakRight: 0, voiceCount: 0,
-  faultMutation: 0, faultDivision: 16, faultProgress: 0, faultResampleSemitones: 0,
-  smearActivity: 0, smearGain: 0, bleedScopeLeft: [], bleedScopeRight: [], spectralScan: 0
+  audioLevel: 0, spectralScan: 0
 }
 const backendSubscribers = new Set<(state: BackendState) => void>()
 const visualisationSubscribers = new Set<(state: VisualisationState) => void>()

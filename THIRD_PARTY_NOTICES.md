@@ -27,6 +27,10 @@ MIT License. See `SIGNALSMITH_LINEAR_LICENSE.txt`.
 MIT License. Copyright © Meta Platforms, Inc. and affiliates. See
 `REACT_MIT.txt` and `REACT_DOM_MIT.txt`.
 
+## simplex-noise 4.0.3
+
+MIT License. Copyright © 2018 Jonas Wagner. See `SIMPLEX_NOISE_MIT.txt`.
+
 ## Microsoft WebView2 1.0.3485.44
 
 Microsoft software license terms. See `WEBVIEW2_LICENSE.txt`.

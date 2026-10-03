@@ -367,32 +367,35 @@ void SmearProcessor::prepare(double newSampleRate)
                             1000.0, 768000.0);
     const auto frames = std::max(32, static_cast<int>(std::ceil(sampleRate * 1.0)) + 4);
     delayBuffer.setSize(2, frames, false, true, false);
-    mediumBandDelayBuffer.setSize(2, frames, false, true, false);
-    highBandDelayBuffer.setSize(2, frames, false, true, false);
-    mediumFilterCoefficient = 1.0f - std::exp(-juce::MathConstants<float>::twoPi * 0.22f);
-    highFilterCoefficient = 1.0f - std::exp(-juce::MathConstants<float>::twoPi * 0.10f);
     for (int index = 0; index < modulationTableSize; ++index)
     {
         const auto phase = static_cast<double>(index)
             / static_cast<double>(modulationTableSize);
         sineTable[static_cast<std::size_t>(index)] = static_cast<float>(
             std::sin(juce::MathConstants<double>::twoPi * phase));
-        hannTable[static_cast<std::size_t>(index)] = static_cast<float>(
+        const auto hann = static_cast<float>(
             0.5 - 0.5 * std::cos(juce::MathConstants<double>::twoPi * phase));
+        hannTable[static_cast<std::size_t>(index)] = hann;
+        softWindowTable[static_cast<std::size_t>(index)] = std::pow(hann, 1.25f);
+        constexpr auto sharpEdge = 0.22;
+        const auto edgePhase = phase < sharpEdge
+            ? phase / sharpEdge
+            : phase > 1.0 - sharpEdge ? (1.0 - phase) / sharpEdge : 1.0;
+        sharpWindowTable[static_cast<std::size_t>(index)] = edgePhase < 1.0
+            ? static_cast<float>(0.5 - 0.5 * std::cos(
+                juce::MathConstants<double>::pi * edgePhase))
+            : 1.0f;
     }
-    amountSmoother.reset(sampleRate, 0.010);
+    pressureSmoother.reset(sampleRate, 0.010);
     enabledSmoother.reset(sampleRate, 0.010);
     mixSmoother.reset(sampleRate, 0.020);
-    sizeSmoother.reset(sampleRate, 0.040);
-    pitchSmoother.reset(sampleRate, 0.040);
+    shapeSmoother.reset(sampleRate, 0.040);
     reset();
 }
 
 void SmearProcessor::reset() noexcept
 {
     delayBuffer.clear();
-    mediumBandDelayBuffer.clear();
-    highBandDelayBuffer.clear();
     resetRealtimeState();
 }
 
@@ -401,34 +404,29 @@ void SmearProcessor::resetRealtimeState() noexcept
     for (auto& grain : grains)
         grain = {};
     lowState.fill(0.0f);
-    feedbackState.fill(0.0f);
-    softnessState.fill(0.0f);
-    for (auto& channel : mediumFilterState)
-        channel.fill(0.0f);
-    for (auto& channel : highFilterState)
-        channel.fill(0.0f);
     fastEnvelope = 0.0f;
     slowEnvelope = 0.0f;
     motionPhase = 0.0f;
     lastMotionAmount = 0.0f;
     overlapEnergy = 0.0f;
     lastOverlapGain = 0.0f;
-    amountSmoother.setCurrentAndTargetValue(0.0f);
+    pressureSmoother.setCurrentAndTargetValue(0.0f);
     enabledSmoother.setCurrentAndTargetValue(0.0f);
     mixSmoother.setCurrentAndTargetValue(0.0f);
-    sizeSmoother.setCurrentAndTargetValue(40.0f);
-    pitchSmoother.setCurrentAndTargetValue(0.0f);
+    shapeSmoother.setCurrentAndTargetValue(0.0f);
     writePosition = 0;
     validFrames = 0;
     grainCountdown = 0;
     activeGrainCount = 0;
     peakActiveGrainCount = 0;
     lastGrainLengthFrames = 0;
+    grainStartCount = 0;
 }
 
 void SmearProcessor::setSeed(uint64_t seed) noexcept
 {
     random.setSeed(seed ^ 0x736d6561722d6372ULL);
+    schedulerRandom.setSeed(seed ^ 0x626c6565642d646eULL);
     // Logical invalidation makes old ring contents unreachable while avoiding a
     // one-second buffer clear if a host restores state during playback.
     resetRealtimeState();
@@ -439,23 +437,17 @@ float SmearProcessor::sanitise(float value) noexcept
     return std::isfinite(value) ? std::clamp(value, -64.0f, 64.0f) : 0.0f;
 }
 
-float SmearProcessor::readDelay(int channel, double position,
-                                double increment) const noexcept
+float SmearProcessor::readDelay(int channel, double position) const noexcept
 {
-    const auto* source = &delayBuffer;
-    if (increment > 2.1)
-        source = &highBandDelayBuffer;
-    else if (increment > 1.1)
-        source = &mediumBandDelayBuffer;
-    const auto size = source->getNumSamples();
+    const auto size = delayBuffer.getNumSamples();
     if (size <= 1)
         return 0.0f;
     position = wrap(position, static_cast<double>(size));
     const auto first = static_cast<int>(position);
     const auto second = first + 1 < size ? first + 1 : 0;
     const auto fraction = static_cast<float>(position - first);
-    return lerp(source->getSample(channel, first),
-                source->getSample(channel, second), fraction);
+    return lerp(delayBuffer.getSample(channel, first),
+                delayBuffer.getSample(channel, second), fraction);
 }
 
 float SmearProcessor::lookupSine(float phase) const noexcept
@@ -468,17 +460,23 @@ float SmearProcessor::lookupSine(float phase) const noexcept
                 sineTable[static_cast<std::size_t>(second)], scaled - first);
 }
 
-float SmearProcessor::lookupWindow(float phase) const noexcept
+float SmearProcessor::lookupWindow(float phase, float shape) const noexcept
 {
     const auto wrapped = static_cast<float>(wrap(static_cast<double>(phase), 1.0));
     const auto scaled = wrapped * static_cast<float>(modulationTableSize);
     const auto first = std::clamp(static_cast<int>(scaled), 0, modulationTableSize - 1);
     const auto second = (first + 1) % modulationTableSize;
-    return lerp(hannTable[static_cast<std::size_t>(first)],
-                hannTable[static_cast<std::size_t>(second)], scaled - first);
+    const auto lookup = [first, second, scaled](const auto& table)
+    {
+        return lerp(table[static_cast<std::size_t>(first)],
+                    table[static_cast<std::size_t>(second)], scaled - first);
+    };
+    if (shape < 0.0f)
+        return lerp(lookup(softWindowTable), lookup(hannTable), shape + 1.0f);
+    return lerp(lookup(hannTable), lookup(sharpWindowTable), shape);
 }
 
-void SmearProcessor::startGrain(float amount, uint32_t features, float sizeMs, float pitch) noexcept
+void SmearProcessor::startGrain(float shape, uint32_t features) noexcept
 {
     Grain* destination = nullptr;
     for (auto& grain : grains)
@@ -492,65 +490,46 @@ void SmearProcessor::startGrain(float amount, uint32_t features, float sizeMs, f
     if (destination == nullptr)
         return;
 
-    const auto durationScale = static_cast<double>(sizeMs / 40.0f) * std::pow(2.0, -pitch);
-    const auto shortestSeconds = 0.032 * durationScale;
-    const auto longestSeconds = 0.048 * durationScale;
-    const auto shortBiasExponent = 1.0;
-    const auto shortness = std::pow(random.unit(), shortBiasExponent);
-    const auto lengthSeconds = longestSeconds
-        + (shortestSeconds - longestSeconds) * shortness;
-    const auto minimumLength = std::max(16,
-        static_cast<int>(std::llround(sampleRate * 0.006)));
-    const auto length = std::clamp(static_cast<int>(std::llround(sampleRate * lengthSeconds)),
-                                   minimumLength,
-                                   std::max(minimumLength,
-                                            delayBuffer.getNumSamples() / 4));
-    const auto selector = random.unit();
-    int semitones = 12;
-    if (selector < 0.12 * (1.0 - amount))
-        semitones = 0;
-    else if (selector < 0.36)
-        semitones = 7;
-    else if (selector < 0.72)
-        semitones = 12;
-    else if (selector < 0.90)
-        semitones = amount > 0.55f ? 19 : 7;
-    else
-        semitones = amount > 0.72f ? 24 : 12;
-    // The bipolar control voices each new grain; active grains finish without pitch jumps.
-    const auto voicedSemitones = std::clamp(static_cast<float>(semitones) + pitch * 12.0f, -12.0f, 24.0f);
-    const auto increment = (features & SmearFeatures::pitch) != 0
-        ? std::pow(2.0, static_cast<double>(voicedSemitones) / 12.0) : 1.0;
-    const auto minimumDelay = static_cast<int>(std::ceil(length * std::max(1.0, increment * 1.02))) + 4;
+    shape = std::clamp(std::isfinite(shape) ? shape : 0.0f, -1.0f, 1.0f);
+    const auto nominalLengthMs = shape < 0.0f
+        ? 40.0f + 50.0f * -shape
+        : 40.0f - 22.0f * shape;
+    const auto maximumPossibleLength = static_cast<int>(std::ceil(
+        sampleRate * static_cast<double>(nominalLengthMs) * 0.001 * 1.10));
+    if (validFrames <= maximumPossibleLength + 4)
+        return;
+    const auto variedLengthMs = nominalLengthMs
+        * static_cast<float>(0.90 + 0.20 * random.unit());
+    constexpr float minimumGrainSeconds = 0.014f;
+    const auto minimumLength = std::max(16, static_cast<int>(std::llround(
+        sampleRate * minimumGrainSeconds)));
+    const auto length = std::clamp(static_cast<int>(std::llround(
+        sampleRate * static_cast<double>(variedLengthMs) * 0.001)),
+        minimumLength, std::max(minimumLength, delayBuffer.getNumSamples() / 4));
+    const auto minimumDelay = length + 4;
     if (validFrames <= minimumDelay)
         return;
     const auto scatterChoice = random.unit();
     const auto scatter = (features & SmearFeatures::scatter) != 0
         ? static_cast<int>(std::llround(sampleRate
-            * (0.035 + 0.12 * amount) * (1.0 - 0.65 * std::max(0.0f, pitch)) * scatterChoice)) : 0;
+            * (0.035 + 0.060 * scatterChoice))) : 0;
     const auto maximumDelay = std::max(minimumDelay,
         std::min(validFrames - 2, delayBuffer.getNumSamples() - 2));
     const auto delay = std::clamp(minimumDelay + scatter, minimumDelay, maximumDelay);
 
     destination->readPosition = wrap(static_cast<double>(writePosition - delay),
                                      static_cast<double>(delayBuffer.getNumSamples()));
-    destination->increment = increment;
     const auto panChoice = random.unit();
     destination->pan = (features & SmearFeatures::stereo) != 0
         ? static_cast<float>(panChoice * 2.0 - 1.0) : 0.0f;
-    destination->pitchPhase = static_cast<float>(random.unit());
-    destination->pitchRate = static_cast<float>((0.22 + 0.50 * random.unit())
-                                                 / static_cast<double>(length));
     destination->panPhase = static_cast<float>(random.unit());
     destination->panRate = static_cast<float>((0.18 + 0.44 * random.unit())
                                                / static_cast<double>(length));
-    const auto brightnessChoice = random.unit();
-    destination->brightness = (features & SmearFeatures::brightness) != 0
-        ? static_cast<float>(0.72 + 0.56 * brightnessChoice) : 1.0f;
     destination->age = 0;
     destination->length = length;
     destination->active = true;
     lastGrainLengthFrames = length;
+    ++grainStartCount;
     ++activeGrainCount;
 }
 
@@ -560,12 +539,13 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
     if (delayBuffer.getNumSamples() <= 1 || buffer.getNumChannels() < 1)
         return;
     const auto features = settings.features & SmearFeatures::all;
-    const auto targetAmount = features != 0 ? normalisePercent(settings.amount) : 0.0f;
-    amountSmoother.setTargetValue(targetAmount);
-    enabledSmoother.setTargetValue(targetAmount > 0.0f ? 1.0f : 0.0f);
+    const auto targetPressure = normalisePercent(settings.pressure);
+    pressureSmoother.setTargetValue(targetPressure);
+    enabledSmoother.setTargetValue(targetPressure > 0.0f ? 1.0f : 0.0f);
     mixSmoother.setTargetValue(normalisePercent(settings.mix));
-    sizeSmoother.setTargetValue(std::clamp(std::isfinite(settings.grainSizeMs) ? settings.grainSizeMs : 40.0f, 8.0f, 120.0f));
-    pitchSmoother.setTargetValue(std::clamp(std::isfinite(settings.grainPitch) ? settings.grainPitch / 100.0f : 0.0f, -1.0f, 1.0f));
+    shapeSmoother.setTargetValue(std::clamp(
+        std::isfinite(settings.shape) ? settings.shape / 100.0f : 0.0f,
+        -1.0f, 1.0f));
     const auto channels = std::min(2, buffer.getNumChannels());
     const auto fastCoefficient = 1.0f - std::exp(-1.0f
         / static_cast<float>(sampleRate * 0.004));
@@ -573,74 +553,42 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
         / static_cast<float>(sampleRate * 0.065));
     const auto overlapCoefficient = 1.0f - std::exp(-1.0f
         / static_cast<float>(sampleRate * 0.004));
-    const auto feedbackCoefficient = 1.0f - std::exp(-1.0f
-        / static_cast<float>(sampleRate * 0.000105));
+    const auto lowCoefficient = 1.0f - std::exp(
+        -juce::MathConstants<float>::twoPi * 700.0f
+        / static_cast<float>(sampleRate));
+    constexpr int maximumEventsPerDensityWindow = 16;
+    const auto densityWindowFrames = sampleRate * 0.050;
     peakActiveGrainCount = activeGrainCount;
 
     for (int frame = 0; frame < buffer.getNumSamples(); ++frame)
     {
-        const auto amount = amountSmoother.getNextValue();
+        const auto pressure = pressureSmoother.getNextValue();
         const auto mix = mixSmoother.getNextValue();
-        const auto sizeMs = sizeSmoother.getNextValue();
-        const auto pitch = pitchSmoother.getNextValue();
-        const auto brightBias = std::max(0.0f, pitch);
-        const auto softBias = std::max(0.0f, -pitch);
-        lastMotionAmount = amount;
-        const auto highPassCutoff = 350.0f + 1450.0f * amount + 1800.0f * brightBias;
-        const auto lowCoefficient = 1.0f - std::exp(
-            -juce::MathConstants<float>::twoPi * highPassCutoff
-            / static_cast<float>(sampleRate));
-        const auto feedbackGain = (features & SmearFeatures::feedback) != 0
-            ? (0.10f + 0.04f * softBias) * (1.0f - 0.8f * brightBias) * std::pow(amount, 1.45f) : 0.0f;
-        const auto pitchOrbitCents = (features & SmearFeatures::orbit) != 0
-            ? 3.0f + 11.0f * amount : 0.0f;
-        const auto panOrbitDepth = (features & SmearFeatures::orbit) != 0
-            ? 0.16f + 0.40f * amount : 0.0f;
+        const auto shape = shapeSmoother.getNextValue();
+        lastMotionAmount = pressure;
+        const auto panOrbitDepth = (features & SmearFeatures::orbit) != 0 ? 0.22f : 0.0f;
         float dry[2] {
             sanitise(buffer.getSample(0, frame)),
             sanitise(buffer.getSample(std::min(1, channels - 1), frame))
         };
         for (int channel = 0; channel < 2; ++channel)
-        {
-            const auto input = sanitise(dry[channel] + feedbackGain
-                * feedbackState[static_cast<std::size_t>(channel)]);
-            delayBuffer.setSample(channel, writePosition, input);
-            auto medium = input;
-            auto high = input;
-            for (int stage = 0; stage < 4; ++stage)
-            {
-                auto& mediumState = mediumFilterState[static_cast<std::size_t>(channel)]
-                                                    [static_cast<std::size_t>(stage)];
-                auto& highState = highFilterState[static_cast<std::size_t>(channel)]
-                                                [static_cast<std::size_t>(stage)];
-                mediumState = sanitise(mediumState
-                    + mediumFilterCoefficient * (medium - mediumState));
-                highState = sanitise(highState
-                    + highFilterCoefficient * (high - highState));
-                medium = mediumState;
-                high = highState;
-            }
-            mediumBandDelayBuffer.setSample(channel, writePosition, medium);
-            highBandDelayBuffer.setSample(channel, writePosition, high);
-        }
+            delayBuffer.setSample(channel, writePosition, dry[channel]);
         validFrames = std::min(validFrames + 1, delayBuffer.getNumSamples());
 
-        if (amount > 0.0f && grainCountdown-- <= 0)
+        if (pressure > 0.0f && grainCountdown-- <= 0)
         {
-            const auto densityCurve = std::pow(amount, 0.90f);
-            const auto targetGrains = std::clamp(2 + static_cast<int>(std::llround(
-                static_cast<double>(maximumGrains - 2) * densityCurve)),
-                2, maximumGrains);
-            if (activeGrainCount < targetGrains)
-                startGrain(amount, features, sizeMs, pitch);
+            const auto densityCurve = std::pow(pressure, 1.8f);
+            const auto targetEvents = std::clamp(1 + static_cast<int>(std::llround(
+                static_cast<double>(maximumEventsPerDensityWindow - 1) * densityCurve)),
+                1, maximumEventsPerDensityWindow);
+            if (activeGrainCount < maximumGrains)
+                startGrain(shape, features);
             peakActiveGrainCount = std::max(peakActiveGrainCount, activeGrainCount);
-            const auto nominalLength = sampleRate
-                * std::clamp(sizeMs * 0.001 * std::pow(2.0, -pitch), 0.006, 0.25);
             const auto pulse = 0.90f + 0.10f * std::sin(
                 juce::MathConstants<float>::twoPi * motionPhase);
             grainCountdown = std::max(1, static_cast<int>(std::llround(
-                nominalLength / static_cast<double>(targetGrains)
-                * pulse * (0.86 + 0.28 * random.unit()))));
+                densityWindowFrames / static_cast<double>(targetEvents)
+                * pulse * (0.86 + 0.28 * schedulerRandom.unit()))));
         }
 
         float texture[2] { 0.0f, 0.0f };
@@ -651,26 +599,19 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
                 continue;
             const auto phase = static_cast<float>(grain.age)
                 / static_cast<float>(std::max(1, grain.length));
-            const auto window = lookupWindow(phase);
-            const auto pitchOrbit = lookupSine(grain.pitchPhase);
+            const auto window = lookupWindow(phase, shape);
             const auto panOrbit = lookupSine(grain.panPhase);
             const auto movingPan = std::clamp(grain.pan + panOrbitDepth * panOrbit,
                                               -1.0f, 1.0f);
-            const auto increment = grain.increment * std::pow(2.0,
-                static_cast<double>(pitchOrbitCents * pitchOrbit) / 1200.0);
-            const auto left = sanitise(readDelay(0, grain.readPosition, increment))
-                * grain.brightness;
-            const auto right = sanitise(readDelay(1, grain.readPosition, increment))
-                * grain.brightness;
+            const auto left = sanitise(readDelay(0, grain.readPosition));
+            const auto right = sanitise(readDelay(1, grain.readPosition));
             const auto leftPan = std::sqrt(0.5f * (1.0f - movingPan));
             const auto rightPan = std::sqrt(0.5f * (1.0f + movingPan));
             texture[0] += window * (left * leftPan + right * rightPan * 0.16f);
             texture[1] += window * (right * rightPan + left * leftPan * 0.16f);
             windowEnergy += window * window;
-            grain.readPosition = wrap(grain.readPosition + increment,
+            grain.readPosition = wrap(grain.readPosition + 1.0,
                                       static_cast<double>(delayBuffer.getNumSamples()));
-            grain.pitchPhase = static_cast<float>(wrap(
-                grain.pitchPhase + grain.pitchRate, 1.0));
             grain.panPhase = static_cast<float>(wrap(
                 grain.panPhase + grain.panRate, 1.0));
             if (++grain.age >= grain.length)
@@ -699,30 +640,20 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
             low = sanitise(low + lowCoefficient * (texture[channel] - low));
             const auto bright = sanitise(texture[channel] - low);
             const auto crystal = (features & SmearFeatures::brightness) != 0
-                ? sanitise((0.10f + 0.15f * softBias) * texture[channel]
-                    + (1.34f + 0.72f * amount + 0.45f * brightBias) * bright)
+                ? sanitise(0.22f * texture[channel] + 1.28f * bright)
                 : texture[channel];
-            auto& softened = softnessState[static_cast<std::size_t>(channel)];
-            const auto softCoefficient = 1.0f - std::exp(-juce::MathConstants<float>::twoPi
-                * (16000.0f - 12500.0f * softBias) / static_cast<float>(sampleRate));
-            softened = sanitise(softened + softCoefficient * (crystal - softened));
-            const auto voiced = lerp(crystal, softened, softBias);
-            auto& feedback = feedbackState[static_cast<std::size_t>(channel)];
-            feedback += feedbackCoefficient
-                * (std::tanh(bright * (1.0f + 0.65f * amount)) - feedback);
-            feedback = sanitise(feedback);
             const auto blend = mix * wet;
             const auto output = dry[channel] * (1.0f - blend)
-                + blend * (1.0f - 0.35f * transient) * 1.5f * std::tanh(voiced * 1.25f);
+                + blend * (1.0f - 0.35f * transient) * 1.5f * std::tanh(crystal * 1.25f);
             buffer.setSample(channel, frame, sanitise(output));
         }
 
         if (++writePosition >= delayBuffer.getNumSamples())
             writePosition = 0;
         motionPhase = static_cast<float>(wrap(
-            motionPhase + (0.11 + 0.31 * amount) / sampleRate, 1.0));
+            motionPhase + 0.23 / sampleRate, 1.0));
     }
-    if (targetAmount <= 0.0f && !amountSmoother.isSmoothing())
+    if (targetPressure <= 0.0f && !pressureSmoother.isSmoothing())
     {
         for (auto& grain : grains)
             grain.active = false;
@@ -730,7 +661,6 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
         activeGrainCount = 0;
         peakActiveGrainCount = 0;
         lastGrainLengthFrames = 0;
-        feedbackState.fill(0.0f);
         overlapEnergy = 0.0f;
         lastOverlapGain = 0.0f;
         lastMotionAmount = 0.0f;

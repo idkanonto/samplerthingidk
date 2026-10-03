@@ -38,7 +38,7 @@ FetchContent_GetProperties(JUCE SOURCE_DIR juce_source_dir)
 FetchContent_GetProperties(signalsmith-linear SOURCE_DIR signalsmith_linear_source_dir)
 
 juce_add_plugin(RandomChopSampler
-    COMPANY_NAME "recompiler.dll"
+    COMPANY_NAME "damnnprodigy"
     BUNDLE_ID "com.randomchopaudio.randomchopsampler"
     PLUGIN_MANUFACTURER_CODE RChp
     PLUGIN_CODE RCS1
@@ -195,6 +195,9 @@ add_custom_command(TARGET RandomChopSampler_VST3 POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/Licenses/REACT_DOM_MIT.txt"
         "$<TARGET_FILE_DIR:RandomChopSampler_VST3>/../Resources/REACT_DOM_MIT.txt"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/Licenses/SIMPLEX_NOISE_MIT.txt"
+        "$<TARGET_FILE_DIR:RandomChopSampler_VST3>/../Resources/SIMPLEX_NOISE_MIT.txt"
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${CMAKE_CURRENT_SOURCE_DIR}/Licenses/WEBVIEW2_LICENSE.txt"
         "$<TARGET_FILE_DIR:RandomChopSampler_VST3>/../Resources/WEBVIEW2_LICENSE.txt"

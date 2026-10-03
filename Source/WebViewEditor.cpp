@@ -233,20 +233,7 @@ juce::var RandomChopSamplerWebViewEditor::createVisualisationState() const
     object->setProperty("outputPeakLeft", processor.getOutputPeakLeft());
     object->setProperty("outputPeakRight", processor.getOutputPeakRight());
     object->setProperty("voiceCount", processor.getActiveVoiceCount());
-    object->setProperty("faultMutation", processor.getFaultMutation());
-    object->setProperty("faultDivision", processor.getFaultDivision());
-    object->setProperty("faultProgress", processor.getFaultProgress());
-    object->setProperty("faultResampleSemitones", processor.getFaultResampleSemitones());
-    object->setProperty("smearActivity", processor.getSmearVisualActivity());
-    object->setProperty("smearGain", processor.getSmearVisualGain());
-    juce::Array<juce::var> bleedScopeLeft;
-    juce::Array<juce::var> bleedScopeRight;
-    for (const auto value : processor.getBleedScope(0))
-        bleedScopeLeft.add(value);
-    for (const auto value : processor.getBleedScope(1))
-        bleedScopeRight.add(value);
-    object->setProperty("bleedScopeLeft", bleedScopeLeft);
-    object->setProperty("bleedScopeRight", bleedScopeRight);
+    object->setProperty("audioLevel", processor.getVisualAudioLevel());
     object->setProperty("spectralScan", processor.getSpectralScanPosition());
     juce::Array<juce::var> spectrum;
     for (const auto value : processor.getDisplaySpectrum())

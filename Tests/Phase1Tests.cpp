@@ -799,7 +799,7 @@ void testCreativeMacroProgressionAndRender()
           "Melt did not create a meaningful macro intensity progression");
     // MIX now owns wet/dry intensity; PRESSURE owns grain density. Distance
     // from dry need not increase monotonically as differently phased grains overlap.
-    // Density and pitch-direction brightness are checked in testSmearProcessor.
+    // BLEED density and centered Shape behavior are checked in testSmearProcessor.
     check(smearDistance[1] > 0.002f && smearDistance[2] > 0.002f
               && smearDistance[4] > 0.002f
               && differenceRms(renderSmear(25.0f, dry), renderSmear(100.0f, dry)) > 0.002f,
@@ -954,7 +954,7 @@ void testSmearProcessor()
     auto dry = makeTemporalInput(512);
     auto output = copyBuffer(dry);
     bypass.process(output, { 0.0f });
-    check(buffersEqual(dry, output), "Smear Amount 0 was not sample-identical bypass");
+    check(buffersEqual(dry, output), "Bleed Pressure 0 was not sample-identical bypass");
 
     randomchop::SmearProcessor continuous;
     continuous.prepare(48000.0);
@@ -1001,46 +1001,88 @@ void testSmearProcessor()
     check(dense.getPeakActiveGrainCount() > sparse.getPeakActiveGrainCount()
               && dense.getPeakActiveGrainCount() >= 12
               && dense.getLastGrainLengthFrames() > 0
-              && dense.getLastGrainLengthFrames() <= 2400
+              && dense.getLastGrainLengthFrames() <= 5040
               && bufferFiniteAndBounded(sparseInput)
               && bufferFiniteAndBounded(denseInput),
-          "Bleed Pressure did not raise density while respecting grain size");
+          "Bleed Pressure did not raise density within the bounded grain pool");
 
     const auto controlInput = makeTemporalInput(96000);
-    const auto renderControls = [&](float mix, float size, float pitch) {
+    const auto renderControls = [&](float mix, float shape) {
         auto output = copyBuffer(controlInput);
         randomchop::SmearProcessor effect;
         effect.prepare(48000.0);
         effect.setSeed(913);
-        effect.process(output, { 100.0f, randomchop::SmearFeatures::all, mix, size, pitch });
+        effect.process(output, { 100.0f, randomchop::SmearFeatures::all, mix, shape });
         check(bufferFiniteAndBounded(output), "Bleed control extremes produced invalid output");
         return output;
     };
-    check(buffersEqual(controlInput, renderControls(0.0f, 40.0f, 100.0f)),
+    check(buffersEqual(controlInput, renderControls(0.0f, 0.0f)),
           "Bleed Mix zero was not exact dry");
-    const auto soft = renderControls(100.0f, 40.0f, -100.0f);
-    const auto crystal = renderControls(100.0f, 40.0f, 100.0f);
-    const auto centered = renderControls(100.0f, 40.0f, 0.0f);
-    check(differenceRms(soft, crystal) > 0.002f,
-          "Bleed pitch directions did not produce different audio");
-    check(firstDifferenceRms(crystal) > firstDifferenceRms(soft),
-          "Bleed bright direction did not increase high-frequency detail");
-    check(differenceRms(renderControls(100.0f, 8.0f, 0.0f),
-                        renderControls(100.0f, 120.0f, 0.0f)) > 0.002f,
-          "Bleed Grain Size did not change the rendered texture");
-    renderControls(100.0f, 120.0f, -100.0f);
-    renderControls(100.0f, 8.0f, 100.0f);
-    std::cout << "Bleed pitch detail (soft/center/crystal): "
-              << firstDifferenceRms(soft) << '/' << firstDifferenceRms(centered)
-              << '/' << firstDifferenceRms(crystal) << '\n';
+    const auto round = renderControls(100.0f, -100.0f);
+    const auto faceted = renderControls(100.0f, 100.0f);
+    const auto centered = renderControls(100.0f, 0.0f);
+    check(differenceRms(round, faceted) > 0.002f,
+          "Bleed Shape did not change the grain form");
+
+    const auto firstGrainLength = [](float pressure, float shape)
+    {
+        randomchop::SmearProcessor effect;
+        effect.prepare(48000.0);
+        effect.setSeed(0x51a9);
+        juce::AudioBuffer<float> sample(2, 1);
+        for (int frame = 0; frame < 48000; ++frame)
+        {
+            const auto value = 0.25f * std::sin(
+                juce::MathConstants<float>::twoPi * 220.0f
+                * static_cast<float>(frame) / 48000.0f);
+            sample.setSample(0, 0, value);
+            sample.setSample(1, 0, value);
+            effect.process(sample, { pressure, randomchop::SmearFeatures::all, 100.0f, shape });
+            if (effect.getGrainStartCount() > 0)
+                return effect.getLastGrainLengthFrames();
+        }
+        return 0;
+    };
+    const auto lowPressureLength = firstGrainLength(20.0f, 0.0f);
+    const auto highPressureLength = firstGrainLength(100.0f, 0.0f);
+    const auto longRoundedLength = firstGrainLength(100.0f, -100.0f);
+    const auto shortSharpLength = firstGrainLength(100.0f, 100.0f);
+    check(lowPressureLength == highPressureLength,
+          "Bleed Pressure changed the duration of an individual grain");
+    check(longRoundedLength > highPressureLength
+              && highPressureLength > shortSharpLength
+              && shortSharpLength >= 672,
+          "Bleed Shape did not span long, centered, and safely short grain durations");
+
+    auto roundDensity = makeTemporalInput(24000);
+    auto sharpDensity = copyBuffer(roundDensity);
+    randomchop::SmearProcessor roundEffect;
+    randomchop::SmearProcessor sharpEffect;
+    roundEffect.prepare(48000.0);
+    sharpEffect.prepare(48000.0);
+    roundEffect.setSeed(0xdead);
+    sharpEffect.setSeed(0xdead);
+    auto roundWarmup = makeTemporalInput(48000);
+    auto sharpWarmup = copyBuffer(roundWarmup);
+    roundEffect.process(roundWarmup, { 50.0f, randomchop::SmearFeatures::all, 100.0f, -100.0f });
+    sharpEffect.process(sharpWarmup, { 50.0f, randomchop::SmearFeatures::all, 100.0f, 100.0f });
+    roundEffect.process(roundDensity, { 50.0f, randomchop::SmearFeatures::all, 100.0f, -100.0f });
+    sharpEffect.process(sharpDensity, { 50.0f, randomchop::SmearFeatures::all, 100.0f, 100.0f });
+    const auto roundStarted = roundEffect.getGrainStartCount();
+    const auto sharpStarted = sharpEffect.getGrainStartCount();
+    check(std::abs(static_cast<int64_t>(roundStarted) - static_cast<int64_t>(sharpStarted)) <= 1,
+          "Bleed Shape changed grain trigger density");
+
+    std::cout << "Bleed Shape grain lengths (round/center/faceted): "
+              << longRoundedLength << '/' << highPressureLength << '/' << shortSharpLength << '\n';
     const auto bleedRenderPath = juce::SystemStats::getEnvironmentVariable("RANDOM_CHOP_RENDER_DIR", {});
     if (bleedRenderPath.isNotEmpty())
     {
         const juce::File bleedRenderDirectory(bleedRenderPath);
-        check(writeListeningWave(bleedRenderDirectory.getChildFile("bleed_pitch_soft.wav"), soft)
-                  && writeListeningWave(bleedRenderDirectory.getChildFile("bleed_pitch_center.wav"), centered)
-                  && writeListeningWave(bleedRenderDirectory.getChildFile("bleed_pitch_crystal.wav"), crystal),
-              "Could not write Bleed pitch comparison renders");
+        check(writeListeningWave(bleedRenderDirectory.getChildFile("bleed_shape_round.wav"), round)
+                  && writeListeningWave(bleedRenderDirectory.getChildFile("bleed_shape_center.wav"), centered)
+                  && writeListeningWave(bleedRenderDirectory.getChildFile("bleed_shape_faceted.wav"), faceted),
+              "Could not write Bleed Shape comparison renders");
     }
 
     auto settling = makeTemporalInput(2048);
@@ -1055,7 +1097,7 @@ void testSmearProcessor()
     unsafe.setSample(1, 0, std::numeric_limits<float>::infinity());
     continuous.process(unsafe, { 1000.0f });
     check(bufferFiniteAndBounded(unsafe),
-          "Smear extreme Amount propagated invalid or unbounded output");
+          "Bleed extreme Pressure propagated invalid or unbounded output");
 }
 
 void testSpectralMaskPublicationAndState()
@@ -1407,7 +1449,7 @@ void testStateMigration()
                             "freezeSize", "codecQuality", "fractureDrive",
                             "fractureCharacter", "fractureMix", "finalLength",
                             "attack", "release", "rateReduction", "meltReverseChance",
-                            "rootNote", "globalGrid", "spectralScanRate" })
+                            "rootNote", "globalGrid", "spectralScanRate", "bleedGrainPitch" })
     {
         juce::ValueTree parameter("PARAM");
         parameter.setProperty("id", id, nullptr);
@@ -1432,6 +1474,7 @@ void testStateMigration()
                && !state.hasProperty("rootNote")
                && !state.hasProperty("globalGrid")
                && !state.hasProperty("spectralScanRate")
+               && !state.getChildWithProperty("id", "bleedGrainPitch").isValid()
               && state.getNumChildren() == 1
               && state.getChild(0).getProperty("id").toString() == "output"
               && static_cast<int>(state.getProperty("stateVersion"))
@@ -1451,7 +1494,10 @@ void testStateMigration()
                && randomchop::isRemovedParameterId("rootNote")
                && randomchop::isRemovedParameterId("globalGrid")
                && randomchop::isRemovedParameterId("spectralScanRate")
+               && randomchop::isRemovedParameterId("bleedGrainPitch")
               && !randomchop::isRemovedParameterId("output")
+              && !randomchop::isRemovedParameterId("bleedGrainSize")
+              && !randomchop::isRemovedParameterId("bleedShape")
               && randomchop::isRemovedParameterId("targetKey")
               && randomchop::isRemovedParameterId("scrambleAmount")
               && randomchop::isRemovedParameterId("meltAmount"),

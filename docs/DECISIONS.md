@@ -10,13 +10,14 @@ status: active
 
 These decisions govern implementation together with [[PRODUCT_SPEC_V2]].
 
-## Drawing-only ETCH and crystalline BLEED (2026-10-02)
+## Drawing-only ETCH and final Shape-based BLEED (2026-10-02)
 
-- ETCH preserves the user's drawing and its playhead. Restore the read-only scan line from the real spectral playback-position telemetry; do not add a spectrum overlay, idle animation, or pointer/crosshair decoration.
-- Keep BLEED PRESSURE as density and expose independent MIX (0–100%), GRAIN SIZE (8–120 ms base duration), and GRAIN PITCH (−100 to +100, centered at zero). Right shortens and raises grains, reduces scatter/feedback, and emphasizes upper detail; left lengthens grains and softens their upper frequencies. Existing parameter IDs remain stable and new controls receive explicit saved-state defaults.
-- BLEED's smaller particle flow uses real stereo samples, grain activity, signal level, and spectral change to drive direction and speed. Stop movement and clear trails at silence or zero activity.
-- FAULT uses broken, flowing wave trajectories shaped by live mutation type, pressure, and segment progress, alongside its mutation marks. Keep the monitor quiet when no mutation is active. Use the supplied wave visuals as behavior references; keep the existing monochrome frames and layout.
-- Pool enable uses a small filled/empty square; selection uses the row background without an X or left rule. ABOUT uses the user-supplied white SVG close mark; hover enlarges the mark without a separate fill or halo.
+- ETCH preserves the user's drawing and the read-only playback scan line from real spectral playback-position telemetry. Do not add a spectrum overlay, idle animation, or pointer/crosshair decoration.
+- BLEED's final controls are PRESSURE, MIX, and centered SHAPE. PRESSURE controls grain scheduling density only; MIX is the dry/wet blend; SHAPE continuously changes grain duration and window only, from long/rounded through the original balanced center to short/sharp. Grains always read at source rate, with no random or parameter-driven pitch shift.
+- Retain the old Grain Size parameter ID only as a deprecated ignored compatibility parameter. Remove the old Grain Pitch parameter ID from the active layout and discard it during state migration. New Shape restores neutral in older sessions.
+- Keep the supplied NeuralBackground and Waves component geometry/composition. Feed each component only normalized post-MASTER audio RMS, apply bounded attack/release smoothing in the UI, and modulate its existing movement conservatively. BLEED additionally scales activity by the nonlinear Pressure curve; Shape only subtly changes BLEED flow inertia. ETCH remains a drawing surface.
+- Use the existing black/white monochrome display fields and frames; remove the replaced custom canvas algorithms and their WebView sample-scope telemetry. Bundle simplex-noise 4.0.3 under its MIT license for the supplied Waves component.
+- Keep the POOL selection treatment and ABOUT close-mark interaction already in place. VST manufacturer/creator metadata is `damnnprodigy`; product name remains `recompiler.dll`.
 
 ## Release-candidate identity and FAULT lock (2026-10-01)
 

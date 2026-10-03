@@ -80,14 +80,9 @@ public:
     {
         return smearVisualGain.load(std::memory_order_relaxed);
     }
-    static constexpr size_t bleedScopeSampleCount = 64;
-    std::array<float, bleedScopeSampleCount> getBleedScope(int channel) const noexcept
+    float getVisualAudioLevel() const noexcept
     {
-        std::array<float, bleedScopeSampleCount> result {};
-        const auto& source = channel == 0 ? bleedScopeLeft : bleedScopeRight;
-        for (size_t index = 0; index < result.size(); ++index)
-            result[index] = source[index].load(std::memory_order_relaxed);
-        return result;
+        return visualAudioLevel.load(std::memory_order_relaxed);
     }
     void requestSourcePreview(uint64_t runtimeId) noexcept;
     uint64_t getPreviewingSourceId() const noexcept
@@ -196,8 +191,7 @@ private:
     std::atomic<int> faultResampleSemitones { 0 };
     std::atomic<float> smearVisualActivity { 0.0f };
     std::atomic<float> smearVisualGain { 0.0f };
-    std::array<std::atomic<float>, bleedScopeSampleCount> bleedScopeLeft {};
-    std::array<std::atomic<float>, bleedScopeSampleCount> bleedScopeRight {};
+    std::atomic<float> visualAudioLevel { 0.0f };
     std::atomic<uint64_t> previewRequestId { 0 };
     std::atomic<uint64_t> previewRequestSerial { 0 };
     std::atomic<uint64_t> previewingRuntimeId { 0 };

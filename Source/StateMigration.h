@@ -6,7 +6,7 @@
 
 namespace randomchop
 {
-inline constexpr int currentStateVersion = 15;
+inline constexpr int currentStateVersion = 16;
 
 inline void migrateOutputToPercent(juce::ValueTree& state, int restoredVersion)
 {
@@ -27,7 +27,7 @@ inline void migrateOutputToPercent(juce::ValueTree& state, int restoredVersion)
 
 inline bool isRemovedParameterId(const juce::String& id) noexcept
 {
-    constexpr std::array<const char*, 37> removed {
+    constexpr std::array<const char*, 38> removed {
         "reverseChance", "retriggerChance", "retriggerSize", "retriggerCount",
         "skipChance", "reorderChance", "bendChance", "dropChance",
         "stepLength", "bitDepth", "takeSelection",
@@ -37,7 +37,7 @@ inline bool isRemovedParameterId(const juce::String& id) noexcept
         "codecAmount", "codecQuality", "fractureCharacter", "fractureMix",
         "randomStart", "finalLength", "attack", "release", "rateReduction",
         "meltReverseChance", "rootNote", "globalGrid", "spectralScanRate",
-        "targetKey", "scrambleAmount", "meltAmount"
+        "targetKey", "scrambleAmount", "meltAmount", "bleedGrainPitch"
     };
     for (const auto* candidate : removed)
         if (id == candidate)

@@ -18,13 +18,11 @@ constexpr uint32_t all = stretch | reverse | sliceVariation;
 
 namespace SmearFeatures
 {
-constexpr uint32_t pitch = 1u << 0;
 constexpr uint32_t scatter = 1u << 1;
 constexpr uint32_t orbit = 1u << 2;
 constexpr uint32_t stereo = 1u << 3;
 constexpr uint32_t brightness = 1u << 4;
-constexpr uint32_t feedback = 1u << 5;
-constexpr uint32_t all = pitch | scatter | orbit | stereo | brightness | feedback;
+constexpr uint32_t all = scatter | orbit | stereo | brightness;
 }
 
 struct MeltSettings final
@@ -101,17 +99,16 @@ private:
 
 struct SmearSettings
 {
-    float amount = 0.0f;
+    float pressure = 0.0f;
     uint32_t features = SmearFeatures::all;
     float mix = 50.0f;
-    float grainSizeMs = 40.0f;
-    float grainPitch = 0.0f;
+    float shape = 0.0f;
 };
 
 class SmearProcessor final
 {
 public:
-    static constexpr int maximumGrains = 16;
+    static constexpr int maximumGrains = 40;
 
     void prepare(double newSampleRate);
     void reset() noexcept;
@@ -121,6 +118,7 @@ public:
     int getActiveGrainCount() const noexcept { return activeGrainCount; }
     int getPeakActiveGrainCount() const noexcept { return peakActiveGrainCount; }
     int getLastGrainLengthFrames() const noexcept { return lastGrainLengthFrames; }
+    uint64_t getGrainStartCount() const noexcept { return grainStartCount; }
     float getLastMotionAmount() const noexcept { return lastMotionAmount; }
     float getLastOverlapGain() const noexcept { return lastOverlapGain; }
 
@@ -129,51 +127,42 @@ private:
     struct Grain
     {
         double readPosition = 0.0;
-        double increment = 1.0;
         float pan = 0.0f;
-        float pitchPhase = 0.0f;
-        float pitchRate = 0.0f;
         float panPhase = 0.0f;
         float panRate = 0.0f;
-        float brightness = 1.0f;
         int age = 0;
         int length = 1;
         bool active = false;
     };
 
     static float sanitise(float value) noexcept;
-    float readDelay(int channel, double position, double increment) const noexcept;
+    float readDelay(int channel, double position) const noexcept;
     float lookupSine(float phase) const noexcept;
-    float lookupWindow(float phase) const noexcept;
-    void startGrain(float amount, uint32_t features, float sizeMs, float pitch) noexcept;
+    float lookupWindow(float phase, float shape) const noexcept;
+    void startGrain(float shape, uint32_t features) noexcept;
     void resetRealtimeState() noexcept;
 
     juce::AudioBuffer<float> delayBuffer;
-    juce::AudioBuffer<float> mediumBandDelayBuffer;
-    juce::AudioBuffer<float> highBandDelayBuffer;
     std::array<Grain, maximumGrains> grains;
     std::array<float, modulationTableSize> sineTable {};
     std::array<float, modulationTableSize> hannTable {};
+    std::array<float, modulationTableSize> softWindowTable {};
+    std::array<float, modulationTableSize> sharpWindowTable {};
     std::array<float, 2> lowState { 0.0f, 0.0f };
-    std::array<float, 2> feedbackState { 0.0f, 0.0f };
-    std::array<float, 2> softnessState { 0.0f, 0.0f };
-    std::array<std::array<float, 4>, 2> mediumFilterState {};
-    std::array<std::array<float, 4>, 2> highFilterState {};
     RandomizationEngine random;
+    RandomizationEngine schedulerRandom;
     double sampleRate = 44100.0;
     float fastEnvelope = 0.0f;
     float slowEnvelope = 0.0f;
     float motionPhase = 0.0f;
     float lastMotionAmount = 0.0f;
+    uint64_t grainStartCount = 0;
     float overlapEnergy = 0.0f;
     float lastOverlapGain = 0.0f;
-    float mediumFilterCoefficient = 0.0f;
-    float highFilterCoefficient = 0.0f;
-    juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> amountSmoother { 0.0f };
+    juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> pressureSmoother { 0.0f };
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> enabledSmoother { 0.0f };
     juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> mixSmoother { 0.5f };
-    juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> sizeSmoother { 40.0f };
-    juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> pitchSmoother { 0.0f };
+    juce::SmoothedValue<float, juce::ValueSmoothingTypes::Linear> shapeSmoother { 0.0f };
     int writePosition = 0;
     int validFrames = 0;
     int grainCountdown = 0;

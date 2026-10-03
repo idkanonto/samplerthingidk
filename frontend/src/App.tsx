@@ -3,7 +3,7 @@ import {
   postDroppedFiles, sendPluginCommand, type SampleSummary, useBackendState,
   usePluginParameter, useVisualisationState
 } from './juceBridge'
-import { EffectCanvas, FaultCanvas, SpectralDrawCanvas, StereoMeterCanvas, WaveformCanvas } from './VisualCanvases'
+import { FaultWaves, NeuralBackground, SpectralDrawCanvas, StereoMeterCanvas, WaveformCanvas } from './VisualCanvases'
 import productLogo from './assets/recompiler-logo.svg'
 import damnnprodigyLogo from './assets/damnnprodigy-logo.svg'
 import shadx2Logo from './assets/shadx2-logo.svg'
@@ -248,30 +248,32 @@ function SourceControls({ sample }: { sample?: SampleSummary }) {
 }
 
 function BleedModule({ enabled }: { enabled: boolean }) {
-  const parameter = usePluginParameter('smearAmount'); const visualisation = useVisualisationState()
-  const pitch = usePluginParameter('bleedGrainPitch')
+  const pressure = usePluginParameter('smearAmount'); const visualisation = useVisualisationState()
   const mix = usePluginParameter('bleedMix')
-  const commitPitch = (value: number) => { pitch.beginGesture(); pitch.setValue(value); pitch.endGesture() }
+  const shape = usePluginParameter('bleedShape')
+  const commitShape = (value: number) => { shape.beginGesture(); shape.setValue(value); shape.endGesture() }
   return <RecompilerPanel title="BLEED" className={`effect-module bleed-module ${enabled ? '' : 'bypassed'}`} headerAction={<EffectPower effect={1} enabled={enabled} />}>
     <div className="bleed-controls">
       <PressureControl id="smearAmount" accessibleLabel="Bleed pressure" />
       <PressureControl id="bleedMix" accessibleLabel="Bleed mix" label="MIX" />
-      <PressureControl id="bleedGrainSize" accessibleLabel="Bleed grain size in milliseconds" label="SIZE ms" />
     </div>
-    <div className="bleed-pitch"><label htmlFor="bleed-grain-pitch">GRAIN PITCH</label>
-      <input id="bleed-grain-pitch" aria-label="Bleed grain pitch" type="range" min={-100} max={100} step={0.1} value={pitch.value}
-        onPointerDown={pitch.beginGesture} onPointerUp={pitch.endGesture} onPointerCancel={pitch.endGesture}
-        onKeyDown={pitch.beginGesture} onKeyUp={pitch.endGesture} onChange={(event) => pitch.setValue(Number(event.target.value))}
-        onDoubleClick={() => commitPitch(0)} />
-      <div className="bleed-pitch-values"><span>SOFT</span><EditableValue label="Bleed grain pitch exact value" value={pitch.value} min={-100} max={100} step={1} onCommit={commitPitch} /><span>CRYSTAL</span></div>
+    <div className="bleed-shape">
+      <label htmlFor="bleed-shape">SHAPE</label>
+      <input id="bleed-shape" aria-label="Bleed grain shape" type="range" min={-100} max={100} step={0.1} value={shape.value}
+        aria-valuetext={shape.value < -2 ? 'Long and rounded' : shape.value > 2 ? 'Short and sharp' : 'Balanced'}
+        onPointerDown={shape.beginGesture} onPointerUp={shape.endGesture} onPointerCancel={shape.endGesture}
+        onKeyDown={shape.beginGesture} onKeyUp={shape.endGesture} onChange={(event) => shape.setValue(Number(event.target.value))}
+        onDoubleClick={() => commitShape(0)} />
+      <div className="bleed-shape-values"><span>LONG / ROUND</span><span>SHORT / SHARP</span></div>
     </div>
-    <PixelDisplay className="effect-display bleed-display"><EffectCanvas amount={parameter.value * mix.value / 100} visualisation={visualisation} active={enabled} /></PixelDisplay>
+    <PixelDisplay className="effect-display bleed-display"><NeuralBackground className="bleed-neural-root" audioLevel={visualisation.audioLevel}
+      pressure={pressure.value / 100} shape={shape.value} active={enabled} /></PixelDisplay>
     <BypassOverlay enabled={enabled} />
   </RecompilerPanel>
 }
 
 function FaultModule({ mutations, enabled }: { mutations: number, enabled: boolean }) {
-  const pressure = usePluginParameter('faultPressure'); const visualisation = useVisualisationState()
+  const visualisation = useVisualisationState()
   const choices = [{ label: 'FLIP', bit: 4 }, { label: 'DUST', bit: 2 }, { label: 'WARP', bit: 1 }]
   return <RecompilerPanel title="FAULT" className={`effect-module fault-module ${enabled ? '' : 'bypassed'}`} headerAction={<EffectPower effect={0} enabled={enabled} />}>
     <div className="creative-controls fault-controls"><PressureControl id="faultPressure" accessibleLabel="Fault pressure" />
@@ -279,7 +281,7 @@ function FaultModule({ mutations, enabled }: { mutations: number, enabled: boole
         {choices.map(({ label, bit }) => <PixelButton key={label} active={(mutations & bit) !== 0}
           onClick={() => sendPluginCommand('setFaultMutations', { mutations: mutations ^ bit })}>{label}</PixelButton>)}
       </div></div>
-    <PixelDisplay className="fault-display"><FaultCanvas pressure={pressure.value} visualisation={visualisation} active={enabled} /></PixelDisplay>
+    <PixelDisplay className="fault-display"><FaultWaves audioLevel={visualisation.audioLevel} active={enabled} /></PixelDisplay>
     <BypassOverlay enabled={enabled} />
   </RecompilerPanel>
 }
@@ -352,7 +354,7 @@ FAULT introduces tempo-synced mutations into the combined sampler output. PRESSU
 FAULT uses 1/2, 1/4, 1/8 and 1/16 divisions. FLIP plays a slice backward. DUST reduces digital resolution and sample rate. WARP replays a slice one octave up or down using varispeed, changing speed and pitch together. Enable any combination; FAULT chooses once per event.
 
 06 / BLEED
-BLEED PRESSURE sets grain density. MIX blends the dry source with the grains. SIZE sets the base grain duration in milliseconds. GRAIN PITCH is centered by default: left makes longer, softer grains; right makes shorter, higher, crystalline grains with less feedback. The compact display shows audio-driven facets.
+BLEED PRESSURE sets grain density. MIX blends the dry source with the processed grains. SHAPE is centered by default: left makes longer, rounded grains; right makes shorter, sharper grains. Shape does not change musical pitch.
 
 07 / ETCH
 ETCH lets you draw directly into the spectral content. ETCH PRESSURE controls the depth of spectral removal. Frequency runs vertically and time horizontally. Draw to remove spectral energy as the scanner passes through the mask. CLEAR removes the drawing.
@@ -385,6 +387,7 @@ JUCE 8.0.13 — AGPLv3 or commercial JUCE license
 Signalsmith Stretch — MIT
 Signalsmith Linear — MIT
 React 18.3.1 / React DOM 18.3.1 — MIT
+Simplex Noise 4.0.3 — MIT
 Microsoft WebView2 — Microsoft software license terms
 Spleen 2.2.0 — BSD 2-Clause
 Cozette 1.30.0 — MIT

@@ -100,6 +100,7 @@ jobs:
             'COZETTE_MIT.txt',
             'REACT_MIT.txt',
             'REACT_DOM_MIT.txt',
+            'SIMPLEX_NOISE_MIT.txt',
             'WEBVIEW2_LICENSE.txt'
           )
           foreach ($noticeName in $requiredNotices) {
