@@ -1066,10 +1066,12 @@ void testSmearProcessor()
     auto sharpWarmup = copyBuffer(roundWarmup);
     roundEffect.process(roundWarmup, { 50.0f, randomchop::SmearFeatures::all, 100.0f, -100.0f });
     sharpEffect.process(sharpWarmup, { 50.0f, randomchop::SmearFeatures::all, 100.0f, 100.0f });
+    const auto roundBaseline = roundEffect.getGrainStartCount();
+    const auto sharpBaseline = sharpEffect.getGrainStartCount();
     roundEffect.process(roundDensity, { 50.0f, randomchop::SmearFeatures::all, 100.0f, -100.0f });
     sharpEffect.process(sharpDensity, { 50.0f, randomchop::SmearFeatures::all, 100.0f, 100.0f });
-    const auto roundStarted = roundEffect.getGrainStartCount();
-    const auto sharpStarted = sharpEffect.getGrainStartCount();
+    const auto roundStarted = roundEffect.getGrainStartCount() - roundBaseline;
+    const auto sharpStarted = sharpEffect.getGrainStartCount() - sharpBaseline;
     check(std::abs(static_cast<int64_t>(roundStarted) - static_cast<int64_t>(sharpStarted)) <= 1,
           "Bleed Shape changed grain trigger density");
 
