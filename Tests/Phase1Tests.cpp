@@ -346,9 +346,11 @@ void testPitchPreservingSourceStretch()
 
     check(randomchop::clampStretchSpeed(0.1f) == 0.25f
               && randomchop::clampStretchSpeed(3.0f) == 2.0f
+              && randomchop::clampStretchSpeed(0.62f) == 0.5f
+              && randomchop::clampStretchSpeed(0.63f) == 0.75f
               && randomchop::clampStretchSpeed(
                   std::numeric_limits<float>::quiet_NaN()) == 1.0f,
-          "source Stretch bounds did not sanitize invalid values");
+          "source Stretch did not snap to approved quarter-step values");
 }
 
 void testRegionsAndVoices()

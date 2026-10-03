@@ -15,9 +15,14 @@ These decisions govern implementation together with [[PRODUCT_SPEC_V2]].
 - ETCH preserves the user's drawing and the read-only playback scan line from real spectral playback-position telemetry. Do not add a spectrum overlay, idle animation, or pointer/crosshair decoration.
 - BLEED's final controls are PRESSURE, MIX, and centered SHAPE. PRESSURE controls grain scheduling density only; MIX is the dry/wet blend; SHAPE continuously changes grain duration and window only, from long/rounded through the original balanced center to short/sharp. Grains always read at source rate, with no random or parameter-driven pitch shift.
 - Retain the old Grain Size parameter ID only as a deprecated ignored compatibility parameter. Remove the old Grain Pitch parameter ID from the active layout and discard it during state migration. New Shape restores neutral in older sessions.
-- Keep the supplied NeuralBackground and Waves component geometry/composition. Feed each component only normalized post-MASTER audio RMS, apply bounded attack/release smoothing in the UI, and modulate its existing movement conservatively. BLEED additionally scales activity by the nonlinear Pressure curve; Shape only subtly changes BLEED flow inertia. ETCH remains a drawing surface.
+- Keep the supplied NeuralBackground and Waves component geometry/composition. Feed each component only normalized post-MASTER audio RMS and apply bounded attack/release smoothing in the UI. Translate that signal into the components' existing pointer-force paths: BLEED follows a wide rounded superellipse, while FAULT follows a corner-reaching rectangular rupture path. BLEED activity also follows Pressure and Mix; Shape maps to particle trail decay and flow inertia. ETCH remains a drawing surface.
 - Use the existing black/white monochrome display fields and frames; remove the replaced custom canvas algorithms and their WebView sample-scope telemetry. Bundle simplex-noise 4.0.3 under its MIT license for the supplied Waves component.
 - Keep the POOL selection treatment and ABOUT close-mark interaction already in place. VST manufacturer/creator metadata is `damnnprodigy`; product name remains `recompiler.dll`.
+
+## Source scrubbing and discrete Stretch (2026-10-03)
+
+- TUNE, DRIFT, and STRETCH retain their step buttons and numeric fields. Holding and dragging vertically changes values quickly; a double-click with the second click held uses the same scrub gesture. The value previews locally during the gesture and commits once on release.
+- Source STRETCH accepts only `0.25×`, `0.50×`, `0.75×`, `1×`, `1.25×`, `1.50×`, `1.75×`, or `2×`. The shared backend sanitizer snaps restored state and every command path to those values.
 
 ## Release-candidate identity and FAULT lock (2026-10-01)
 

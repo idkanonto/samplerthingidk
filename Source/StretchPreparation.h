@@ -8,7 +8,10 @@ namespace randomchop
 {
 inline float clampStretchSpeed(float speed) noexcept
 {
-    return std::isfinite(speed) ? std::clamp(speed, 0.25f, 2.0f) : 1.0f;
+    if (!std::isfinite(speed))
+        return 1.0f;
+    const auto bounded = std::clamp(speed, 0.25f, 2.0f);
+    return std::clamp(std::round(bounded * 4.0f) * 0.25f, 0.25f, 2.0f);
 }
 
 PreparedSamplePtr prepareStretch(

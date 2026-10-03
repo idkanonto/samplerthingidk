@@ -219,12 +219,64 @@ function Waveform({ sample }: { sample?: SampleSummary }) {
   </div></PixelDisplay>
 }
 
-function SampleNumber({ sample, property, value, min, max, step, suffix }: {
-  sample?: SampleSummary, property: string, value: number, min: number, max: number, step: number, suffix: string
+function SampleNumber({ sample, property, value, min, max, step, suffix, values, dragPixelsPerStep = 4 }: {
+  sample?: SampleSummary, property: string, value: number, min: number, max: number, step: number, suffix: string,
+  values?: readonly number[], dragPixelsPerStep?: number
 }) {
-  const set = (next: number) => sample && sendPluginCommand('setSampleProperty', { id: sample.id, property, value: Math.max(min, Math.min(max, next)) })
-  return <div className="stepper-shell"><div className="stepper"><input type="number" min={min} max={max} step={step} value={value} aria-label={property} disabled={!sample}
-    onChange={(event) => set(Number(event.target.value))} /><div><button disabled={!sample} onClick={() => set(value + step)}>+</button><button disabled={!sample} onClick={() => set(value - step)}>−</button></div></div><span className="unit-line">{suffix}</span></div>
+  const drag = useRef<{ pointerId: number, startY: number, startValue: number, nextValue: number } | null>(null)
+  const dragCleanup = useRef<(() => void) | null>(null)
+  const [dragValue, setDragValue] = useState<number | null>(null)
+  const quantise = (next: number) => {
+    const bounded = Math.max(min, Math.min(max, Number.isFinite(next) ? next : value))
+    if (values?.length) return values.reduce((closest, candidate) =>
+      Math.abs(candidate - bounded) < Math.abs(closest - bounded) ? candidate : closest, values[0])
+    return Math.max(min, Math.min(max, min + Math.round((bounded - min) / step) * step))
+  }
+  const shownValue = dragValue ?? quantise(value)
+  const set = (next: number) => sample && sendPluginCommand('setSampleProperty', {
+    id: sample.id, property, value: quantise(next)
+  })
+  useEffect(() => () => dragCleanup.current?.(), [])
+  const beginDrag = (event: ReactPointerEvent<HTMLInputElement>) => {
+    if (!sample || event.button !== 0) return
+    dragCleanup.current?.()
+    const active = { pointerId: event.pointerId, startY: event.clientY, startValue: shownValue, nextValue: shownValue }
+    drag.current = active
+    setDragValue(shownValue)
+    const move = (pointer: PointerEvent) => {
+      if (pointer.pointerId !== active.pointerId) return
+      pointer.preventDefault()
+      const offset = Math.round((active.startY - pointer.clientY) / dragPixelsPerStep)
+      if (values?.length) {
+        const startIndex = values.indexOf(quantise(active.startValue))
+        active.nextValue = values[Math.max(0, Math.min(values.length - 1, startIndex + offset))]
+      } else active.nextValue = quantise(active.startValue + offset * step)
+      setDragValue(active.nextValue)
+    }
+    const finish = (pointer: PointerEvent) => {
+      if (pointer.pointerId !== active.pointerId) return
+      dragCleanup.current?.()
+      drag.current = null
+      set(active.nextValue)
+      setDragValue(null)
+    }
+    const cleanup = () => {
+      window.removeEventListener('pointermove', move, true)
+      window.removeEventListener('pointerup', finish, true)
+      window.removeEventListener('pointercancel', finish, true)
+      if (dragCleanup.current === cleanup) dragCleanup.current = null
+    }
+    dragCleanup.current = cleanup
+    window.addEventListener('pointermove', move, { capture: true, passive: false })
+    window.addEventListener('pointerup', finish, true)
+    window.addEventListener('pointercancel', finish, true)
+  }
+  return <div className="stepper-shell"><div className="stepper"><input type="number" min={min} max={max} step={step}
+    value={shownValue} aria-label={property} title="Double-click and drag vertically to adjust" disabled={!sample}
+    onChange={(event) => set(Number(event.target.value))} onPointerDown={beginDrag}
+    onDoubleClick={(event) => event.preventDefault()} />
+    <div><button disabled={!sample} onClick={() => set(shownValue + step)}>+</button><button disabled={!sample}
+      onClick={() => set(shownValue - step)}>−</button></div></div><span className="unit-line">{suffix}</span></div>
 }
 
 function SourceTrim({ sample }: { sample?: SampleSummary }) {
@@ -239,10 +291,11 @@ function SourceTrim({ sample }: { sample?: SampleSummary }) {
 }
 
 function SourceControls({ sample }: { sample?: SampleSummary }) {
+  const stretchValues = [.25, .5, .75, 1, 1.25, 1.5, 1.75, 2] as const
   return <div className="source-controls">
-    <label><b>TUNE</b><SampleNumber sample={sample} property="transpose" value={sample?.transpose ?? 0} min={-24} max={24} step={1} suffix="st" /></label>
-    <label><b>DRIFT</b><SampleNumber sample={sample} property="fineTune" value={sample?.fineTune ?? 0} min={-100} max={100} step={1} suffix="ct" /></label>
-    <label><b>STRETCH{sample?.stretchPending ? '…' : ''}</b><SampleNumber sample={sample} property="stretch" value={sample?.stretch ?? 1} min={.25} max={2} step={.05} suffix="×" /></label>
+    <label><b>TUNE</b><SampleNumber sample={sample} property="transpose" value={sample?.transpose ?? 0} min={-24} max={24} step={1} suffix="st" dragPixelsPerStep={4} /></label>
+    <label><b>DRIFT</b><SampleNumber sample={sample} property="fineTune" value={sample?.fineTune ?? 0} min={-100} max={100} step={1} suffix="ct" dragPixelsPerStep={2} /></label>
+    <label><b>STRETCH{sample?.stretchPending ? '…' : ''}</b><SampleNumber sample={sample} property="stretch" value={sample?.stretch ?? 1} min={.25} max={2} step={.25} suffix="×" values={stretchValues} dragPixelsPerStep={14} /></label>
     <label><b>TRIM</b><SourceTrim sample={sample} /></label>
   </div>
 }
@@ -267,7 +320,7 @@ function BleedModule({ enabled }: { enabled: boolean }) {
       <div className="bleed-shape-values"><span>LONG / ROUND</span><span>SHORT / SHARP</span></div>
     </div>
     <PixelDisplay className="effect-display bleed-display"><NeuralBackground className="bleed-neural-root" audioLevel={visualisation.audioLevel}
-      pressure={pressure.value / 100} shape={shape.value} active={enabled} /></PixelDisplay>
+      pressure={pressure.value / 100} mix={mix.value / 100} shape={shape.value} active={enabled} /></PixelDisplay>
     <BypassOverlay enabled={enabled} />
   </RecompilerPanel>
 }

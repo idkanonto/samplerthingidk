@@ -58,16 +58,16 @@ function smoothAudioLevel(current: number, target: number, deltaSeconds: number)
 
 /** User-supplied NeuralBackground flow, with bounded energy-only audio response. */
 export function NeuralBackground({ className = '', color = '#ffffff', trailOpacity = 0.15,
-  particleCount = 600, speed = 1, audioLevel, pressure, shape, active }: {
+  particleCount = 600, speed = 1, audioLevel, pressure, mix, shape, active }: {
   className?: string, color?: string, trailOpacity?: number, particleCount?: number, speed?: number,
-  audioLevel: number, pressure: number, shape: number, active: boolean
+  audioLevel: number, pressure: number, mix: number, shape: number, active: boolean
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const particlesRef = useRef<NeuralParticle[]>([])
   const dimensionsRef = useRef({ width: 0, height: 0, particleCount: 0 })
-  const dataRef = useRef({ audioLevel, pressure, shape })
-  dataRef.current = { audioLevel, pressure, shape }
+  const dataRef = useRef({ audioLevel, pressure, mix, shape })
+  dataRef.current = { audioLevel, pressure, mix, shape }
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -78,10 +78,11 @@ export function NeuralBackground({ className = '', color = '#ffffff', trailOpaci
 
     let width = Math.max(1, container.clientWidth)
     let height = Math.max(1, container.clientHeight)
-    const mouse = { x: -1000, y: -1000 }
+    const mouse = { x: width * .5, y: height * .5 }
     let frame = 0
     let previousFrame = 0
     let energy = 0
+    let virtualPhase = 0
 
     const initialize = () => {
       width = Math.max(1, container.clientWidth)
@@ -108,12 +109,6 @@ export function NeuralBackground({ className = '', color = '#ffffff', trailOpaci
     }
 
     const handleResize = () => initialize()
-    const handleMouseMove = (event: MouseEvent) => {
-      const rect = canvas.getBoundingClientRect()
-      mouse.x = event.clientX - rect.left
-      mouse.y = event.clientY - rect.top
-    }
-    const handleMouseLeave = () => { mouse.x = -1000; mouse.y = -1000 }
     const resetParticle = (particle: NeuralParticle) => {
       particle.x = Math.random() * width
       particle.y = Math.random() * height
@@ -132,14 +127,29 @@ export function NeuralBackground({ className = '', color = '#ffffff', trailOpaci
       const targetLevel = clamped(current.audioLevel)
       energy = smoothAudioLevel(energy, targetLevel, deltaSeconds)
       const pressureCurve = Math.pow(clamped(current.pressure), 1.8)
-      const visualEnergy = energy * pressureCurve
+      const mixCurve = Math.pow(clamped(current.mix), .75)
+      const visualEnergy = energy * pressureCurve * mixCurve
       const shapeBias = clamped((current.shape + 100) / 200)
-      const flowSpeed = speed * (1 + 0.30 * visualEnergy)
+      const flowSpeed = speed * visualEnergy * 2.2
       const friction = 0.966 - 0.018 * shapeBias
+      const currentTrailOpacity = Math.max(.035, Math.min(.34,
+        trailOpacity + (shapeBias - .5) * .22))
+      virtualPhase = (virtualPhase + deltaSeconds * visualEnergy * 3.2) % (Math.PI * 2)
+      const horizontal = Math.cos(virtualPhase)
+      const vertical = Math.sin(virtualPhase)
+      const superellipseX = Math.sign(horizontal) * Math.sqrt(Math.abs(horizontal))
+      const superellipseY = Math.sign(vertical) * Math.sqrt(Math.abs(vertical))
+      const targetX = width * (.5 + .43 * superellipseX)
+      const targetY = height * (.5 + .39 * superellipseY)
+      const cursorBlend = 1 - Math.exp(-deltaSeconds * (4 + 14 * visualEnergy))
+      mouse.x += (targetX - mouse.x) * cursorBlend
+      mouse.y += (targetY - mouse.y) * cursorBlend
 
-      context.fillStyle = `rgba(0, 0, 0, ${trailOpacity})`
+      context.fillStyle = `rgba(0, 0, 0, ${currentTrailOpacity})`
       context.fillRect(0, 0, width, height)
-      for (const particle of particlesRef.current) {
+      const visibleParticles = Math.round(particlesRef.current.length * (.18 + .82 * pressureCurve))
+      for (let index = 0; index < visibleParticles; index += 1) {
+        const particle = particlesRef.current[index]
         const angle = (Math.cos(particle.x * 0.005) + Math.sin(particle.y * 0.005)) * Math.PI
         particle.vx += Math.cos(angle) * 0.2 * flowSpeed
         particle.vy += Math.sin(angle) * 0.2 * flowSpeed
@@ -148,17 +158,18 @@ export function NeuralBackground({ className = '', color = '#ffffff', trailOpaci
         const dy = mouse.y - particle.y
         const distance = Math.hypot(dx, dy)
         const interactionRadius = 150
-        if (distance < interactionRadius) {
+        if (visualEnergy > .001 && distance < interactionRadius) {
           const force = (interactionRadius - distance) / interactionRadius
-          particle.vx -= dx * force * 0.05
-          particle.vy -= dy * force * 0.05
+          particle.vx -= dx * force * 0.05 * visualEnergy
+          particle.vy -= dy * force * 0.05 * visualEnergy
         }
 
-        particle.x += particle.vx
-        particle.y += particle.vy
+        particle.x += particle.vx * Math.min(1, visualEnergy * 7)
+        particle.y += particle.vy * Math.min(1, visualEnergy * 7)
         particle.vx *= friction
         particle.vy *= friction
-        if (++particle.age > particle.life) resetParticle(particle)
+        particle.age += Math.min(1, visualEnergy * 5)
+        if (particle.age > particle.life) resetParticle(particle)
         if (particle.x < 0) particle.x = width
         if (particle.x > width) particle.x = 0
         if (particle.y < 0) particle.y = height
@@ -175,12 +186,8 @@ export function NeuralBackground({ className = '', color = '#ffffff', trailOpaci
     initialize()
     frame = requestAnimationFrame(animate)
     window.addEventListener('resize', handleResize)
-    container.addEventListener('mousemove', handleMouseMove)
-    container.addEventListener('mouseleave', handleMouseLeave)
     return () => {
       window.removeEventListener('resize', handleResize)
-      container.removeEventListener('mousemove', handleMouseMove)
-      container.removeEventListener('mouseleave', handleMouseLeave)
       cancelAnimationFrame(frame)
     }
   }, [active, color, particleCount, speed, trailOpacity])
@@ -264,11 +271,10 @@ export function FaultWaves({ audioLevel, active, className = '', strokeColor = '
       }
     }
 
-    const updateMousePosition = (x: number, y: number) => {
-      if (!boundingRef.current) return
+    const updateVirtualPointer = (x: number, y: number) => {
       const mouse = mouseRef.current
-      mouse.x = x - boundingRef.current.left
-      mouse.y = y - boundingRef.current.top + window.scrollY
+      mouse.x = x
+      mouse.y = y
       if (!mouse.set) {
         mouse.sx = mouse.x
         mouse.sy = mouse.y
@@ -278,12 +284,6 @@ export function FaultWaves({ audioLevel, active, className = '', strokeColor = '
       }
       containerRef.current?.style.setProperty('--x', `${mouse.sx}px`)
       containerRef.current?.style.setProperty('--y', `${mouse.sy}px`)
-    }
-    const onMouseMove = (event: MouseEvent) => updateMousePosition(event.pageX, event.pageY)
-    const onTouchMove = (event: TouchEvent) => {
-      event.preventDefault()
-      const touch = event.touches[0]
-      if (touch) updateMousePosition(touch.clientX, touch.clientY)
     }
     const onResize = () => { setSize(); setLines() }
     const moved = (point: WavePoint, withCursorForce = true) => ({
@@ -338,14 +338,30 @@ export function FaultWaves({ audioLevel, active, className = '', strokeColor = '
     let smoothedEnergy = 0
     let previousFrame = 0
     let elapsed = 0
+    let virtualPhase = 0
     const tick = (time: number) => {
       rafRef.current = null
       if (!activeRef.current) return
       const delta = previousFrame === 0 ? 1 / 60
         : Math.max(1 / 120, Math.min(1 / 20, (time - previousFrame) / 1000))
       previousFrame = time
-      elapsed += delta * 1000
       smoothedEnergy = smoothAudioLevel(smoothedEnergy, clamped(audioRef.current), delta)
+      virtualPhase = (virtualPhase + delta * smoothedEnergy * 1.8) % 1
+      const width = boundingRef.current?.width ?? 1
+      const height = boundingRef.current?.height ?? 1
+      const perimeter = virtualPhase * 4
+      const segment = Math.floor(perimeter) % 4
+      const progress = perimeter - Math.floor(perimeter)
+      const corners = [
+        [width * .08, height * .12], [width * .92, height * .12],
+        [width * .92, height * .88], [width * .08, height * .88]
+      ]
+      const from = corners[segment]
+      const to = corners[(segment + 1) % corners.length]
+      const rupture = smoothedEnergy * Math.sin(virtualPhase * Math.PI * 14)
+      updateVirtualPointer(from[0] + (to[0] - from[0]) * progress + rupture * width * .035,
+        from[1] + (to[1] - from[1]) * progress - rupture * height * .06)
+      elapsed += delta * 1000 * smoothedEnergy * 2.4
       const { current: mouse } = mouseRef
       mouse.sx += (mouse.x - mouse.sx) * 0.1
       mouse.sy += (mouse.y - mouse.sy) * 0.1
@@ -366,15 +382,11 @@ export function FaultWaves({ audioLevel, active, className = '', strokeColor = '
     tickRef.current = tick
     const onContainerResize = () => onResize()
     window.addEventListener('resize', onContainerResize)
-    window.addEventListener('mousemove', onMouseMove)
-    container.addEventListener('touchmove', onTouchMove, { passive: false })
     return () => {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
       rafRef.current = null
       tickRef.current = null
       window.removeEventListener('resize', onContainerResize)
-      window.removeEventListener('mousemove', onMouseMove)
-      container.removeEventListener('touchmove', onTouchMove)
       pathsRef.current.forEach((path) => path.remove())
       pathsRef.current = []
       linesRef.current = []
