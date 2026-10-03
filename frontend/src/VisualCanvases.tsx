@@ -202,6 +202,8 @@ type WavePoint = {
   cursor: { x: number, y: number, vx: number, vy: number }
 }
 
+type FaultCanvasSize = { width: number, height: number, pixelRatio: number }
+
 /** User-supplied Waves field, retaining its line geometry and pointer response. */
 export function FaultWaves({ eventSerial, active, className = '', strokeColor = '#ffffff',
   backgroundColor = '#000000' }: {
@@ -219,7 +221,7 @@ export function FaultWaves({ eventSerial, active, className = '', strokeColor = 
   const noiseRef = useRef<((x: number, y: number) => number) | null>(null)
   const rafRef = useRef<number | null>(null)
   const tickRef = useRef<((time: number) => void) | null>(null)
-  const boundingRef = useRef<DOMRect | null>(null)
+  const sizeRef = useRef<FaultCanvasSize | null>(null)
 
   useEffect(() => {
     const container = containerRef.current
@@ -231,33 +233,40 @@ export function FaultWaves({ eventSerial, active, className = '', strokeColor = 
 
     const setSize = () => {
       if (!containerRef.current || !canvasRef.current) return false
-      const bounds = containerRef.current.getBoundingClientRect()
-      const width = Math.round(bounds.width)
-      const height = Math.round(bounds.height)
-      // JUCE's WebView can mount the document before the editor receives its
-      // final bounds. Do not build an empty SVG from that transient 0 x 0 box.
+      // clientWidth/clientHeight stay in the monitor's logical coordinate
+      // system. getBoundingClientRect() includes the complete editor's CSS
+      // scale and would apply 75/125/150% a second time to this canvas.
+      const width = Math.round(containerRef.current.clientWidth)
+      const height = Math.round(containerRef.current.clientHeight)
+      const pixelRatio = Math.max(1, window.devicePixelRatio || 1)
+      // JUCE's WebView can mount before the editor receives its final bounds.
+      // Ignore that transient box and let ResizeObserver perform the real pass.
       if (width < 2 || height < 2) return false
-      if (Math.round(boundingRef.current?.width ?? -1) === width
-        && Math.round(boundingRef.current?.height ?? -1) === height
+      if (sizeRef.current?.width === width
+        && sizeRef.current?.height === height
+        && sizeRef.current?.pixelRatio === pixelRatio
         && linesRef.current.length > 0) return false
-      boundingRef.current = bounds
-      const dpr = Math.max(1, window.devicePixelRatio || 1)
-      canvasRef.current.width = Math.max(1, Math.round(width * dpr))
-      canvasRef.current.height = Math.max(1, Math.round(height * dpr))
-      canvasRef.current.style.width = `${width}px`
-      canvasRef.current.style.height = `${height}px`
-      context.setTransform(dpr, 0, 0, dpr, 0, 0)
+      sizeRef.current = { width, height, pixelRatio }
+      canvasRef.current.width = Math.max(1, Math.round(width * pixelRatio))
+      canvasRef.current.height = Math.max(1, Math.round(height * pixelRatio))
+      // CSS owns the visual size. Only the backing bitmap follows DPI.
+      canvasRef.current.style.width = '100%'
+      canvasRef.current.style.height = '100%'
+      context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0)
       context.imageSmoothingEnabled = false
       return true
     }
     const setLines = () => {
-      if (!boundingRef.current) return
-      const { width, height } = boundingRef.current
+      if (!sizeRef.current) return
+      const { width, height } = sizeRef.current
       linesRef.current = []
       const xGap = 9
       const yGap = 9
-      const oWidth = width + 240
-      const oHeight = height + 160
+      // A fixed logical overscan keeps cursor deformation beyond the bezel
+      // without changing composition when the whole editor is scaled.
+      const overscan = 64
+      const oWidth = width + overscan * 2
+      const oHeight = height + overscan * 2
       const totalLines = Math.ceil(oWidth / xGap)
       const totalPoints = Math.ceil(oHeight / yGap)
       // Overscan the original wave field beyond every bezel edge. Cursor-force
@@ -328,10 +337,10 @@ export function FaultWaves({ eventSerial, active, className = '', strokeColor = 
       }))
     }
     const drawLines = () => {
-      const bounds = boundingRef.current
-      if (!bounds) return
+      const size = sizeRef.current
+      if (!size) return
       context.fillStyle = backgroundColor
-      context.fillRect(0, 0, bounds.width, bounds.height)
+      context.fillRect(0, 0, size.width, size.height)
       context.strokeStyle = strokeColor
       context.lineWidth = 1
       context.lineCap = 'butt'
@@ -381,8 +390,8 @@ export function FaultWaves({ eventSerial, active, className = '', strokeColor = 
       const eventProgress = eventMotionElapsed / eventMotionDuration
       const easedEventProgress = eventProgress * eventProgress * (3 - 2 * eventProgress)
       displayedPhase = phaseAtEvent + (targetPhase - phaseAtEvent) * easedEventProgress
-      const width = boundingRef.current?.width ?? 1
-      const height = boundingRef.current?.height ?? 1
+      const width = sizeRef.current?.width ?? 1
+      const height = sizeRef.current?.height ?? 1
       const routePosition = ((displayedPhase % 1) + 1) % 1 * eventRoute.length
       const segment = Math.floor(routePosition) % eventRoute.length
       const progress = routePosition - Math.floor(routePosition)
