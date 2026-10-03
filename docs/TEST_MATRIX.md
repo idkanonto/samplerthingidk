@@ -8,6 +8,17 @@ status: active
 
 # Test Matrix
 
+## Verified Chance, FAULT Loop, and 30 Hz display pass
+
+| Area | Verified evidence | Still required |
+|---|---|---|
+| Source Chance | Weighted 25/75 selection, zero-weight exclusion, all-zero silence, bounds, persistence, and independent source values pass in CTest; rendered control placement, editing, and reset were inspected | Hands-on host save/reopen and chord performance |
+| FAULT Loop | First-quarter repetition, wrap behavior, release exit, independent voice handling, telemetry increments, and default-mask compatibility pass in CTest | Subjective MIDI/DAW performance check |
+| Effect displays | Production build passes; rendered FAULT/BLEED canvases use 30 Hz frame gating and 0.375 backing scale, approximately 0.47 backing pixels per CSS pixel on the inspected display, with nearest-neighbour presentation | Live embedded WebView2/DAW motion check with real audio |
+| Packaging | Exact code head built and the workflow verified the uploaded raw Windows VST3 bundle | DAW scan/load on the target system |
+
+[Windows release run 37159465472](https://github.com/idkanonto/samplerthingidk/actions/runs/37159465472) passed every workflow stage at `2d39d37439335f1762210ff2117fa1af02d2600d`. VST3 artifact [`11287377281`](https://github.com/idkanonto/samplerthingidk/actions/runs/37159465472/artifacts/11287377281) is 3,731,359 bytes with GitHub SHA-256 `92fbd8a6c525409578ccd06145612e136d905d6bc8334a99aa7fd56ff7fa624a`; listening-render artifact [`11287342425`](https://github.com/idkanonto/samplerthingidk/actions/runs/37159465472/artifacts/11287342425) is 19,550,940 bytes with SHA-256 `9335fa51d4661ee197ef00acdeb8883714db96487442624f347ce4a0c143dc7e`.
+
 ## Verified focused slice/source update
 
 | Area | Verified evidence | Still required |

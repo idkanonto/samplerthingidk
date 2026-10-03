@@ -6,10 +6,19 @@ tags:
   - implementation
   - current-state
 status: active
-verified: 2026-10-02
+verified: 2026-10-03
 ---
 
 # Current Implementation State
+
+## Verified Chance, FAULT Loop, and effect-display pass (2026-10-03)
+
+- Each source now persists an independent CHANCE value from 0–100%, defaulting to 100%. The SOURCE strip places its compact horizontal control between STRETCH and TRIM. Playable sources are selected by relative positive Chance weights; 0 excludes a source, an all-zero pool is silent, and each POLY chord note draws independently while existing MONO final-note behavior is unchanged.
+- FAULT adds a deterministic LOOP switch below WARP. While a MIDI note remains held, each affected voice repeats the first quarter of its selected START–END region; release exits the repetition through the existing envelope. Voices loop independently, and actual wrap events feed FAULT visual telemetry. The saved default/legacy mutation mask remains the previous three random mutations, so LOOP starts off.
+- FAULT and BLEED keep their approved audio-driven visual algorithms and current containers, but now present at 30 Hz from a 0.375-resolution backing canvas with nearest-neighbour scaling. This halves the prior backing resolution and makes the pixels approximately twice as large without changing DSP, telemetry mapping, layout, or effect behavior.
+- The production TypeScript/Vite build passed. The rendered 100% frontend was inspected after rebuilding: CHANCE is aligned between STRETCH/TRIM, LOOP is aligned under WARP, and both effect canvases resolve to approximately 0.47 backing pixels per displayed CSS pixel with crisp-edge presentation. CHANCE keyboard editing and double-click reset to 100 were exercised in the rendered UI. The browser preview does not provide live plug-in audio telemetry, so audio-reactive motion remains covered by the native build/tests rather than claimed as a browser audition.
+- Exact code head `2d39d37439335f1762210ff2117fa1af02d2600d` passed [Windows release run 37159465472](https://github.com/idkanonto/samplerthingidk/actions/runs/37159465472): Release VST3/test compilation, CTest, listening-render verification, artifact verification, and uploads.
+- VST3 artifact [`11287377281`](https://github.com/idkanonto/samplerthingidk/actions/runs/37159465472/artifacts/11287377281) is 3,731,359 bytes with GitHub SHA-256 `92fbd8a6c525409578ccd06145612e136d905d6bc8334a99aa7fd56ff7fa624a`. Listening renders artifact [`11287342425`](https://github.com/idkanonto/samplerthingidk/actions/runs/37159465472/artifacts/11287342425) is 19,550,940 bytes with SHA-256 `9335fa51d4661ee197ef00acdeb8883714db96487442624f347ce4a0c143dc7e`.
 
 ## Final Shape-based BLEED and supplied reactive visuals (2026-10-02)
 
