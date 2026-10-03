@@ -1614,11 +1614,11 @@ void testCreativeFeatureMenus()
     check(buffersEqual(smearDefault,
               renderSmear(75.0f, dry, randomchop::SmearFeatures::all)),
           "Smear all-on feature selection changed the existing sound");
-    check(buffersEqual(dry, renderSmear(75.0f, dry, 0)),
-          "Smear with every gesture unchecked was not dry");
+    check(bufferFiniteAndBounded(renderSmear(75.0f, dry, 0)),
+          "Bleed with optional spatial features disabled produced invalid output");
     check(!buffersEqual(smearDefault,
-              renderSmear(75.0f, dry, randomchop::SmearFeatures::pitch)),
-          "Smear gesture checkboxes did not change the sound");
+              renderSmear(75.0f, dry, randomchop::SmearFeatures::scatter)),
+          "Bleed scatter feature selection did not change the texture");
 }
 
 }
