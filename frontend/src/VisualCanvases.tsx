@@ -115,6 +115,40 @@ export function FaultCanvas({ pressure, visualisation, active }: {
       }
       context.globalAlpha = 1
       if (mutation > 0) {
+        // Sound-driven flowing trajectories, broken at the active mutation point.
+        // The pasted wave field is concentrated around FAULT's real segment head
+        // so this remains a rupture trace rather than a static mesh.
+        const center = 7 + progress * 240
+        const amplitude = 3 + Math.min(1, current.pressure / 100) * 19
+        context.strokeStyle = '#eeeeee'
+        context.lineWidth = .7
+        for (let strand = 0; strand < 7; strand += 1) {
+          const baseX = center + (strand - 3) * 5
+          context.globalAlpha = .12 + (1 - Math.abs(strand - 3) / 4) * .22
+          context.beginPath()
+          let penDown = false
+          for (let point = 0; point <= 18; point += 1) {
+            const fraction = point / 18
+            const phase = progress * Math.PI * 5 + strand * .82 + fraction * Math.PI * 3
+            const fracture = mutation === 1
+              ? Math.sin(phase) * amplitude
+              : mutation === 2
+                ? Math.round(Math.sin(phase) * amplitude * .18) * 5
+                : (Math.sin(phase) + Math.sign(Math.sin(phase * .5)) * .65) * amplitude
+            const x = baseX + fracture
+            const y = 8 + fraction * 124
+            const snappedGap = mutation === 1 && point >= 8 + strand % 3 && point <= 9 + strand % 3
+            if (snappedGap) { penDown = false; continue }
+            if (mutation === 2 && point % 3 === 2) {
+              penDown = false
+              continue
+            }
+            if (!penDown) { context.moveTo(x, y); penDown = true }
+            else context.lineTo(x, y)
+          }
+          context.stroke()
+        }
+        context.globalAlpha = 1
         context.fillStyle = '#eeeeee'
         context.fillRect(Math.round(7 + progress * 240), 18, 1, 112)
       }
@@ -123,7 +157,7 @@ export function FaultCanvas({ pressure, visualisation, active }: {
     return () => cancelAnimationFrame(frame)
   }, [active])
   return <canvas ref={ref} className="pixel-canvas fault-canvas"
-    aria-label="Live Fault segment activity, mutation type, division, and progress" />
+    aria-label="Live Fault fracture and wave activity from segment telemetry" />
 }
 
 export function EffectCanvas({ amount, visualisation, active }: {
@@ -135,11 +169,20 @@ export function EffectCanvas({ amount, visualisation, active }: {
   useEffect(() => {
     const canvas = ref.current
     if (!canvas || !active) return
+    type Particle = { x: number, y: number, vx: number, vy: number, phase: number }
+    const particles: Particle[] = Array.from({ length: 52 }, (_, index) => ({
+      x: ((index * 47) % 127) + .5,
+      y: ((index * 29) % 67) + .5,
+      vx: 0,
+      vy: 0,
+      phase: index * 2.399963229728653
+    }))
     let frame = 0
     let previous = 0
     const draw = (time: number) => {
       frame = requestAnimationFrame(draw)
       if (time - previous < 33) return
+      const delta = Math.max(.5, Math.min(2, (time - previous) / 16.67))
       previous = time
       const context = setup(canvas, 128, 68, false)
       if (!context) return
@@ -149,28 +192,46 @@ export function EffectCanvas({ amount, visualisation, active }: {
       const right = telemetry.bleedScopeRight ?? []
       const count = Math.min(left.length, right.length)
       const activity = Math.max(0, Math.min(1, telemetry.smearActivity || 0))
-      const gain = Math.max(0, Math.min(1, telemetry.smearGain || 0))
-      context.fillStyle = '#101010'
+      const grainGain = Math.max(0, Math.min(1, telemetry.smearGain || 0))
+      let level = 0
+      let high = 0
+      if (count > 1) {
+        for (let index = 0; index < count; index += 1) {
+          level += Math.abs(left[index]) + Math.abs(right[index])
+          if (index > 0) high += Math.abs(left[index] - left[index - 1])
+            + Math.abs(right[index] - right[index - 1])
+        }
+        level /= count * 2
+        high /= (count - 1) * 2
+      }
+      const sounding = count > 1 && current.amount > 0 && activity > 0 && level > .001
+      context.fillStyle = sounding ? 'rgba(16,16,16,.24)' : '#101010'
       context.fillRect(0, 0, 128, 68)
-      if (count > 1 && current.amount > 0 && activity > 0) {
-        // Audio amplitude and stereo difference shape thin facets; silence draws nothing.
-        context.strokeStyle = '#eeeeee'
-        context.lineWidth = .75
-        for (let facet = 0; facet < 8; facet += 1) {
-          const index = Math.min(count - 1, Math.floor(facet * count / 8))
-          const amplitude = Math.min(1, Math.abs(left[index]) + Math.abs(right[index]))
-          if (amplitude < .002) continue
-          const difference = Math.max(-1, Math.min(1, left[index] - right[index]))
-          const x = 10 + facet * 15
-          const y = 34 + difference * 18
-          const reach = 2 + amplitude * 25
-          context.globalAlpha = Math.min(1, .25 + amplitude * .7 + gain * .1)
-          context.beginPath()
-          context.moveTo(x - 3, y + reach * .5)
-          context.lineTo(x + difference * 8, y - reach)
-          context.lineTo(x + 4, y + reach * .2)
-          context.closePath()
-          context.stroke()
+      if (sounding) {
+        for (let particle = 0; particle < particles.length; particle += 1) {
+          const point = particles[particle]
+          const index = (particle * 13) % count
+          const sampleL = left[index] || 0
+          const sampleR = right[index] || 0
+          const side = Math.max(-1, Math.min(1, sampleL - sampleR))
+          const sampleLevel = Math.min(1, Math.abs(sampleL) + Math.abs(sampleR))
+          const phase = Math.atan2(sampleR, sampleL)
+          const flow = (Math.cos(point.x * .055 + point.phase) + Math.sin(point.y * .09 - point.phase)) * Math.PI
+          const angle = phase + side * 2.4 + flow * (.12 + high * 1.8)
+          const force = (.014 + sampleLevel * .12 + Math.min(.08, high * .7)) * activity
+          point.vx += Math.cos(angle) * force * delta
+          point.vy += Math.sin(angle) * force * delta
+          point.vx *= Math.pow(.94, delta)
+          point.vy *= Math.pow(.94, delta)
+          point.x += point.vx * delta
+          point.y += point.vy * delta
+          if (point.x < 0) point.x += 128
+          if (point.x >= 128) point.x -= 128
+          if (point.y < 0) point.y += 68
+          if (point.y >= 68) point.y -= 68
+          context.globalAlpha = Math.min(.85, (.12 + sampleLevel * 1.9 + grainGain * .18) * activity)
+          context.fillStyle = '#eeeeee'
+          context.fillRect(Math.round(point.x), Math.round(point.y), sampleLevel > .25 ? 2 : 1, 1)
         }
       }
       context.globalAlpha = 1
@@ -179,7 +240,7 @@ export function EffectCanvas({ amount, visualisation, active }: {
     frame = requestAnimationFrame(draw)
     return () => cancelAnimationFrame(frame)
   }, [active])
-  return <canvas ref={ref} className="pixel-canvas effect-canvas" aria-label="Live Bleed crystalline audio facets" />
+  return <canvas ref={ref} className="pixel-canvas effect-canvas" aria-label="Live Bleed audio-driven particle flow" />
 }
 
 const paintLine = (mask: Float32Array, width: number, height: number,
@@ -203,8 +264,8 @@ const paintLine = (mask: Float32Array, width: number, height: number,
   }
 }
 
-export function SpectralDrawCanvas({ values, width, height, resetSignal, active }: {
-  values: number[], width: number, height: number, resetSignal: number, active: boolean
+export function SpectralDrawCanvas({ values, width, height, resetSignal, scanPosition, active }: {
+  values: number[], width: number, height: number, resetSignal: number, scanPosition: number, active: boolean
 }) {
   const ref = useRef<HTMLCanvasElement>(null)
   const raster = useRef<HTMLCanvasElement | null>(null)
@@ -255,7 +316,18 @@ export function SpectralDrawCanvas({ values, width, height, resetSignal, active 
     context.imageSmoothingEnabled = false
     context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
     context.restore()
-  }, [active, revision, width, height])
+    if (active) {
+      const scanX = Math.max(0, Math.min(1, scanPosition)) * width
+      const trail = context.createLinearGradient(scanX - 3, 0, scanX + 3, 0)
+      trail.addColorStop(0, 'rgba(238,238,238,0)')
+      trail.addColorStop(.5, 'rgba(238,238,238,.12)')
+      trail.addColorStop(1, 'rgba(238,238,238,0)')
+      context.fillStyle = trail
+      context.fillRect(scanX - 3, 0, 6, height)
+      context.fillStyle = '#eeeeee'
+      context.fillRect(Math.round(scanX), 0, Math.max(1, 1 / (window.devicePixelRatio || 1)), height)
+    }
+  }, [active, revision, scanPosition, width, height])
 
   const point = useCallback((event: React.PointerEvent<HTMLCanvasElement>): [number, number] => {
     const bounds = event.currentTarget.getBoundingClientRect()

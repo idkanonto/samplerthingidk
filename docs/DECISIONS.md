@@ -12,10 +12,11 @@ These decisions govern implementation together with [[PRODUCT_SPEC_V2]].
 
 ## Drawing-only ETCH and crystalline BLEED (2026-10-02)
 
-- ETCH displays only the user's stored drawing. Remove its scan line and spectrum overlay; retain spectral processing and editing.
+- ETCH preserves the user's drawing and its playhead. Restore the read-only scan line from the real spectral playback-position telemetry; do not add a spectrum overlay, idle animation, or pointer/crosshair decoration.
 - Keep BLEED PRESSURE as density and expose independent MIX (0–100%), GRAIN SIZE (8–120 ms base duration), and GRAIN PITCH (−100 to +100, centered at zero). Right shortens and raises grains, reduces scatter/feedback, and emphasizes upper detail; left lengthens grains and softens their upper frequencies. Existing parameter IDs remain stable and new controls receive explicit saved-state defaults.
-- Replace BLEED's oscilloscope with a smaller audio-driven facet display. FAULT retains broken trajectories and mutation-driven rupture marks. Preserve monochrome frames and the current main layout.
-- Pool enable uses a small filled/empty square; selection uses the row background without an X or left rule. Retain the current ABOUT close asset until the user provides its replacement.
+- BLEED's smaller particle flow uses real stereo samples, grain activity, signal level, and spectral change to drive direction and speed. Stop movement and clear trails at silence or zero activity.
+- FAULT uses broken, flowing wave trajectories shaped by live mutation type, pressure, and segment progress, alongside its mutation marks. Keep the monitor quiet when no mutation is active. Use the supplied wave visuals as behavior references; keep the existing monochrome frames and layout.
+- Pool enable uses a small filled/empty square; selection uses the row background without an X or left rule. ABOUT uses the user-supplied white SVG close mark; hover enlarges the mark without a separate fill or halo.
 
 ## Release-candidate identity and FAULT lock (2026-10-01)
 

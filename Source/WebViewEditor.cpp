@@ -55,9 +55,9 @@ std::optional<juce::WebBrowserComponent::Resource> makeResource(
     if (path == "/assets/shadx2-logo.svg")
         return juce::WebBrowserComponent::Resource {
             bytesFrom(BinaryData::shadx2logo_svg, BinaryData::shadx2logo_svgSize), "image/svg+xml" };
-    if (path == "/assets/close-icon.png")
+    if (path == "/assets/close-icon.svg")
         return juce::WebBrowserComponent::Resource {
-            bytesFrom(BinaryData::closeicon_png, BinaryData::closeicon_pngSize), "image/png" };
+            bytesFrom(BinaryData::closeicon_svg, BinaryData::closeicon_svgSize), "image/svg+xml" };
     return std::nullopt;
 }
 }

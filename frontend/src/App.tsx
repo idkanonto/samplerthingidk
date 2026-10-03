@@ -7,7 +7,7 @@ import { EffectCanvas, FaultCanvas, SpectralDrawCanvas, StereoMeterCanvas, Wavef
 import productLogo from './assets/recompiler-logo.svg'
 import damnnprodigyLogo from './assets/damnnprodigy-logo.svg'
 import shadx2Logo from './assets/shadx2-logo.svg'
-import closeIcon from './assets/close-icon.png'
+import closeIcon from './assets/close-icon.svg'
 
 declare const __RECOMPILER_VERSION__: string
 declare const __RECOMPILER_BUILD_ID__: string
@@ -286,10 +286,11 @@ function FaultModule({ mutations, enabled }: { mutations: number, enabled: boole
 
 function SpectralModule({ values, width, height, enabled, onInfo }: { values: number[], width: number, height: number, enabled: boolean, onInfo: () => void }) {
   const [resetSignal, setResetSignal] = useState(0)
+  const visualisation = useVisualisationState()
   const reset = () => { setResetSignal((current) => current + 1); sendPluginCommand('resetSpectral') }
   return <RecompilerPanel title="ETCH" className={`effect-module spectral-module ${enabled ? '' : 'bypassed'}`} headerAction={<><ActionButton className="spectral-reset" onClick={reset}>CLEAR</ActionButton><EffectPower effect={2} enabled={enabled} /></>}>
     <PixelDisplay className="effect-display"><SpectralDrawCanvas values={values} width={width} height={height}
-      resetSignal={resetSignal} active={enabled} /></PixelDisplay>
+      resetSignal={resetSignal} scanPosition={visualisation.spectralScan} active={enabled} /></PixelDisplay>
     <div className="etch-footer"><button type="button" className="etch-brand-button" aria-label="Open About" onClick={onInfo}>
       <img src={productLogo} alt="RECOMPILER" /></button>
       <div className="creative-controls"><PressureControl id="spectralDepth" accessibleLabel="Etch pressure" /></div></div>
