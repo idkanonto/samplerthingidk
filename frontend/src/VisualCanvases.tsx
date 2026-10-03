@@ -203,17 +203,17 @@ type WavePoint = {
 }
 
 /** User-supplied Waves field, retaining its line geometry and pointer response. */
-export function FaultWaves({ audioLevel, active, className = '', strokeColor = '#ffffff',
+export function FaultWaves({ eventSerial, active, className = '', strokeColor = '#ffffff',
   backgroundColor = '#000000', pointerSize = 0.5 }: {
-  audioLevel: number, active: boolean, className?: string, strokeColor?: string,
+  eventSerial: number, active: boolean, className?: string, strokeColor?: string,
   backgroundColor?: string, pointerSize?: number
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
   const activeRef = useRef(active)
-  const audioRef = useRef(audioLevel)
+  const eventSerialRef = useRef(eventSerial)
   activeRef.current = active
-  audioRef.current = audioLevel
+  eventSerialRef.current = eventSerial
   const mouseRef = useRef({ x: -10, y: 0, lx: 0, ly: 0, sx: 0, sy: 0, v: 0, vs: 0, a: 0, set: false })
   const pathsRef = useRef<SVGPathElement[]>([])
   const linesRef = useRef<WavePoint[][]>([])
@@ -247,8 +247,11 @@ export function FaultWaves({ audioLevel, active, className = '', strokeColor = '
       const oHeight = height + 30
       const totalLines = Math.ceil(oWidth / xGap)
       const totalPoints = Math.ceil(oHeight / yGap)
-      const xStart = (width - xGap * totalLines) / 2
-      const yStart = (height - yGap * totalPoints) / 2
+      // The supplied component is deliberately oversized and cropped by the
+      // existing monitor. Bias its field down/right so its visual centre lands
+      // inside RECOMPILER's FAULT display instead of ending early at the bezel.
+      const xStart = (width - xGap * totalLines) / 2 + 24
+      const yStart = (height - yGap * totalPoints) / 2 + 14
 
       for (let line = 0; line < totalLines; line++) {
         const points: WavePoint[] = []
@@ -335,36 +338,48 @@ export function FaultWaves({ audioLevel, active, className = '', strokeColor = '
 
     setSize()
     setLines()
-    let smoothedEnergy = 0
     let previousFrame = 0
     let elapsed = 0
-    let virtualPhase = 0
+    let displayedPhase = 0
+    let targetPhase = 0
+    let phaseAtEvent = 0
+    let eventMotionElapsed = 1
+    let lastEventSerial = eventSerialRef.current
     const tick = (time: number) => {
       rafRef.current = null
       if (!activeRef.current) return
       const delta = previousFrame === 0 ? 1 / 60
         : Math.max(1 / 120, Math.min(1 / 20, (time - previousFrame) / 1000))
       previousFrame = time
-      smoothedEnergy = smoothAudioLevel(smoothedEnergy, clamped(audioRef.current), delta)
-      virtualPhase = (virtualPhase + delta * smoothedEnergy * 1.8) % 1
+      const currentEventSerial = eventSerialRef.current
+      const eventDelta = Math.max(0, Math.min(8, currentEventSerial - lastEventSerial))
+      if (eventDelta > 0) {
+        phaseAtEvent = displayedPhase
+        targetPhase += 0.22 * eventDelta
+        eventMotionElapsed = 0
+        elapsed += 92 * eventDelta
+      }
+      lastEventSerial = currentEventSerial
+      eventMotionElapsed = Math.min(.22, eventMotionElapsed + delta)
+      const eventProgress = eventMotionElapsed / .22
+      const easedEventProgress = 1 - Math.pow(1 - eventProgress, 3)
+      displayedPhase = phaseAtEvent + (targetPhase - phaseAtEvent) * easedEventProgress
       const width = boundingRef.current?.width ?? 1
       const height = boundingRef.current?.height ?? 1
-      const perimeter = virtualPhase * 4
+      const perimeter = ((displayedPhase % 1) + 1) % 1 * 4
       const segment = Math.floor(perimeter) % 4
       const progress = perimeter - Math.floor(perimeter)
       const corners = [
-        [width * .08, height * .12], [width * .92, height * .12],
-        [width * .92, height * .88], [width * .08, height * .88]
+        [width * .14, height * .16], [width * .96, height * .16],
+        [width * .96, height * .92], [width * .14, height * .92]
       ]
       const from = corners[segment]
       const to = corners[(segment + 1) % corners.length]
-      const rupture = smoothedEnergy * Math.sin(virtualPhase * Math.PI * 14)
-      updateVirtualPointer(from[0] + (to[0] - from[0]) * progress + rupture * width * .035,
-        from[1] + (to[1] - from[1]) * progress - rupture * height * .06)
-      elapsed += delta * 1000 * smoothedEnergy * 2.4
+      updateVirtualPointer(from[0] + (to[0] - from[0]) * progress,
+        from[1] + (to[1] - from[1]) * progress)
       const { current: mouse } = mouseRef
-      mouse.sx += (mouse.x - mouse.sx) * 0.1
-      mouse.sy += (mouse.y - mouse.sy) * 0.1
+      mouse.sx = mouse.x
+      mouse.sy = mouse.y
       const dx = mouse.x - mouse.lx
       const dy = mouse.y - mouse.ly
       const distance = Math.hypot(dx, dy)
@@ -375,7 +390,7 @@ export function FaultWaves({ audioLevel, active, className = '', strokeColor = '
       mouse.a = Math.atan2(dy, dx)
       containerRef.current?.style.setProperty('--x', `${mouse.sx}px`)
       containerRef.current?.style.setProperty('--y', `${mouse.sy}px`)
-      movePoints(elapsed, smoothedEnergy)
+      movePoints(elapsed, Math.min(1, eventDelta * .5))
       drawLines()
       rafRef.current = requestAnimationFrame(tick)
     }

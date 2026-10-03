@@ -248,6 +248,11 @@ void RandomChopSamplerAudioProcessor::processBlock(
           faultMutations.load(std::memory_order_relaxed) });
     faultMutation.store(static_cast<int>(faultProcessor.getCurrentMutation()),
                         std::memory_order_relaxed);
+    faultEventSerial.store(
+        faultProcessor.getMutationCount(randomchop::FaultMutation::resample)
+            + faultProcessor.getMutationCount(randomchop::FaultMutation::bitcrush)
+            + faultProcessor.getMutationCount(randomchop::FaultMutation::reverse),
+        std::memory_order_relaxed);
     faultDivision.store(faultProcessor.getCurrentDivisionDenominator(),
                         std::memory_order_relaxed);
     faultProgress.store(faultProcessor.getSegmentProgress(), std::memory_order_relaxed);

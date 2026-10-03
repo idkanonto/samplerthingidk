@@ -52,6 +52,10 @@ public:
     {
         return faultMutation.load(std::memory_order_relaxed);
     }
+    uint64_t getFaultEventSerial() const noexcept
+    {
+        return faultEventSerial.load(std::memory_order_relaxed);
+    }
     int getFaultDivision() const noexcept
     {
         return faultDivision.load(std::memory_order_relaxed);
@@ -186,6 +190,7 @@ private:
     RandomizationEngine random;
     std::atomic<uint64_t> internalSeed { 1 };
     std::atomic<int> faultMutation { 0 };
+    std::atomic<uint64_t> faultEventSerial { 0 };
     std::atomic<int> faultDivision { 16 };
     std::atomic<float> faultProgress { 0.0f };
     std::atomic<int> faultResampleSemitones { 0 };

@@ -54,6 +54,7 @@ export type VisualisationState = {
   outputPeakRight: number
   voiceCount: number
   audioLevel: number
+  faultEventSerial: number
   spectralScan: number
   spectrum?: number[]
 }
@@ -121,7 +122,7 @@ const previewBackendState = (): BackendState => ({
 let backendState: BackendState | null = window.__JUCE__?.backend ? null : previewBackendState()
 let visualisationState: VisualisationState = {
   outputPeak: 0, outputPeakLeft: 0, outputPeakRight: 0, voiceCount: 0,
-  audioLevel: 0, spectralScan: 0
+  audioLevel: 0, faultEventSerial: 0, spectralScan: 0
 }
 const backendSubscribers = new Set<(state: BackendState) => void>()
 const visualisationSubscribers = new Set<(state: VisualisationState) => void>()

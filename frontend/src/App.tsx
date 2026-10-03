@@ -313,11 +313,11 @@ function BleedModule({ enabled }: { enabled: boolean }) {
     <div className="bleed-shape">
       <label htmlFor="bleed-shape">SHAPE</label>
       <input id="bleed-shape" aria-label="Bleed grain shape" type="range" min={-100} max={100} step={0.1} value={shape.value}
-        aria-valuetext={shape.value < -2 ? 'Long and rounded' : shape.value > 2 ? 'Short and sharp' : 'Balanced'}
+        aria-valuetext={shape.value < -2 ? 'Bubbly' : shape.value > 2 ? 'Piercing' : 'Balanced'}
         onPointerDown={shape.beginGesture} onPointerUp={shape.endGesture} onPointerCancel={shape.endGesture}
         onKeyDown={shape.beginGesture} onKeyUp={shape.endGesture} onChange={(event) => shape.setValue(Number(event.target.value))}
         onDoubleClick={() => commitShape(0)} />
-      <div className="bleed-shape-values"><span>LONG / ROUND</span><span>SHORT / SHARP</span></div>
+      <div className="bleed-shape-values"><span>BUBBLY</span><span>PIERCING</span></div>
     </div>
     <PixelDisplay className="effect-display bleed-display"><NeuralBackground className="bleed-neural-root" audioLevel={visualisation.audioLevel}
       pressure={pressure.value / 100} mix={mix.value / 100} shape={shape.value} active={enabled} /></PixelDisplay>
@@ -334,7 +334,7 @@ function FaultModule({ mutations, enabled }: { mutations: number, enabled: boole
         {choices.map(({ label, bit }) => <PixelButton key={label} active={(mutations & bit) !== 0}
           onClick={() => sendPluginCommand('setFaultMutations', { mutations: mutations ^ bit })}>{label}</PixelButton>)}
       </div></div>
-    <PixelDisplay className="fault-display"><FaultWaves audioLevel={visualisation.audioLevel} active={enabled} /></PixelDisplay>
+    <PixelDisplay className="fault-display"><FaultWaves eventSerial={visualisation.faultEventSerial} active={enabled} /></PixelDisplay>
     <BypassOverlay enabled={enabled} />
   </RecompilerPanel>
 }
@@ -407,7 +407,7 @@ FAULT introduces tempo-synced mutations into the combined sampler output. PRESSU
 FAULT uses 1/2, 1/4, 1/8 and 1/16 divisions. FLIP plays a slice backward. DUST reduces digital resolution and sample rate. WARP replays a slice one octave up or down using varispeed, changing speed and pitch together. Enable any combination; FAULT chooses once per event.
 
 06 / BLEED
-BLEED PRESSURE sets grain density. MIX blends the dry source with the processed grains. SHAPE is centered by default: left makes longer, rounded grains; right makes shorter, sharper grains. Shape does not change musical pitch.
+BLEED PRESSURE sets grain density. MIX blends the dry source with the processed grains. SHAPE is centered by default: left is bubbly; right is piercing. Shape does not change pitch; BLEED's processed grains stay fixed one octave above the source.
 
 07 / ETCH
 ETCH lets you draw directly into the spectral content. ETCH PRESSURE controls the depth of spectral removal. Frequency runs vertically and time horizontally. Draw to remove spectral energy as the scanner passes through the mask. CLEAR removes the drawing.

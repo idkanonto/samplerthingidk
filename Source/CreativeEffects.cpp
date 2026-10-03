@@ -610,7 +610,9 @@ void SmearProcessor::process(juce::AudioBuffer<float>& buffer,
             texture[0] += window * (left * leftPan + right * rightPan * 0.16f);
             texture[1] += window * (right * rightPan + left * leftPan * 0.16f);
             windowEnergy += window * window;
-            grain.readPosition = wrap(grain.readPosition + 1.0,
+            // BLEED is intentionally voiced one octave above the source. Shape
+            // changes the grain envelope and duration, never this fixed pitch.
+            grain.readPosition = wrap(grain.readPosition + 2.0,
                                       static_cast<double>(delayBuffer.getNumSamples()));
             grain.panPhase = static_cast<float>(wrap(
                 grain.panPhase + grain.panRate, 1.0));

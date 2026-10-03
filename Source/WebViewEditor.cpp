@@ -234,6 +234,8 @@ juce::var RandomChopSamplerWebViewEditor::createVisualisationState() const
     object->setProperty("outputPeakRight", processor.getOutputPeakRight());
     object->setProperty("voiceCount", processor.getActiveVoiceCount());
     object->setProperty("audioLevel", processor.getVisualAudioLevel());
+    object->setProperty("faultEventSerial",
+        static_cast<double>(processor.getFaultEventSerial()));
     object->setProperty("spectralScan", processor.getSpectralScanPosition());
     juce::Array<juce::var> spectrum;
     for (const auto value : processor.getDisplaySpectrum())
