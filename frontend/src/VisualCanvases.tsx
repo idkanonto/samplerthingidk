@@ -44,7 +44,10 @@ export function WaveformCanvas({ waveform }: { waveform?: [number, number][] }) 
   return <canvas ref={ref} className="pixel-canvas waveform-canvas" aria-label="Selected sample waveform" />
 }
 
-type NeuralParticle = { x: number, y: number, vx: number, vy: number, age: number, life: number }
+type NeuralParticle = {
+  x: number, y: number, homeX: number, homeY: number,
+  vx: number, vy: number, age: number, life: number
+}
 
 function clamped(value: number, min = 0, max = 1) {
   return Math.max(min, Math.min(max, Number.isFinite(value) ? value : 0))
@@ -98,20 +101,24 @@ export function NeuralBackground({ className = '', color = '#ffffff', trailOpaci
       canvas.style.width = `${width}px`
       canvas.style.height = `${height}px`
       context.setTransform(dpr, 0, 0, dpr, 0, 0)
-      particlesRef.current = Array.from({ length: particleCount }, () => ({
-        x: Math.random() * width,
-        y: Math.random() * height,
-        vx: 0,
-        vy: 0,
-        age: 0,
-        life: Math.random() * 200 + 100
-      }))
+      const safeX = Math.min(20, width * .1)
+      const safeY = Math.min(20, height * .1)
+      particlesRef.current = Array.from({ length: particleCount }, () => {
+        const x = safeX + Math.random() * Math.max(1, width - safeX * 2)
+        const y = safeY + Math.random() * Math.max(1, height - safeY * 2)
+        return { x, y, homeX: x, homeY: y, vx: 0, vy: 0, age: 0,
+          life: Math.random() * 200 + 100 }
+      })
     }
 
     const handleResize = () => initialize()
     const resetParticle = (particle: NeuralParticle) => {
-      particle.x = Math.random() * width
-      particle.y = Math.random() * height
+      const safeX = Math.min(20, width * .1)
+      const safeY = Math.min(20, height * .1)
+      particle.x = safeX + Math.random() * Math.max(1, width - safeX * 2)
+      particle.y = safeY + Math.random() * Math.max(1, height - safeY * 2)
+      particle.homeX = particle.x
+      particle.homeY = particle.y
       particle.vx = 0
       particle.vy = 0
       particle.age = 0
@@ -139,8 +146,8 @@ export function NeuralBackground({ className = '', color = '#ffffff', trailOpaci
       const vertical = Math.sin(virtualPhase)
       const superellipseX = Math.sign(horizontal) * Math.sqrt(Math.abs(horizontal))
       const superellipseY = Math.sign(vertical) * Math.sqrt(Math.abs(vertical))
-      const targetX = width * (.5 + .43 * superellipseX)
-      const targetY = height * (.5 + .39 * superellipseY)
+      const targetX = width * (.5 + .32 * superellipseX)
+      const targetY = height * (.5 + .30 * superellipseY)
       const cursorBlend = 1 - Math.exp(-deltaSeconds * (4 + 14 * visualEnergy))
       mouse.x += (targetX - mouse.x) * cursorBlend
       mouse.y += (targetY - mouse.y) * cursorBlend
@@ -157,11 +164,31 @@ export function NeuralBackground({ className = '', color = '#ffffff', trailOpaci
         const dx = mouse.x - particle.x
         const dy = mouse.y - particle.y
         const distance = Math.hypot(dx, dy)
-        const interactionRadius = 150
+        const interactionRadius = Math.max(36, Math.min(90, Math.min(width, height) * .42))
         if (visualEnergy > .001 && distance < interactionRadius) {
           const force = (interactionRadius - distance) / interactionRadius
-          particle.vx -= dx * force * 0.05 * visualEnergy
-          particle.vy -= dy * force * 0.05 * visualEnergy
+          particle.vx -= dx * force * 0.012 * visualEnergy
+          particle.vy -= dy * force * 0.012 * visualEnergy
+        }
+
+        const safeX = Math.min(20, width * .1)
+        const safeY = Math.min(20, height * .1)
+        const boundaryForce = .014 * visualEnergy
+        if (particle.x < safeX) particle.vx += (safeX - particle.x) * boundaryForce
+        if (particle.x > width - safeX) particle.vx -= (particle.x - (width - safeX)) * boundaryForce
+        if (particle.y < safeY) particle.vy += (safeY - particle.y) * boundaryForce
+        if (particle.y > height - safeY) particle.vy -= (particle.y - (height - safeY)) * boundaryForce
+
+        const homeForce = .022 + .006 * visualEnergy
+        particle.vx += (particle.homeX - particle.x) * homeForce
+        particle.vy += (particle.homeY - particle.y) * homeForce
+
+        const particleSpeed = Math.hypot(particle.vx, particle.vy)
+        const maximumSpeed = .9 + visualEnergy * 2.4
+        if (particleSpeed > maximumSpeed) {
+          const speedScale = maximumSpeed / particleSpeed
+          particle.vx *= speedScale
+          particle.vy *= speedScale
         }
 
         particle.x += particle.vx * Math.min(1, visualEnergy * 7)
@@ -170,10 +197,10 @@ export function NeuralBackground({ className = '', color = '#ffffff', trailOpaci
         particle.vy *= friction
         particle.age += Math.min(1, visualEnergy * 5)
         if (particle.age > particle.life) resetParticle(particle)
-        if (particle.x < 0) particle.x = width
-        if (particle.x > width) particle.x = 0
-        if (particle.y < 0) particle.y = height
-        if (particle.y > height) particle.y = 0
+        if (particle.x < safeX) { particle.x = safeX; particle.vx = Math.abs(particle.vx) * .45 }
+        if (particle.x > width - safeX) { particle.x = width - safeX; particle.vx = -Math.abs(particle.vx) * .45 }
+        if (particle.y < safeY) { particle.y = safeY; particle.vy = Math.abs(particle.vy) * .45 }
+        if (particle.y > height - safeY) { particle.y = height - safeY; particle.vy = -Math.abs(particle.vy) * .45 }
 
         const opacity = 1 - Math.abs(particle.age / particle.life - 0.5) * 2
         context.globalAlpha = opacity
@@ -204,9 +231,9 @@ type WavePoint = {
 
 /** User-supplied Waves field, retaining its line geometry and pointer response. */
 export function FaultWaves({ eventSerial, active, className = '', strokeColor = '#ffffff',
-  backgroundColor = '#000000', pointerSize = 0.5 }: {
+  backgroundColor = '#000000' }: {
   eventSerial: number, active: boolean, className?: string, strokeColor?: string,
-  backgroundColor?: string, pointerSize?: number
+  backgroundColor?: string
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
   const svgRef = useRef<SVGSVGElement>(null)
@@ -241,17 +268,16 @@ export function FaultWaves({ eventSerial, active, className = '', strokeColor = 
       linesRef.current = []
       pathsRef.current.forEach((path) => path.remove())
       pathsRef.current = []
-      const xGap = 8
-      const yGap = 8
-      const oWidth = width + 200
-      const oHeight = height + 30
+      const xGap = 9
+      const yGap = 9
+      const oWidth = width + 240
+      const oHeight = height + 160
       const totalLines = Math.ceil(oWidth / xGap)
       const totalPoints = Math.ceil(oHeight / yGap)
-      // The supplied component is deliberately oversized and cropped by the
-      // existing monitor. Bias its field down/right so its visual centre lands
-      // inside RECOMPILER's FAULT display instead of ending early at the bezel.
-      const xStart = (width - xGap * totalLines) / 2 + 24
-      const yStart = (height - yGap * totalPoints) / 2 + 14
+      // Overscan the original wave field beyond every bezel edge. Cursor-force
+      // displacement can no longer reveal the SVG boundary inside the monitor.
+      const xStart = (width - xGap * totalLines) / 2
+      const yStart = (height - yGap * totalPoints) / 2
 
       for (let line = 0; line < totalLines; line++) {
         const points: WavePoint[] = []
@@ -345,6 +371,11 @@ export function FaultWaves({ eventSerial, active, className = '', strokeColor = 
     let phaseAtEvent = 0
     let eventMotionElapsed = 1
     let lastEventSerial = eventSerialRef.current
+    const eventRoute = [
+      [.10, .14], [.90, .14], [.10, .86], [.90, .86],
+      [.10, .14], [.10, .86], [.90, .14], [.90, .86]
+    ]
+    const eventMotionDuration = .65
     const tick = (time: number) => {
       rafRef.current = null
       if (!activeRef.current) return
@@ -355,28 +386,24 @@ export function FaultWaves({ eventSerial, active, className = '', strokeColor = 
       const eventDelta = Math.max(0, Math.min(8, currentEventSerial - lastEventSerial))
       if (eventDelta > 0) {
         phaseAtEvent = displayedPhase
-        targetPhase += 0.22 * eventDelta
+        targetPhase += eventDelta / eventRoute.length
         eventMotionElapsed = 0
         elapsed += 92 * eventDelta
       }
       lastEventSerial = currentEventSerial
-      eventMotionElapsed = Math.min(.22, eventMotionElapsed + delta)
-      const eventProgress = eventMotionElapsed / .22
-      const easedEventProgress = 1 - Math.pow(1 - eventProgress, 3)
+      eventMotionElapsed = Math.min(eventMotionDuration, eventMotionElapsed + delta)
+      const eventProgress = eventMotionElapsed / eventMotionDuration
+      const easedEventProgress = eventProgress * eventProgress * (3 - 2 * eventProgress)
       displayedPhase = phaseAtEvent + (targetPhase - phaseAtEvent) * easedEventProgress
       const width = boundingRef.current?.width ?? 1
       const height = boundingRef.current?.height ?? 1
-      const perimeter = ((displayedPhase % 1) + 1) % 1 * 4
-      const segment = Math.floor(perimeter) % 4
-      const progress = perimeter - Math.floor(perimeter)
-      const corners = [
-        [width * .14, height * .16], [width * .96, height * .16],
-        [width * .96, height * .92], [width * .14, height * .92]
-      ]
-      const from = corners[segment]
-      const to = corners[(segment + 1) % corners.length]
-      updateVirtualPointer(from[0] + (to[0] - from[0]) * progress,
-        from[1] + (to[1] - from[1]) * progress)
+      const routePosition = ((displayedPhase % 1) + 1) % 1 * eventRoute.length
+      const segment = Math.floor(routePosition) % eventRoute.length
+      const progress = routePosition - Math.floor(routePosition)
+      const from = eventRoute[segment]
+      const to = eventRoute[(segment + 1) % eventRoute.length]
+      updateVirtualPointer(width * (from[0] + (to[0] - from[0]) * progress),
+        height * (from[1] + (to[1] - from[1]) * progress))
       const { current: mouse } = mouseRef
       mouse.sx = mouse.x
       mouse.sy = mouse.y
@@ -421,10 +448,6 @@ export function FaultWaves({ eventSerial, active, className = '', strokeColor = 
     style={{ backgroundColor, position: 'absolute', top: 0, left: 0, margin: 0, padding: 0,
       width: '100%', height: '100%', overflow: 'hidden', '--x': '-0.5rem', '--y': '50%' } as CSSProperties}>
     <svg ref={svgRef} className="block h-full w-full js-svg" xmlns="http://www.w3.org/2000/svg" />
-    <div className="pointer-dot" style={{ position: 'absolute', top: 0, left: 0,
-      width: `${pointerSize}rem`, height: `${pointerSize}rem`, background: strokeColor,
-      borderRadius: '50%', transform: 'translate3d(calc(var(--x) - 50%), calc(var(--y) - 50%), 0)',
-      willChange: 'transform' }} />
   </div>
 }
 
