@@ -11,12 +11,14 @@ verified: 2026-10-03
 
 # Current Implementation State
 
-## Final display-presentation correction (local verification, 2026-10-03)
+## Verified final display-presentation correction (2026-10-03)
 
 - FAULT and BLEED have returned to their preceding 0.75 backing scale and normal animation cadence; the approved visual algorithms and audio/telemetry mappings are unchanged.
 - ETCH's inner chamber starts exactly 3 px lower and FAULT's exactly 2 px lower. ETCH and BLEED no longer apply the fractional enable-control offset, so all three effect-enable controls use the same whole-pixel geometry.
 - SOURCE renders the real sample waveform on a fixed 256×96 nearest-neighbour canvas. The inspected loaded sample is visibly blocky without physical grey grid lines.
-- The production TypeScript/Vite build passes and the rebuilt 100% browser preview was inspected with a loaded sample. CI packaging for this presentation-only correction is pending.
+- The production TypeScript/Vite build passes and the rebuilt 100% browser preview was inspected with a loaded sample.
+- Exact product head `ee7fd1e89eb882595d87853d88b44866df98edb8` passed [Windows release run 37164067388](https://github.com/idkanonto/samplerthingidk/actions/runs/37164067388): Release VST3/test compilation, CTest, listening-render verification, artifact verification, and uploads.
+- VST3 artifact [`11289475290`](https://github.com/idkanonto/samplerthingidk/actions/runs/37164067388/artifacts/11289475290) is 3,731,363 bytes with GitHub SHA-256 `bb00fba4c151481e69f3b9a16dd7150329052b6ce162113056f0351d7d54e1a2`. Listening renders artifact [`11289370495`](https://github.com/idkanonto/samplerthingidk/actions/runs/37164067388/artifacts/11289370495) is 19,550,940 bytes with SHA-256 `6d958f9a585045dfee90cc113384585f27f5955ee8d534d30a31fd876fecf9f0`.
 
 ## Previous verified Chance, FAULT Loop, and 30 Hz effect-display pass (display presentation superseded above)
 
