@@ -109,6 +109,16 @@ public:
     {
         return activeVoiceCount.load(std::memory_order_relaxed);
     }
+    uint64_t getSourcePlayheadRuntimeId(size_t index) const noexcept
+    {
+        return index < sourcePlayheadRuntimeIds.size()
+            ? sourcePlayheadRuntimeIds[index].load(std::memory_order_acquire) : 0;
+    }
+    float getSourcePlayheadPosition(size_t index) const noexcept
+    {
+        return index < sourcePlayheadPositions.size()
+            ? sourcePlayheadPositions[index].load(std::memory_order_relaxed) : 0.0f;
+    }
     int getUiScaleIndex() const noexcept
     {
         return uiScaleIndex.load(std::memory_order_relaxed);
@@ -205,6 +215,10 @@ private:
     std::atomic<float> outputPeakLeft { 0.0f };
     std::atomic<float> outputPeakRight { 0.0f };
     std::atomic<int> activeVoiceCount { 0 };
+    std::array<std::atomic<uint64_t>, randomchop::VoicePool::capacity>
+        sourcePlayheadRuntimeIds {};
+    std::array<std::atomic<float>, randomchop::VoicePool::capacity>
+        sourcePlayheadPositions {};
     std::atomic<int> uiScaleIndex { 1 };
     std::atomic<uint32_t> faultMutations { randomchop::FaultMutations::all };
     std::atomic<uint32_t> scrambleFeatures { randomchop::ScrambleFeatures::all };

@@ -17,6 +17,7 @@ export type ParameterDescriptor = {
 
 export type SampleSummary = {
   id: string
+  runtimeId: number
   name: string
   enabled: boolean
   missing: boolean
@@ -57,6 +58,7 @@ export type VisualisationState = {
   audioLevel: number
   faultEventSerial: number
   spectralScan: number
+  sourcePlayheads: { runtimeId: number, position: number }[]
   spectrum?: number[]
 }
 
@@ -110,7 +112,7 @@ const previewWaveform = Array.from({ length: 128 }, (_, index): [number, number]
   return [Math.min(0, sample), Math.max(0, sample)]
 })
 const previewSample = (): SampleSummary => ({
-  id: 'preview-sample', name: 'approved_loop.wav', enabled: true, missing: false,
+  id: 'preview-sample', runtimeId: 1, name: 'approved_loop.wav', enabled: true, missing: false,
   start: 0, end: 1, transpose: 0, fineTune: 0, gainDb: 0, stretch: 1, chance: 100,
   stretchPending: false, sampleRate: 48000, bitDepth: 24, durationSeconds: 3.2,
   waveform: previewWaveform
@@ -123,7 +125,7 @@ const previewBackendState = (): BackendState => ({
 let backendState: BackendState | null = window.__JUCE__?.backend ? null : previewBackendState()
 let visualisationState: VisualisationState = {
   outputPeak: 0, outputPeakLeft: 0, outputPeakRight: 0, voiceCount: 0,
-  audioLevel: 0, faultEventSerial: 0, spectralScan: 0
+  audioLevel: 0, faultEventSerial: 0, spectralScan: 0, sourcePlayheads: []
 }
 const backendSubscribers = new Set<(state: BackendState) => void>()
 const visualisationSubscribers = new Set<(state: VisualisationState) => void>()

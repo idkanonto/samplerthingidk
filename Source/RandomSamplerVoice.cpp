@@ -20,7 +20,8 @@ void RandomSamplerVoice::start(PreparedSamplePtr newSample, int note, float velo
                                double playbackPitchRatio, float voiceGain, float attackSeconds,
                                float releaseSeconds, uint64_t newAge,
                                float finalLengthMilliseconds,
-                               bool loopFirstQuarter) noexcept
+                               bool loopFirstQuarter,
+                               uint64_t newSourceRuntimeId) noexcept
 {
     if (newSample == nullptr || newSample->audio == nullptr)
     {
@@ -41,19 +42,22 @@ void RandomSamplerVoice::start(PreparedSamplePtr newSample, int note, float velo
     sample = std::move(newSample);
     midiNote = note;
     age = newAge;
+    sourceRuntimeId = newSourceRuntimeId;
     region = sourceRegion;
     loopQuarter = loopFirstQuarter && region.canInterpolate();
     pendingLoopEvents = 0;
-    loopStart = static_cast<double>(region.firstFrame);
-    const auto regionFrames = juce::jmax(2, region.lastFrame - region.firstFrame);
-    const auto quarterFrames = juce::jmax(2, regionFrames / 4);
-    loopEnd = juce::jmin(static_cast<double>(region.lastFrame),
-                        loopStart + static_cast<double>(quarterFrames));
-    loopQuarter = loopQuarter && loopEnd - loopStart >= 2.0;
-    sourcePosition = std::clamp(loopQuarter ? loopStart : randomchop::finiteOr(
+    const auto requestedStart = std::clamp(randomchop::finiteOr(
         startFrame, static_cast<double>(region.firstFrame)),
         static_cast<double>(region.firstFrame),
         randomchop::lastInterpolationPosition(region));
+    const auto quarterFrames = randomchop::quarterLoopFrames(region);
+    loopStart = loopQuarter
+        ? std::min(requestedStart, randomchop::maximumQuarterLoopStart(region))
+        : static_cast<double>(region.firstFrame);
+    loopEnd = juce::jmin(static_cast<double>(region.lastFrame),
+                        loopStart + static_cast<double>(quarterFrames));
+    loopQuarter = loopQuarter && loopEnd - loopStart >= 2.0;
+    sourcePosition = loopQuarter ? loopStart : requestedStart;
     const auto safePitchRatio = std::isfinite(playbackPitchRatio) && playbackPitchRatio > 0.0
         ? playbackPitchRatio : 1.0;
     increment = (sample->sampleRate / juce::jmax(1.0, hostRate)) * safePitchRatio;

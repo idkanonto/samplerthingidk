@@ -123,8 +123,14 @@ void RandomChopSamplerAudioProcessor::noteOn(int note, float velocity) noexcept
     const auto region = randomchop::makeFrameRegion(
         prepared->audio->getNumSamples(), source->settings.startNormalised,
         source->settings.endNormalised);
-    const auto start = randomchop::resolveRandomStart(
-        region, prepared->sampleRate, 1.0, random.unit());
+    const auto loopQuarter = isEffectEnabled(0)
+        && (faultMutations.load(std::memory_order_relaxed)
+            & randomchop::FaultMutations::loop) != 0;
+    const auto randomStart = random.unit();
+    const auto start = loopQuarter
+        ? randomchop::resolveRandomQuarterLoopStart(region, randomStart)
+        : randomchop::resolveRandomStart(
+            region, prepared->sampleRate, 1.0, randomStart);
     const auto chords = parameters.getRawParameterValue(IDs::midiPitch)->load() >= 0.5f;
     const auto globalPitch = static_cast<int>(
         parameters.getRawParameterValue(IDs::globalPitch)->load());
@@ -134,14 +140,11 @@ void RandomChopSamplerAudioProcessor::noteOn(int note, float velocity) noexcept
     const auto pitchRatio = randomchop::pitchRatioForSemitones(pitchSemitones);
     const auto mode = parameters.getRawParameterValue(IDs::voiceMode)->load() >= 0.5f
         ? randomchop::VoiceMode::mono : randomchop::VoiceMode::poly;
-    const auto loopQuarter = isEffectEnabled(0)
-        && (faultMutations.load(std::memory_order_relaxed)
-            & randomchop::FaultMutations::loop) != 0;
     auto& voice = voices.acquire(mode);
     voice.start(prepared, note, velocity, start, region, pitchRatio,
                 juce::Decibels::decibelsToGain(source->settings.gainDb),
                 internalAttackSeconds, internalReleaseSeconds, ++voiceCounter, 0.0f,
-                loopQuarter);
+                loopQuarter, source->runtimeId);
     lastTriggeredRuntimeId.store(source->runtimeId, std::memory_order_relaxed);
     triggeredWhileEmpty.store(false, std::memory_order_relaxed);
 }
@@ -243,6 +246,16 @@ void RandomChopSamplerAudioProcessor::processBlock(
     }
     if (rendered < buffer.getNumSamples())
         voices.render(buffer, rendered, buffer.getNumSamples() - rendered);
+    for (size_t index = 0; index < randomchop::VoicePool::capacity; ++index)
+    {
+        const auto& voice = voices[index];
+        sourcePlayheadPositions[index].store(
+            voice.isActive() ? voice.getNormalisedSourcePosition() : 0.0f,
+            std::memory_order_relaxed);
+        sourcePlayheadRuntimeIds[index].store(
+            voice.isActive() ? voice.getSourceRuntimeId() : 0,
+            std::memory_order_release);
+    }
     previewVoice.render(buffer, 0, buffer.getNumSamples());
     faultLoopEvents.fetch_add(voices.consumeLoopEvents(), std::memory_order_relaxed);
     if (!previewVoice.isActive())

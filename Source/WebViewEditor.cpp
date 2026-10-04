@@ -180,6 +180,7 @@ juce::var RandomChopSamplerWebViewEditor::createBackendState()
         auto* item = new juce::DynamicObject();
         const auto& settings = sample->settings;
         item->setProperty("id", settings.id);
+        item->setProperty("runtimeId", static_cast<double>(sample->runtimeId));
         item->setProperty("name", settings.displayName);
         item->setProperty("enabled", settings.enabled);
         item->setProperty("missing", settings.missing);
@@ -238,6 +239,18 @@ juce::var RandomChopSamplerWebViewEditor::createVisualisationState() const
     object->setProperty("faultEventSerial",
         static_cast<double>(processor.getFaultEventSerial()));
     object->setProperty("spectralScan", processor.getSpectralScanPosition());
+    juce::Array<juce::var> sourcePlayheads;
+    for (size_t index = 0; index < randomchop::VoicePool::capacity; ++index)
+    {
+        const auto runtimeId = processor.getSourcePlayheadRuntimeId(index);
+        if (runtimeId == 0)
+            continue;
+        auto* playhead = new juce::DynamicObject();
+        playhead->setProperty("runtimeId", static_cast<double>(runtimeId));
+        playhead->setProperty("position", processor.getSourcePlayheadPosition(index));
+        sourcePlayheads.add(juce::var(playhead));
+    }
+    object->setProperty("sourcePlayheads", sourcePlayheads);
     juce::Array<juce::var> spectrum;
     for (const auto value : processor.getDisplaySpectrum())
         spectrum.add(value);

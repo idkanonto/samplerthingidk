@@ -87,6 +87,34 @@ inline double maximumRandomStart(const FrameRegion& region, double sourceRate) n
                       lastInterpolationPosition(region));
 }
 
+inline int quarterLoopFrames(const FrameRegion& region) noexcept
+{
+    if (!region.canInterpolate())
+        return 0;
+    return std::max(2, (region.lastFrame - region.firstFrame) / 4);
+}
+
+inline double maximumQuarterLoopStart(const FrameRegion& region) noexcept
+{
+    const auto loopFrames = quarterLoopFrames(region);
+    if (loopFrames <= 0)
+        return static_cast<double>(region.firstFrame);
+    return std::max(static_cast<double>(region.firstFrame),
+                    static_cast<double>(region.lastFrame - loopFrames));
+}
+
+inline double resolveRandomQuarterLoopStart(const FrameRegion& region,
+                                            double randomUnit) noexcept
+{
+    if (!region.canInterpolate())
+        return static_cast<double>(region.firstFrame);
+
+    randomUnit = std::clamp(finiteOr(randomUnit, 0.0), 0.0,
+                            std::nextafter(1.0, 0.0));
+    const auto first = static_cast<double>(region.firstFrame);
+    return first + (maximumQuarterLoopStart(region) - first) * randomUnit;
+}
+
 inline double resolveRandomStart(const FrameRegion& region, double sourceRate,
                                  double amount, double randomUnit) noexcept
 {

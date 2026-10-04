@@ -175,7 +175,9 @@ function SampleRow({ sample, selected }: { sample: SampleSummary, selected: bool
   </div>
 }
 
-function Waveform({ sample }: { sample?: SampleSummary }) {
+function Waveform({ sample, playheads }: {
+  sample?: SampleSummary, playheads: { runtimeId: number, position: number }[]
+}) {
   const [region, setRegion] = useState({ start: sample?.start ?? 0, end: sample?.end ?? 1 })
   const dragging = useRef<'start' | 'end' | null>(null)
   const minimumRegion = .002
@@ -209,9 +211,12 @@ function Waveform({ sample }: { sample?: SampleSummary }) {
     <WaveformCanvas waveform={sample?.waveform} />
     {sample && <>
       <div className="region-shade left" style={{ width: `${region.start * 100}%` }} /><div className="region-shade right" style={{ width: `${(1 - region.end) * 100}%` }} />
+      {playheads.filter((playhead) => playhead.runtimeId === sample.runtimeId).map((playhead, index) =>
+        <div key={`${playhead.runtimeId}-${index}`} className="source-playhead"
+          style={{ left: `${Math.max(0, Math.min(1, playhead.position)) * 100}%` }} />)}
       {(['start', 'end'] as const).map((handle) => <div key={handle} className={`marker ${handle}`} role="slider" tabIndex={0}
         aria-label={`Sample ${handle}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(region[handle] * 100)}
-        style={{ left: `${region[handle] * 100}%` }} onKeyDown={(event) => nudge(event, handle)}><b>{handle.toUpperCase()}</b><i /></div>)}
+        style={{ left: `${region[handle] * 100}%` }} onKeyDown={(event) => nudge(event, handle)}><b>{handle.toUpperCase()}</b></div>)}
       <div className="waveform-interaction" role="group" aria-label="Sample playback region" onPointerDown={begin}
         onPointerMove={(event) => { if (dragging.current) move(position(event), dragging.current) }} onPointerUp={finish}
         onPointerCancel={(event) => { dragging.current = null; setRegion({ start: sample.start, end: sample.end }); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId) }} />
@@ -528,6 +533,7 @@ function AboutPage({ uiScale, onClose }: { uiScale: number, onClose: () => void 
 
 export default function App() {
   const backendState = useBackendState(); const [page, setPage] = useState<'main' | 'about'>('main'); const [draggingFiles, setDraggingFiles] = useState(false)
+  const visualisation = useVisualisationState()
   const samples = backendState?.samples ?? []
   const selectedSample = useMemo(() => samples.find((sample) => sample.id === backendState?.selectedSampleId), [samples, backendState?.selectedSampleId])
   useEffect(() => {
@@ -550,7 +556,7 @@ export default function App() {
               <button className={`pool-loaded-action ${draggingFiles ? 'drag-active' : ''}`} onClick={() => sendPluginCommand('importSamples')}>{draggingFiles ? 'RELEASE TO IMPORT' : 'DROP / CLICK TO IMPORT AUDIO'}</button></>}
           </RecompilerPanel>
         </div>
-        <RecompilerPanel title="SOURCE" className="selected-source"><div className="source-title"><strong>{selectedSample?.name ?? 'NO SOURCE SELECTED'}</strong><span>{selectedSample ? `${(selectedSample.sampleRate / 1000).toFixed(1)} kHz  ${selectedSample.bitDepth || '--'} bit  ${selectedSample.durationSeconds.toFixed(1)} s` : ''}</span></div><Waveform sample={selectedSample} /><SourceControls sample={selectedSample} /></RecompilerPanel>
+        <RecompilerPanel title="SOURCE" className="selected-source"><div className="source-title"><strong>{selectedSample?.name ?? 'NO SOURCE SELECTED'}</strong><span>{selectedSample ? `${(selectedSample.sampleRate / 1000).toFixed(1)} kHz  ${selectedSample.bitDepth || '--'} bit  ${selectedSample.durationSeconds.toFixed(1)} s` : ''}</span></div><Waveform sample={selectedSample} playheads={visualisation.sourcePlayheads ?? []} /><SourceControls sample={selectedSample} /></RecompilerPanel>
       </div>
       <div className="lower-zone"><SpectralModule values={backendState?.spectralCanvas ?? []} width={backendState?.spectralWidth ?? 128} height={backendState?.spectralHeight ?? 64} enabled={enabled[2] !== false} onInfo={() => setPage('about')} />
         <div className="middle-rack"><div className="global-strip"><label>STACK <PixelToggle id="midiPitch" left="OFF" right="ON" /></label><Divider /><label>VOICES <PixelToggle id="voiceMode" left="POLY" right="MONO" /></label></div>

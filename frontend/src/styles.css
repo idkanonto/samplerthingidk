@@ -48,3 +48,6 @@
 .spectral-module>.pixel-display::after{content:"";position:absolute;z-index:6;top:calc(var(--etch-frame-inset) - 2px);right:-2px;bottom:-2px;left:-2px;height:auto;background:transparent;border:2px solid var(--dim);pointer-events:none}
 
 .bleed-module .effect-power::after{transform:translateX(.3px)}
+
+.source-playhead{position:absolute;z-index:3;top:0;bottom:0;width:2px;background:var(--ivory);pointer-events:none}
+.marker i{display:none}

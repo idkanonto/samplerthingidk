@@ -420,14 +420,22 @@ void testRegionsAndVoices()
     RandomSamplerVoice loopVoice;
     loopVoice.prepare(1000.0);
     loopVoice.start(makePrepared(loopAudio, 1000.0), 61, 1.0f, 9.0, { 0, 17 }, 1.0,
-                    1.0f, 0.0f, 0.004f, 2, 0.0f, true);
+                    1.0f, 0.0f, 0.004f, 2, 0.0f, true, 77);
     juce::AudioBuffer<float> looped(2, 12);
     looped.clear();
     loopVoice.render(looped, 0, looped.getNumSamples());
     check(loopVoice.isActive()
+              && loopVoice.getSourceRuntimeId() == 77
+              && std::abs(loopVoice.getNormalisedSourcePosition() - 9.0f / 17.0f)
+                    < 0.000001f
+              && std::abs(looped.getSample(0, 0) - 0.5f) < 0.000001f
               && std::abs(looped.getSample(0, 0) - looped.getSample(0, 4)) < 0.000001f
               && std::abs(looped.getSample(0, 1) - looped.getSample(0, 5)) < 0.000001f,
-          "held FAULT Loop did not repeat the first quarter of the selected region");
+          "held FAULT Loop ignored its random start or failed to repeat the quarter-region");
+    const auto randomLoopStart = randomchop::resolveRandomQuarterLoopStart({ 0, 17 }, 0.5);
+    check(randomLoopStart > 0.0
+              && randomLoopStart <= randomchop::maximumQuarterLoopStart({ 0, 17 }),
+          "FAULT Loop random start escaped its valid quarter-region range");
     loopVoice.release(0.004f);
     juce::AudioBuffer<float> loopRelease(2, 16);
     loopRelease.clear();

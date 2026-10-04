@@ -42,7 +42,7 @@ export function WaveformCanvas({ waveform }: { waveform?: [number, number][] }) 
     context.fillStyle = '#101010'
     context.fillRect(0, 0, width, height)
     if (!waveform?.length) return
-    context.fillStyle = '#eeeeee'
+    context.fillStyle = '#b8b8b8'
     for (let x = 0; x < width; x += 1) {
       const index = Math.round(x * (waveform.length - 1) / Math.max(1, width - 1))
       const pair = waveform[index]
@@ -551,11 +551,14 @@ export function SpectralDrawCanvas({ values, width, height, resetSignal, scanPos
     context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
     context.restore()
     if (active) {
-      const scanX = Math.max(0, Math.min(1, scanPosition)) * width
+      const canvasBounds = canvas.getBoundingClientRect()
+      const scanLineWidth = 2 / Math.max(1, canvasBounds.width) * width
+      const scanX = Math.max(0, Math.min(width - scanLineWidth,
+        Math.max(0, Math.min(1, scanPosition)) * width))
       const frameInset = Number.parseFloat(window.getComputedStyle(
         canvas.closest('.spectral-module') ?? canvas).getPropertyValue('--etch-frame-inset'))
       const scanTop = (Number.isFinite(frameInset) ? frameInset : ETCH_FRAME_INSET_FALLBACK_PX)
-        / Math.max(1, canvas.getBoundingClientRect().height) * height
+        / Math.max(1, canvasBounds.height) * height
       const backingPixel = height / Math.max(1, canvas.height)
       const scanStart = Math.max(0, scanTop - backingPixel)
       const scanHeight = Math.max(0, height - scanStart + backingPixel)
@@ -566,7 +569,7 @@ export function SpectralDrawCanvas({ values, width, height, resetSignal, scanPos
       context.fillStyle = trail
       context.fillRect(scanX - 3, scanStart, 6, scanHeight)
       context.fillStyle = '#eeeeee'
-      context.fillRect(Math.round(scanX), scanStart, Math.max(1, 1 / (window.devicePixelRatio || 1)), scanHeight)
+      context.fillRect(scanX, scanStart, scanLineWidth, scanHeight)
     }
   }, [active, revision, scanPosition, width, height])
 
