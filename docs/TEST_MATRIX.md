@@ -12,11 +12,11 @@ status: active
 
 | Area | Verified evidence | Still required |
 |---|---|---|
-| FAULT/BLEED presentation | Production build passes; rendered canvases restore the 0.75 backing scale and normal animation cadence without changing their algorithms; run 37164067388 compiled and packaged the exact product head | Live DAW motion check with real audio |
+| FAULT/BLEED presentation | Production build passes; rendered canvases restore the 0.75 backing scale and normal animation cadence without changing their algorithms; run 37165021850 compiled and packaged the exact corrected product head | Live DAW motion check with real audio |
 | Chamber geometry | ETCH retains its original layout box and canvas size while a 5 px mask crops only the top and redraws its rule; FAULT retains `margin-top: 2px`; all effect-enable controls share zero horizontal offset and identical inner geometry | Embedded WebView2 host comparison at the user's preferred scale |
 | SOURCE waveform | Loaded preview sample renders from a 256×96 backing canvas with nearest-neighbour scaling, a blocky real-sample silhouette, and no grey grid lines | Embedded WebView2 import comparison with the user's own samples |
 
-[Windows release run 37164067388](https://github.com/idkanonto/samplerthingidk/actions/runs/37164067388) passed every workflow stage at exact product head `ee7fd1e89eb882595d87853d88b44866df98edb8`. VST3 artifact [`11289475290`](https://github.com/idkanonto/samplerthingidk/actions/runs/37164067388/artifacts/11289475290) is 3,731,363 bytes with GitHub SHA-256 `bb00fba4c151481e69f3b9a16dd7150329052b6ce162113056f0351d7d54e1a2`; listening-render artifact [`11289370495`](https://github.com/idkanonto/samplerthingidk/actions/runs/37164067388/artifacts/11289370495) is 19,550,940 bytes with SHA-256 `6d958f9a585045dfee90cc113384585f27f5955ee8d534d30a31fd876fecf9f0`.
+[Windows release run 37165021850](https://github.com/idkanonto/samplerthingidk/actions/runs/37165021850) passed every workflow stage at exact product head `54a2ee8e807ad1104bebf670eb03468655c255a9`. VST3 artifact [`11289262482`](https://github.com/idkanonto/samplerthingidk/actions/runs/37165021850/artifacts/11289262482) is 3,731,374 bytes with GitHub SHA-256 `41906d8d73439a1df43cff5550158e0df8e5d02d6c4d079817baecc41c36c29d`; listening-render artifact [`11289028085`](https://github.com/idkanonto/samplerthingidk/actions/runs/37165021850/artifacts/11289028085) is 19,550,940 bytes with SHA-256 `4c892995b8a6fb01f6479695a2260b7e7ac0ce500813c3a13174d72256bf8b38`.
 
 ## Previous verified Chance, FAULT Loop, and 30 Hz display pass (presentation superseded above)
 
