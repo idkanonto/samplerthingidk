@@ -554,7 +554,7 @@ export default function App() {
       </div>
       <div className="lower-zone"><SpectralModule values={backendState?.spectralCanvas ?? []} width={backendState?.spectralWidth ?? 128} height={backendState?.spectralHeight ?? 64} enabled={enabled[2] !== false} onInfo={() => setPage('about')} />
         <div className="middle-rack"><div className="global-strip"><label>STACK <PixelToggle id="midiPitch" left="OFF" right="ON" /></label><Divider /><label>VOICES <PixelToggle id="voiceMode" left="POLY" right="MONO" /></label></div>
-          <div className="effect-pair"><FaultModule mutations={backendState?.faultMutations ?? 7} enabled={enabled[0] !== false} /><BleedModule enabled={enabled[1] !== false} /></div></div>
+          <div className="effect-pair"><FaultModule mutations={backendState?.faultMutations ?? 15} enabled={enabled[0] !== false} /><BleedModule enabled={enabled[1] !== false} /></div></div>
         <OutputModule /></div>
     </>}
   </main>

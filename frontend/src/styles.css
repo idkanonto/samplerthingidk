@@ -40,3 +40,8 @@
 .bleed-neural-root{position:relative;width:100%;height:100%;overflow:hidden}
 .bleed-neural-root canvas{display:block;width:100%;height:100%}
 .bleed-module .bleed-display{height:100%;min-height:0;align-self:stretch}
+
+/* Keep ETCH's original layout box while presenting one coherent inset frame. */
+.spectral-module>.pixel-display{clip-path:none;overflow:visible;border-color:transparent}
+.spectral-module>.pixel-display::before{content:"";position:absolute;z-index:5;top:-2px;right:-2px;left:-2px;height:7px;background:var(--surface);pointer-events:none}
+.spectral-module>.pixel-display::after{content:"";position:absolute;z-index:6;top:3px;right:-2px;bottom:-2px;left:-2px;height:auto;background:transparent;border:2px solid var(--dim);pointer-events:none}

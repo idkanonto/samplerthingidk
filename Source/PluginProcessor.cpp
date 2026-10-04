@@ -358,7 +358,7 @@ void RandomChopSamplerAudioProcessor::setStateInformation(const void* data, int 
         setUiScaleIndex(static_cast<int>(state.getProperty("uiScale", 1)));
         setSelectedSampleId(state.getProperty("selectedSampleId").toString());
         setFaultMutations(static_cast<uint32_t>(static_cast<int>(
-            state.getProperty("faultMutations", static_cast<int>(randomchop::FaultMutations::randomised)))));
+            state.getProperty("faultMutations", static_cast<int>(randomchop::FaultMutations::all)))));
         setSmearFeatures(static_cast<uint32_t>(static_cast<int>(
             state.getProperty("smearFeatures", static_cast<int>(randomchop::SmearFeatures::all)))));
         if (restoredVersion < 13)

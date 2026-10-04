@@ -118,7 +118,7 @@ const previewSample = (): SampleSummary => ({
 const previewBackendState = (): BackendState => ({
   selectedSampleId: '', sampleCount: 0, maximumSampleCount: 20, voiceCount: 0,
   importMessage: '', uiScale: 1, samples: [], spectralWidth: 128, spectralHeight: 64,
-  spectralCanvas: [], effectEnabled: [true, true, true], faultMutations: 7
+  spectralCanvas: [], effectEnabled: [true, true, true], faultMutations: 15
 })
 let backendState: BackendState | null = window.__JUCE__?.backend ? null : previewBackendState()
 let visualisationState: VisualisationState = {

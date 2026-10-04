@@ -25,7 +25,7 @@ const setup = (canvas: HTMLCanvasElement, width: number, height: number, clear =
 }
 
 const EFFECT_RENDER_SCALE = 0.75
-const ETCH_SCANNER_TOP_INSET_PX = 10
+const ETCH_SCANNER_TOP_INSET_PX = 5
 
 export function WaveformCanvas({ waveform }: { waveform?: [number, number][] }) {
   const ref = useRef<HTMLCanvasElement>(null)

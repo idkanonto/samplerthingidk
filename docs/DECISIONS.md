@@ -13,7 +13,7 @@ These decisions govern implementation together with [[PRODUCT_SPEC_V2]].
 ## Final effect-display and waveform presentation (2026-10-03)
 
 - FAULT and BLEED retain their approved algorithms and audio/telemetry mappings, but restore the preceding 0.75 backing scale and normal animation cadence. The later half-resolution 30 Hz presentation is superseded.
-- Preserve ETCH's original chamber geometry and canvas scale, but visually crop its top 5 px and redraw the top rule at that inset. Its playback scanner begins another 5 px below the visible crop so it no longer reaches the old top edge. FAULT alone keeps its top edge 2 px lower. Keep every other panel boundary and control position unchanged.
+- Preserve ETCH's original chamber geometry and canvas scale, but redraw its complete inner frame 5 px below the old top edge. The replacement top and both side rules meet as one rectangle, and the playback scanner begins directly beneath the inset top rule. FAULT alone keeps its top edge 2 px lower. Keep every other panel boundary and control position unchanged.
 - Render SOURCE from its real waveform as a fixed 256×96 nearest-neighbour column field: preserve the deliberately blocky silhouette while keeping physical grid/divider lines absent.
 - Keep all three effect-enable controls on the same whole-pixel geometry; remove the ETCH/BLEED fractional horizontal correction that caused inconsistent raster alignment.
 
@@ -22,7 +22,7 @@ These decisions govern implementation together with [[PRODUCT_SPEC_V2]].
 - Restore a per-source CHANCE control as a persisted `0–100%` relative selection weight. Every note-on performs its own weighted draw from enabled, playable sources; `0%` excludes that source, all-zero pools stay silent, and equal nonzero values preserve equal selection. POLY chord notes draw independently and may choose the same source; MONO retains its established final-note-wins voice policy.
 - Place CHANCE between STRETCH and TRIM as the same compact horizontal control language used by TRIM. It supports exact numeric editing and resets to `100%` on double-click. New and legacy projects default missing Chance state to `100%`.
 - Add LOOP as FAULT mask bit `8`, below WARP. LOOP is deterministic rather than pressure-randomized: while its module is enabled and a MIDI note remains held, that voice repeats the first quarter of its selected START–END region. Note release exits repetition through the existing release envelope. POLY voices loop independently, and each real wrap advances FAULT visual-event telemetry.
-- Existing projects restore the historical FLIP/DUST/WARP mask without implicitly enabling LOOP.
+- New projects and states without a saved FAULT mask enable FLIP/DUST/WARP/LOOP by default. Existing projects with an explicit saved mask restore that exact choice.
 
 ## Drawing-only ETCH and final Shape-based BLEED (2026-10-02)
 
