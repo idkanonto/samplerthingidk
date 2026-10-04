@@ -13,7 +13,7 @@ These decisions govern implementation together with [[PRODUCT_SPEC_V2]].
 ## Final effect-display and waveform presentation (2026-10-03)
 
 - FAULT and BLEED retain their approved algorithms and audio/telemetry mappings, but restore the preceding 0.75 backing scale and normal animation cadence. The later half-resolution 30 Hz presentation is superseded.
-- Preserve ETCH's original chamber geometry and canvas scale, but visually crop its top 5 px and redraw the top rule at that inset. FAULT alone keeps its top edge 2 px lower. Keep every other panel boundary and control position unchanged.
+- Preserve ETCH's original chamber geometry and canvas scale, but visually crop its top 5 px and redraw the top rule at that inset. Its playback scanner begins another 5 px below the visible crop so it no longer reaches the old top edge. FAULT alone keeps its top edge 2 px lower. Keep every other panel boundary and control position unchanged.
 - Render SOURCE from its real waveform as a fixed 256×96 nearest-neighbour column field: preserve the deliberately blocky silhouette while keeping physical grid/divider lines absent.
 - Keep all three effect-enable controls on the same whole-pixel geometry; remove the ETCH/BLEED fractional horizontal correction that caused inconsistent raster alignment.
 

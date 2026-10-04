@@ -14,7 +14,7 @@ verified: 2026-10-03
 ## Verified final display-presentation correction (2026-10-03)
 
 - FAULT and BLEED have returned to their preceding 0.75 backing scale and normal animation cadence; the approved visual algorithms and audio/telemetry mappings are unchanged.
-- ETCH keeps its original chamber/canvas geometry and scale while a 5 px top mask crops only its upper edge and redraws the inset top rule. FAULT's chamber alone starts 2 px lower. ETCH and BLEED no longer apply the fractional enable-control offset, so all three effect-enable controls use the same whole-pixel geometry.
+- ETCH keeps its original chamber/canvas geometry and scale while a 5 px top mask crops only its upper edge and redraws the inset top rule. Its playback scanner starts another 5 px below that visible edge rather than reaching the old top. FAULT's chamber alone starts 2 px lower. ETCH and BLEED no longer apply the fractional enable-control offset, so all three effect-enable controls use the same whole-pixel geometry.
 - SOURCE renders the real sample waveform on a fixed 256×96 nearest-neighbour canvas. The inspected loaded sample is visibly blocky without physical grey grid lines.
 - The production TypeScript/Vite build passes and the rebuilt 100% browser preview was inspected with a loaded sample.
 - Exact product head `54a2ee8e807ad1104bebf670eb03468655c255a9` passed [Windows release run 37165021850](https://github.com/idkanonto/samplerthingidk/actions/runs/37165021850): Release VST3/test compilation, CTest, listening-render verification, artifact verification, and uploads.

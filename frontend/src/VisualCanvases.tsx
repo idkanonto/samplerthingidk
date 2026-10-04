@@ -25,6 +25,7 @@ const setup = (canvas: HTMLCanvasElement, width: number, height: number, clear =
 }
 
 const EFFECT_RENDER_SCALE = 0.75
+const ETCH_SCANNER_TOP_INSET_PX = 10
 
 export function WaveformCanvas({ waveform }: { waveform?: [number, number][] }) {
   const ref = useRef<HTMLCanvasElement>(null)
@@ -551,14 +552,16 @@ export function SpectralDrawCanvas({ values, width, height, resetSignal, scanPos
     context.restore()
     if (active) {
       const scanX = Math.max(0, Math.min(1, scanPosition)) * width
+      const scanTop = ETCH_SCANNER_TOP_INSET_PX / Math.max(1, canvas.getBoundingClientRect().height) * height
+      const scanHeight = Math.max(0, height - scanTop)
       const trail = context.createLinearGradient(scanX - 3, 0, scanX + 3, 0)
       trail.addColorStop(0, 'rgba(238,238,238,0)')
       trail.addColorStop(.5, 'rgba(238,238,238,.12)')
       trail.addColorStop(1, 'rgba(238,238,238,0)')
       context.fillStyle = trail
-      context.fillRect(scanX - 3, 0, 6, height)
+      context.fillRect(scanX - 3, scanTop, 6, scanHeight)
       context.fillStyle = '#eeeeee'
-      context.fillRect(Math.round(scanX), 0, Math.max(1, 1 / (window.devicePixelRatio || 1)), height)
+      context.fillRect(Math.round(scanX), scanTop, Math.max(1, 1 / (window.devicePixelRatio || 1)), scanHeight)
     }
   }, [active, revision, scanPosition, width, height])
 
