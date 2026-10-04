@@ -24,33 +24,33 @@ const setup = (canvas: HTMLCanvasElement, width: number, height: number, clear =
   return context
 }
 
-const EFFECT_RENDER_SCALE = 0.375
-const EFFECT_FRAME_INTERVAL_MS = 1000 / 30
+const EFFECT_RENDER_SCALE = 0.75
 
 export function WaveformCanvas({ waveform }: { waveform?: [number, number][] }) {
   const ref = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
     const canvas = ref.current
     if (!canvas) return
-    const context = setup(canvas, 256, 96)
+    const width = 256
+    const height = 96
+    canvas.width = width
+    canvas.height = height
+    const context = canvas.getContext('2d')
     if (!context) return
+    context.imageSmoothingEnabled = false
+    context.fillStyle = '#101010'
+    context.fillRect(0, 0, width, height)
     if (!waveform?.length) return
     context.fillStyle = '#eeeeee'
-    context.beginPath()
-    waveform.forEach((pair, index) => {
-      const x = index * 256 / Math.max(1, waveform.length - 1)
-      const y = 48 - Math.max(-1, Math.min(1, pair[1])) * 43
-      if (index === 0) context.moveTo(x, y)
-      else context.lineTo(x, y)
-    })
-    for (let index = waveform.length - 1; index >= 0; index -= 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = Math.round(x * (waveform.length - 1) / Math.max(1, width - 1))
       const pair = waveform[index]
-      const x = index * 256 / Math.max(1, waveform.length - 1)
-      const y = 48 - Math.max(-1, Math.min(1, pair[0])) * 43
-      context.lineTo(x, y)
+      const upper = Math.round(48 - Math.max(-1, Math.min(1, pair[1])) * 43)
+      const lower = Math.round(48 - Math.max(-1, Math.min(1, pair[0])) * 43)
+      const top = Math.min(upper, lower)
+      const bottom = Math.max(upper, lower)
+      context.fillRect(x, top, 1, Math.max(1, bottom - top + 1))
     }
-    context.closePath()
-    context.fill()
   }, [waveform])
   return <canvas ref={ref} className="pixel-canvas waveform-canvas" aria-label="Selected sample waveform" />
 }
@@ -131,8 +131,7 @@ export function NeuralBackground({ className = '', color = '#ffffff', trailOpaci
 
     const animate = (time: number) => {
       frame = requestAnimationFrame(animate)
-      if (previousFrame !== 0 && time - previousFrame < EFFECT_FRAME_INTERVAL_MS) return
-      const deltaSeconds = previousFrame === 0 ? 1 / 30
+      const deltaSeconds = previousFrame === 0 ? 1 / 60
         : Math.max(1 / 120, Math.min(1 / 20, (time - previousFrame) / 1000))
       previousFrame = time
       const current = dataRef.current
@@ -212,7 +211,7 @@ export function NeuralBackground({ className = '', color = '#ffffff', trailOpaci
   }, [active, color, particleCount, speed, trailOpacity])
 
   return <div ref={containerRef} className={`relative h-full w-full overflow-hidden ${className}`}>
-    <canvas ref={canvasRef} className="pixel-canvas block h-full w-full" aria-label="Bleed crystalline particle flow" />
+    <canvas ref={canvasRef} className="block h-full w-full" aria-label="Bleed crystalline particle flow" />
   </div>
 }
 
@@ -396,11 +395,7 @@ export function FaultWaves({ eventSerial, audioLevel, active, className = '', st
     const tick = (time: number) => {
       rafRef.current = null
       if (!activeRef.current) return
-      if (previousFrame !== 0 && time - previousFrame < EFFECT_FRAME_INTERVAL_MS) {
-        rafRef.current = requestAnimationFrame(tick)
-        return
-      }
-      const delta = previousFrame === 0 ? 1 / 30
+      const delta = previousFrame === 0 ? 1 / 60
         : Math.max(1 / 120, Math.min(1 / 20, (time - previousFrame) / 1000))
       previousFrame = time
       const currentEventSerial = eventSerialRef.current

@@ -11,7 +11,14 @@ verified: 2026-10-03
 
 # Current Implementation State
 
-## Verified Chance, FAULT Loop, and effect-display pass (2026-10-03)
+## Final display-presentation correction (local verification, 2026-10-03)
+
+- FAULT and BLEED have returned to their preceding 0.75 backing scale and normal animation cadence; the approved visual algorithms and audio/telemetry mappings are unchanged.
+- ETCH's inner chamber starts exactly 3 px lower and FAULT's exactly 2 px lower. ETCH and BLEED no longer apply the fractional enable-control offset, so all three effect-enable controls use the same whole-pixel geometry.
+- SOURCE renders the real sample waveform on a fixed 256×96 nearest-neighbour canvas. The inspected loaded sample is visibly blocky without physical grey grid lines.
+- The production TypeScript/Vite build passes and the rebuilt 100% browser preview was inspected with a loaded sample. CI packaging for this presentation-only correction is pending.
+
+## Previous verified Chance, FAULT Loop, and 30 Hz effect-display pass (display presentation superseded above)
 
 - Each source now persists an independent CHANCE value from 0–100%, defaulting to 100%. The SOURCE strip places its compact horizontal control between STRETCH and TRIM. Playable sources are selected by relative positive Chance weights; 0 excludes a source, an all-zero pool is silent, and each POLY chord note draws independently while existing MONO final-note behavior is unchanged.
 - FAULT adds a deterministic LOOP switch below WARP. While a MIDI note remains held, each affected voice repeats the first quarter of its selected START–END region; release exits the repetition through the existing envelope. Voices loop independently, and actual wrap events feed FAULT visual telemetry. The saved default/legacy mutation mask remains the previous three random mutations, so LOOP starts off.

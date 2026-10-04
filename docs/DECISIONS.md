@@ -10,10 +10,12 @@ status: active
 
 These decisions govern implementation together with [[PRODUCT_SPEC_V2]].
 
-## Lower-resolution effect displays (2026-10-03)
+## Final effect-display and waveform presentation (2026-10-03)
 
-- FAULT and BLEED retain their approved algorithms, audio/telemetry mappings, geometry, and panel sizes, but present through a half-resolution nearest-neighbour canvas compared with the preceding pass. This makes each display pixel roughly twice as large without adding a grid, scanline overlay, or changing the visuals themselves.
-- Cap both effect-display simulation/paint loops at 30 Hz. The browser may still use `requestAnimationFrame` as its scheduler, but frames inside the 33.3 ms cadence are skipped and do not advance visual state.
+- FAULT and BLEED retain their approved algorithms and audio/telemetry mappings, but restore the preceding 0.75 backing scale and normal animation cadence. The later half-resolution 30 Hz presentation is superseded.
+- Move only the top edge of the ETCH chamber down 3 px and the FAULT chamber down 2 px. Keep every other panel boundary and control position unchanged.
+- Render SOURCE from its real waveform as a fixed 256×96 nearest-neighbour column field: preserve the deliberately blocky silhouette while keeping physical grid/divider lines absent.
+- Keep all three effect-enable controls on the same whole-pixel geometry; remove the ETCH/BLEED fractional horizontal correction that caused inconsistent raster alignment.
 
 ## Per-source Chance and held-note FAULT Loop (2026-10-03)
 

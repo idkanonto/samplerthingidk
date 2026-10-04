@@ -8,7 +8,17 @@ status: active
 
 # Test Matrix
 
-## Verified Chance, FAULT Loop, and 30 Hz display pass
+## Final display-presentation correction
+
+| Area | Verified evidence | Still required |
+|---|---|---|
+| FAULT/BLEED presentation | Production build passes; rendered canvases restore the 0.75 backing scale and normal animation cadence without changing their algorithms | Windows VST3 packaging and live DAW motion check |
+| Chamber geometry | Computed/rendered inspection confirms ETCH `margin-top: 3px` and FAULT `margin-top: 2px`; all effect-enable controls now share zero horizontal offset and identical inner geometry | Embedded WebView2 visual check |
+| SOURCE waveform | Loaded preview sample renders from a 256×96 backing canvas with nearest-neighbour scaling, a blocky real-sample silhouette, and no grey grid lines | Embedded WebView2 visual check with imported audio |
+
+Windows release CI is pending for this final presentation-only correction.
+
+## Previous verified Chance, FAULT Loop, and 30 Hz display pass (presentation superseded above)
 
 | Area | Verified evidence | Still required |
 |---|---|---|
