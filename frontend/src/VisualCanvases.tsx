@@ -25,7 +25,7 @@ const setup = (canvas: HTMLCanvasElement, width: number, height: number, clear =
 }
 
 const EFFECT_RENDER_SCALE = 0.75
-const ETCH_SCANNER_TOP_INSET_PX = 5
+const ETCH_FRAME_INSET_FALLBACK_PX = 7
 
 export function WaveformCanvas({ waveform }: { waveform?: [number, number][] }) {
   const ref = useRef<HTMLCanvasElement>(null)
@@ -552,16 +552,21 @@ export function SpectralDrawCanvas({ values, width, height, resetSignal, scanPos
     context.restore()
     if (active) {
       const scanX = Math.max(0, Math.min(1, scanPosition)) * width
-      const scanTop = ETCH_SCANNER_TOP_INSET_PX / Math.max(1, canvas.getBoundingClientRect().height) * height
-      const scanHeight = Math.max(0, height - scanTop)
+      const frameInset = Number.parseFloat(window.getComputedStyle(
+        canvas.closest('.spectral-module') ?? canvas).getPropertyValue('--etch-frame-inset'))
+      const scanTop = (Number.isFinite(frameInset) ? frameInset : ETCH_FRAME_INSET_FALLBACK_PX)
+        / Math.max(1, canvas.getBoundingClientRect().height) * height
+      const backingPixel = height / Math.max(1, canvas.height)
+      const scanStart = Math.max(0, scanTop - backingPixel)
+      const scanHeight = Math.max(0, height - scanStart + backingPixel)
       const trail = context.createLinearGradient(scanX - 3, 0, scanX + 3, 0)
       trail.addColorStop(0, 'rgba(238,238,238,0)')
       trail.addColorStop(.5, 'rgba(238,238,238,.12)')
       trail.addColorStop(1, 'rgba(238,238,238,0)')
       context.fillStyle = trail
-      context.fillRect(scanX - 3, scanTop, 6, scanHeight)
+      context.fillRect(scanX - 3, scanStart, 6, scanHeight)
       context.fillStyle = '#eeeeee'
-      context.fillRect(Math.round(scanX), scanTop, Math.max(1, 1 / (window.devicePixelRatio || 1)), scanHeight)
+      context.fillRect(Math.round(scanX), scanStart, Math.max(1, 1 / (window.devicePixelRatio || 1)), scanHeight)
     }
   }, [active, revision, scanPosition, width, height])
 
